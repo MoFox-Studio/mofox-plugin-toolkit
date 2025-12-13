@@ -8,7 +8,6 @@ from mpdt.templates.component_templates import (
     get_action_template,
     get_command_template,
     get_event_handler_template,
-    get_test_template,
     get_tool_template,
     prepare_component_context,
 )
@@ -32,21 +31,17 @@ def generate_component(
     component_type: str,
     component_name: str,
     description: str | None = None,
-    is_async: bool = False,
-    with_test: bool = False,
     output_dir: str | None = None,
     force: bool = False,
     verbose: bool = False,
 ) -> None:
     """
-    生成插件组件
+    生成插件组件(始终生成异步方法)
 
     Args:
         component_type: 组件类型
         component_name: 组件名称
         description: 组件描述
-        is_async: 是否异步
-        with_test: 是否生成测试
         output_dir: 输出目录
         force: 是否覆盖
         verbose: 详细输出
@@ -84,8 +79,8 @@ def generate_component(
         component_name=component_name,
         plugin_name=plugin_name,
         author=git_info.get("name", ""),
-        description=description,
-        is_async=is_async,
+        description=description or f"{component_name} 组件",
+        is_async=True,  # 始终生成异步方法
     )
 
     # 生成组件文件
@@ -101,18 +96,6 @@ def generate_component(
     if not component_file:
         return
 
-    # 生成测试文件
-    test_file = None
-    if with_test:
-        test_file = _generate_test_file(
-            work_dir=work_dir,
-            component_type=component_type,
-            component_name=component_name,
-            context=context,
-            force=force,
-            verbose=verbose,
-        )
-
     # 更新插件注册
     if not _update_plugin_registration(
         work_dir=work_dir,
@@ -127,15 +110,11 @@ def generate_component(
     print_success(f"✨ {context['class_name']} 生成成功！")
     console.print("\n[bold cyan]生成的文件:[/bold cyan]")
     console.print(f"  📄 {component_file.relative_to(work_dir)}")
-    if test_file:
-        console.print(f"  🧪 {test_file.relative_to(work_dir)}")
 
     console.print("\n[bold cyan]下一步:[/bold cyan]")
     console.print(f"  1. 编辑 {component_file.name} 实现具体逻辑")
-    if test_file:
-        console.print(f"  2. 编辑 {test_file.name} 添加测试用例")
-    console.print(f"  {3 if test_file else 2}. 运行 mpdt check 检查代码")
-    console.print(f"  {4 if test_file else 3}. 运行 mpdt test 测试功能")
+    console.print("  2. 运行 mpdt check 检查代码")
+    console.print("  3. 运行 mpdt test 测试功能")
 
 
 def _detect_plugin_name(work_dir: Path) -> str | None:
@@ -222,55 +201,6 @@ def _generate_component_file(
         return None
     except Exception as e:
         print_error(f"生成文件失败: {e}")
-        return None
-
-
-def _generate_test_file(
-    work_dir: Path,
-    component_type: str,
-    component_name: str,
-    context: dict,
-    force: bool,
-    verbose: bool,
-) -> Path | None:
-    """
-    生成测试文件
-
-    Args:
-        work_dir: 工作目录
-        component_type: 组件类型
-        component_name: 组件名称
-        context: 模板上下文
-        force: 是否覆盖
-        verbose: 详细输出
-
-    Returns:
-        生成的测试文件路径,失败返回 None
-    """
-    # 确定测试目录
-    test_dir = work_dir / "tests" / f"test_{component_type}s"
-    ensure_dir(test_dir)
-
-    # 确保 __init__.py 存在
-    init_file = test_dir / "__init__.py"
-    if not init_file.exists():
-        safe_write_file(init_file, "")
-
-    # 生成测试文件
-    test_file = test_dir / f"test_{component_name}.py"
-    template = get_test_template()
-    content = template.format(**context)
-
-    try:
-        safe_write_file(test_file, content, force=force)
-        if verbose:
-            console.print(f"[dim]✓ 生成测试文件: {test_file}[/dim]")
-        return test_file
-    except FileExistsError:
-        print_warning(f"测试文件已存在: {test_file}")
-        return None
-    except Exception as e:
-        print_error(f"生成测试文件失败: {e}")
         return None
 
 

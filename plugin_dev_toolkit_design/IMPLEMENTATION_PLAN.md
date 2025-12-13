@@ -396,6 +396,7 @@ class PluginTestBase:
 - [ ] 日志显示
 
 **当前状态:** 命令框架已创建（`mpdt dev`），但功能未实现
+```python
         self.observer.start()
         
         console.print("🚀 开发模式已启动")

@@ -25,21 +25,19 @@ def init_plugin(
     author: str | None = None,
     license_type: str = "GPL-v3.0",
     with_examples: bool = False,
-    with_tests: bool = False,
     with_docs: bool = False,
     output_dir: str | None = None,
     verbose: bool = False,
 ) -> None:
     """
     初始化新插件
-    
+
     Args:
         plugin_name: 插件名称
         template: 模板类型
         author: 作者名称
         license_type: 开源协议
         with_examples: 是否包含示例
-        with_tests: 是否创建测试
         with_docs: 是否创建文档
         output_dir: 输出目录
         verbose: 是否详细输出
@@ -54,12 +52,14 @@ def init_plugin(
         author = plugin_info.get("author")
         license_type = plugin_info["license"]
         with_examples = plugin_info.get("with_examples", False)
-        with_tests = plugin_info.get("with_tests", False)
         with_docs = plugin_info.get("with_docs", False)
+
+    # 此时 plugin_name 必定不为 None
+    assert plugin_name is not None
 
     # 验证插件名称
     if not validate_plugin_name(plugin_name):
-        print_error("插件名称无效！必须使用小写字母、数字和下划线，以字母开头")
+        print_error("插件名称无效！必须使用小写字母、数字和下划线,以字母开头")
         return
 
     # 确定输出目录
@@ -83,7 +83,6 @@ def init_plugin(
         author=author,
         license_type=license_type,
         with_examples=with_examples,
-        with_tests=with_tests,
         with_docs=with_docs,
         verbose=verbose,
     )
@@ -98,7 +97,6 @@ def init_plugin(
             "config": ["config.toml"],
             "components": ["actions", "commands", "tools", "events"],
             "utils": ["__init__.py"],
-            "tests": ["conftest.py", "test_plugin.py"] if with_tests else [],
             "docs": ["README.md"] if with_docs else [],
             "pyproject.toml": None,
             "requirements.txt": None,
@@ -157,10 +155,6 @@ def _interactive_init() -> dict[str, Any]:
             "包含示例代码?",
             default=True,
         ),
-        with_tests=questionary.confirm(
-            "创建测试文件?",
-            default=True,
-        ),
         with_docs=questionary.confirm(
             "创建文档文件?",
             default=True,
@@ -177,7 +171,6 @@ def _create_plugin_structure(
     author: str | None,
     license_type: str,
     with_examples: bool,
-    with_tests: bool,
     with_docs: bool,
     verbose: bool,
 ) -> None:
@@ -206,13 +199,6 @@ def _create_plugin_structure(
     # 创建 utils 目录
     utils_dir = ensure_dir(plugin_dir / "utils")
     safe_write_file(utils_dir / "__init__.py", '"""\n工具函数\n"""\n')
-
-    # 创建测试目录
-    if with_tests:
-        tests_dir = ensure_dir(plugin_dir / "tests")
-        safe_write_file(tests_dir / "__init__.py", "")
-        safe_write_file(tests_dir / "conftest.py", _generate_conftest_file())
-        safe_write_file(tests_dir / "test_plugin.py", _generate_test_file(plugin_name))
 
     # 创建文档目录
     if with_docs:
@@ -307,57 +293,6 @@ class {_to_pascal_case(plugin_name)}Plugin(BasePlugin):
         # TODO: 在这里添加你的组件
 
         return components
-'''
-
-
-def _generate_conftest_file() -> str:
-    """生成 conftest.py 文件内容"""
-    return '''"""
-pytest 配置和 fixtures
-"""
-
-import pytest
-
-
-@pytest.fixture
-def mock_chat_stream():
-    """Mock ChatStream 对象"""
-    from unittest.mock import MagicMock
-    
-    stream = MagicMock()
-    stream.stream_id = "test_stream"
-    stream.context = MagicMock()
-    return stream
-
-
-@pytest.fixture
-def mock_plugin_config():
-    """Mock 插件配置"""
-    return {"enabled": True}
-'''
-
-
-def _generate_test_file(plugin_name: str) -> str:
-    """生成 test_plugin.py 文件内容"""
-    return f'''"""
-{plugin_name} 插件测试
-"""
-
-import pytest
-
-
-def test_plugin_info():
-    """测试插件信息"""
-    from {plugin_name} import __plugin_meta__
-    
-    assert __plugin_meta__.name == "{plugin_name}"
-    assert __plugin_meta__.version
-
-
-def test_plugin_registration():
-    """测试插件注册"""
-    # TODO: 添加插件注册测试
-    pass
 '''
 
 

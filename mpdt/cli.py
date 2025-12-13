@@ -18,7 +18,7 @@ console = Console()
 def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
     """
     MoFox Plugin Dev Toolkit - MoFox-Bot 插件开发工具
-    
+
     一个类似 Vite 的开发工具，用于快速创建、开发和测试 MoFox-Bot 插件。
     """
     # 设置上下文对象
@@ -42,12 +42,11 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
 @click.option("--license", "-l", type=click.Choice(["GPL-v3.0", "MIT", "Apache-2.0", "BSD-3-Clause"]),
               default="GPL-v3.0", help="开源协议")
 @click.option("--with-examples", is_flag=True, help="包含示例代码")
-@click.option("--with-tests", is_flag=True, help="创建测试文件")
 @click.option("--with-docs", is_flag=True, help="创建文档文件")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.pass_context
 def init(ctx: click.Context, plugin_name: str | None, template: str, author: str | None,
-         license: str, with_examples: bool, with_tests: bool, with_docs: bool, output: str | None) -> None:
+         license: str, with_examples: bool, with_docs: bool, output: str | None) -> None:
     """初始化新插件项目"""
     from mpdt.commands.init import init_plugin
 
@@ -58,7 +57,6 @@ def init(ctx: click.Context, plugin_name: str | None, template: str, author: str
             author=author,
             license_type=license,
             with_examples=with_examples,
-            with_tests=with_tests,
             with_docs=with_docs,
             output_dir=output,
             verbose=ctx.obj["verbose"],
@@ -72,14 +70,12 @@ def init(ctx: click.Context, plugin_name: str | None, template: str, author: str
 @click.argument("component_type", type=click.Choice(["action", "command", "tool", "event", "adapter", "prompt", "plus-command"]))
 @click.argument("component_name")
 @click.option("--description", "-d", help="组件描述")
-@click.option("--async", "is_async", is_flag=True, help="生成异步方法")
-@click.option("--with-test", is_flag=True, help="同时生成测试文件")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.option("--force", "-f", is_flag=True, help="覆盖已存在的文件")
 @click.pass_context
 def generate(ctx: click.Context, component_type: str, component_name: str, description: str | None,
-             is_async: bool, with_test: bool, output: str | None, force: bool) -> None:
-    """生成插件组件"""
+             output: str | None, force: bool) -> None:
+    """生成插件组件(始终生成异步方法)"""
     from mpdt.commands.generate import generate_component
 
     try:
@@ -87,8 +83,6 @@ def generate(ctx: click.Context, component_type: str, component_name: str, descr
             component_type=component_type,
             component_name=component_name,
             description=description,
-            is_async=is_async,
-            with_test=with_test,
             output_dir=output,
             force=force,
             verbose=ctx.obj["verbose"],
