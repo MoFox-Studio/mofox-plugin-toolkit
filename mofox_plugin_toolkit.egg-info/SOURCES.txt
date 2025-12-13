@@ -7,13 +7,16 @@ mofox_plugin_toolkit.egg-info/entry_points.txt
 mofox_plugin_toolkit.egg-info/requires.txt
 mofox_plugin_toolkit.egg-info/top_level.txt
 mpdt/__init__.py
+mpdt/__main__.py
 mpdt/cli.py
 mpdt/commands/__init__.py
 mpdt/commands/check.py
 mpdt/commands/generate.py
 mpdt/commands/init.py
+mpdt/templates/component_templates.py
 mpdt/utils/__init__.py
 mpdt/utils/color_printer.py
 mpdt/utils/config_loader.py
 mpdt/utils/file_ops.py
+mpdt/utils/license_generator.py
 mpdt/utils/template_engine.py

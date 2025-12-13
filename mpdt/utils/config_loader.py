@@ -140,7 +140,7 @@ def get_default_config() -> dict[str, Any]:
     """
     return {
         "mpdt": {
-            "version": "0.1.0",
+            "version": "0.1.2",
         },
         "check": {
             "level": "warning",
