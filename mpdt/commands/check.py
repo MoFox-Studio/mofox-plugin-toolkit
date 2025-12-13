@@ -9,10 +9,13 @@ from rich.table import Table
 
 from mpdt.utils.color_printer import console, print_error, print_info, print_success, print_warning
 from mpdt.validators import (
+    AutoFixValidator,
     ComponentValidator,
     ConfigValidator,
     MetadataValidator,
     StructureValidator,
+    StyleValidator,
+    TypeValidator,
     ValidationLevel,
     ValidationResult,
 )
@@ -95,17 +98,33 @@ def check_plugin(
     all_results.append(result)
     _print_validation_summary(result, verbose)
 
-    # 类型检查（待实现）
+    # 类型检查
     if not skip_type:
-        print_warning("类型检查功能尚未实现")
+        print_info("正在进行类型检查...")
+        validator = TypeValidator(path)
+        result = validator.validate()
+        all_results.append(result)
+        _print_validation_summary(result, verbose)
 
-    # 代码风格检查（待实现）
+    # 代码风格检查
     if not skip_style:
-        print_warning("代码风格检查功能尚未实现")
+        print_info("正在检查代码风格...")
+        validator = StyleValidator(path, auto_fix=auto_fix)
+        result = validator.validate()
+        all_results.append(result)
+        _print_validation_summary(result, verbose)
 
     # 安全检查（待实现）
     if not skip_security:
         print_warning("安全检查功能尚未实现")
+
+    # 自动修复（如果启用）
+    if auto_fix:
+        print_info("正在应用自动修复...")
+        auto_fixer = AutoFixValidator(path)
+        fix_result = auto_fixer.validate()
+        all_results.append(fix_result)
+        _print_validation_summary(fix_result, verbose)
 
     # 生成总体报告
     _print_overall_report(all_results, level)
