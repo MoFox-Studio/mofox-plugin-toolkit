@@ -75,7 +75,7 @@ def prepare_component_context(
     准备组件模板上下文
 
     Args:
-        component_type: 组件类型 (action, tool, event, adapter, prompt, plus_command)
+        component_type: 组件类型 (action, tool, event, adapter, prompt, plus_command,router,chatter)
         component_name: 组件名称 (snake_case)
         plugin_name: 插件名称
         author: 作者
@@ -98,6 +98,8 @@ def prepare_component_context(
         "adapter": "Adapter",
         "prompt": "Prompt",
         "plus_command": "PlusCommand",
+        "chatter": "Chatter",
+        "router": "Router",
     }
 
     suffix = suffix_map.get(component_type, "")
@@ -132,6 +134,10 @@ def prepare_component_context(
         context["adapter_name"] = component_name
     elif component_type == "prompt":
         context["prompt_name"] = component_name
+    elif component_type == "chatter":
+        context["chatter_name"] = component_name
+    elif component_type == "router":
+        context["router_name"] = component_name
 
     return context
 
@@ -153,5 +159,7 @@ def _get_method_name(component_type: str) -> str:
         "event": "handle",
         "adapter": "connect",
         "prompt": "build",
+        "chatter": "chat",
+        "router": "route",
     }
     return method_map.get(component_type, "execute")

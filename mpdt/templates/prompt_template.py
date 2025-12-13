@@ -11,8 +11,7 @@ Created at: {date}
 
 from src.chat.utils.prompt_params import PromptParameters
 from src.common.logger import get_logger
-from src.plugin_system import BasePrompt, InjectionRule, InjectionType
-
+from src.plugin_system.base.component_types import InjectionRule
 logger = get_logger(__name__)
 
 

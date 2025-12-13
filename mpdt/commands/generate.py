@@ -7,7 +7,7 @@ from typing import Any
 
 import questionary
 
-from mpdt.templates.component_templates import prepare_component_context
+from mpdt.templates import prepare_component_context
 from mpdt.utils.color_printer import (
     console,
     print_error,
@@ -230,6 +230,8 @@ def _generate_component_file(
         "adapter": "adapter",
         "prompt": "prompt",
         "plus_command": "plus_command",
+        "chatter":"chatter",
+        "router":"router"
     }
     template_key = type_map.get(component_type)
     if not template_key:
@@ -351,6 +353,8 @@ def _generate_registration_code(component_type: str, context: dict) -> str:
         "adapter": "get_adapter_info",
         "prompt": "get_prompt_info",
         "plus_command": "get_command_info",
+        "chatter": "get_chatter_info",
+        "router": "get_router_info",
     }
 
     info_method = info_method_map.get(component_type, "get_component_info")

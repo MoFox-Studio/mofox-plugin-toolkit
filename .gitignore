@@ -217,3 +217,6 @@ logs/
 # 配置文件（如果包含敏感信息）
 # config.local.toml
 # .env.local
+mofox_plugin_toolkit.egg-info/PKG-INFO
+mofox_plugin_toolkit.egg-info/requires.txt
+mofox_plugin_toolkit.egg-info/SOURCES.txt
