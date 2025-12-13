@@ -153,7 +153,7 @@ def _interactive_init() -> dict[str, Any]:
                 questionary.Choice("基础插件", value="basic"),
                 questionary.Choice("Action 插件", value="action"),
                 questionary.Choice("Tool 插件", value="tool"),
-                questionary.Choice("Command 插件", value="command"),
+                questionary.Choice("Plus_Command 插件", value="plus_command"),
                 questionary.Choice("完整插件", value="full"),
                 questionary.Choice("Adapter 插件", value="adapter"),
             ],
@@ -211,7 +211,7 @@ def _create_plugin_structure(
     components_dir = ensure_dir(plugin_dir / "components")
     safe_write_file(components_dir / "__init__.py", '"""\n组件模块\n"""\n')
 
-    for comp_type in ["actions", "commands", "tools", "events"]:
+    for comp_type in ["actions", "plus_command", "tools", "events"]:
         comp_dir = ensure_dir(components_dir / comp_type)
         safe_write_file(comp_dir / "__init__.py", f'"""\n{comp_type.title()} 组件\n"""\n')
 

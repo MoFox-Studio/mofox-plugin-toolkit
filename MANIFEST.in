@@ -1,0 +1,30 @@
+# Include important documentation files
+include README.md
+include LICENSE
+include PYPI_PUBLISHING.md
+
+# Include configuration files
+include pyproject.toml
+
+# Include all template files
+recursive-include mpdt/templates *.py
+recursive-include mpdt/templates *.toml
+recursive-include mpdt/templates *.md
+recursive-include mpdt/templates *.txt
+
+# Include all package data
+recursive-include mpdt *.json
+recursive-include mpdt *.yaml
+recursive-include mpdt *.yml
+
+# Exclude unnecessary files
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude *.so
+global-exclude .DS_Store
+recursive-exclude tests *
+recursive-exclude docs *
+recursive-exclude .github *
+exclude .gitignore
+exclude .ruff_cache
+exclude .mypy_cache

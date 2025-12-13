@@ -36,7 +36,7 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
 
 @cli.command()
 @click.argument("plugin_name", required=False)
-@click.option("--template", "-t", type=click.Choice(["basic", "action", "tool", "command", "full", "adapter"]),
+@click.option("--template", "-t", type=click.Choice(["basic", "action", "tool", "plus_command", "full", "adapter"]),
               default="basic", help="插件模板类型")
 @click.option("--author", "-a", help="作者名称")
 @click.option("--license", "-l", type=click.Choice(["GPL-v3.0", "MIT", "Apache-2.0", "BSD-3-Clause"]),
