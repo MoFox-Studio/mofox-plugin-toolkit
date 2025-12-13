@@ -12,7 +12,7 @@ Created at: {date}
 from typing import Any
 
 from src.common.logger import get_logger
-from src.plugin_system import BaseTool
+from src.plugin_system import BaseTool, ToolParamType
 
 logger = get_logger(__name__)
 
@@ -21,89 +21,75 @@ class {class_name}(BaseTool):
     """
     {description}
 
-    这个 Tool 提供特定功能，可以被 AI 模型调用。
+    Tool 组件可以被 LLM 调用来执行特定功能。
     """
 
-    def __init__(self):
-        super().__init__()
-        self.name = "{tool_name}"
-        self.description = "{description}"
+    # Tool 元数据
+    name: str = "{tool_name}"
+    description: str = "{description}"
+    available_for_llm: bool = True  # 是否可供 LLM 使用
 
-        # Tool Schema 定义 (OpenAI Function Calling 格式)
-        self.schema = {{
-            "type": "function",
-            "function": {{
-                "name": self.name,
-                "description": self.description,
-                "parameters": {{
-                    "type": "object",
-                    "properties": {{
-                        # TODO: 定义参数 schema
-                        "param1": {{
-                            "type": "string",
-                            "description": "参数1的说明"
-                        }},
-                        "param2": {{
-                            "type": "number",
-                            "description": "参数2的说明（可选）"
-                        }}
-                    }},
-                    "required": ["param1"]  # 必需参数列表
-                }}
-            }}
-        }}
+    # 定义工具参数
+    # 格式: [("参数名", 参数类型, "参数描述", 是否必填, 枚举值列表)]
+    parameters = [
+        ("query", ToolParamType.STRING, "查询内容", True, None),
+        ("limit", ToolParamType.INTEGER, "返回结果数量限制", False, None),
+        ("format", ToolParamType.STRING, "输出格式", False, ["json", "text", "markdown"]),
+    ]
 
-    {async_keyword}def run(self, **kwargs: Any) -> Any:
+    # 缓存配置（可选）
+    enable_cache: bool = False  # 是否启用缓存
+    cache_ttl: int = 3600  # 缓存过期时间（秒）
+
+    async def execute(self, function_args: dict[str, Any]) -> dict[str, Any]:
         """
-        运行 Tool
+        执行工具功能（供 LLM 调用）
 
         Args:
-            **kwargs: Tool 参数，对应 schema 中定义的参数
+            function_args: LLM 传入的参数，格式符合 parameters 定义
 
         Returns:
-            执行结果（通常是字典格式）
+            执行结果字典
         """
         try:
-            logger.info(f"运行 Tool: {{self.name}}")
-            logger.debug(f"参数: {{kwargs}}")
+            logger.info(f"执行 Tool: {{self.name}}")
+            logger.debug(f"参数: {{function_args}}")
 
-            # TODO: 验证参数
-            self._validate_params(**kwargs)
+            # 获取参数
+            query = function_args.get("query")
+            limit = function_args.get("limit", 10)
+            output_format = function_args.get("format", "text")
 
-            # TODO: 实现 Tool 逻辑
-            # 示例实现
-            param1 = kwargs.get("param1")
-            result = {{
+            # TODO: 实现工具的核心逻辑
+            result_data = self._process_query(query, limit)
+
+            # 格式化返回结果
+            return {{
                 "status": "success",
-                "data": f"处理了参数: {{param1}}",
+                "data": result_data,
                 "message": "执行成功"
             }}
 
-            logger.info("Tool 运行完成")
-            return result
-
         except Exception as e:
-            logger.error(f"Tool 运行失败: {{e}}")
+            logger.error(f"Tool 执行失败: {{e}}")
             return {{
                 "status": "error",
                 "message": str(e)
             }}
 
-    def _validate_params(self, **kwargs: Any) -> None:
+    def _process_query(self, query: str, limit: int) -> Any:
         """
-        验证参数
+        处理查询的核心逻辑
 
         Args:
-            **kwargs: 参数
+            query: 查询内容
+            limit: 结果数量限制
 
-        Raises:
-            ValueError: 参数无效时
+        Returns:
+            处理结果
         """
-        # TODO: 实现参数验证逻辑
-        required_params = ["param1"]
-        for param in required_params:
-            if param not in kwargs:
-                raise ValueError(f"缺少必需参数: {{param}}")
+        # TODO: 实现具体的处理逻辑
+        return {{"query": query, "count": limit}}
 '''
 
 

@@ -9,10 +9,9 @@ Created by: {author}
 Created at: {date}
 """
 
-from typing import Any, Optional
-
+from src.chat.utils.prompt_params import PromptParameters
 from src.common.logger import get_logger
-from src.plugin_system import BasePrompt
+from src.plugin_system import BasePrompt, InjectionRule, InjectionType
 
 logger = get_logger(__name__)
 
@@ -21,152 +20,71 @@ class {class_name}(BasePrompt):
     """
     {description}
 
-    Prompt 组件用于管理和生成 AI 提示词，包括:
-    - 系统提示词
-    - 用户提示词
-    - 上下文注入
-    - 动态提示词生成
+    Prompt 组件用于向核心 Prompt 模板注入额外的上下文信息。
+
+    使用场景：
+    - 向系统提示词添加自定义指令
+    - 注入动态上下文信息
+    - 添加角色设定或行为规则
+    - 提供额外的背景知识
     """
 
-    def __init__(self):
-        super().__init__()
-        self.name = "{prompt_name}"
-        self.description = "{description}"
+    # Prompt 组件元数据
+    prompt_name: str = "{prompt_name}"
+    prompt_description: str = "{description}"
 
-        # 基础提示词模板
-        self.template = """
-{{system_instruction}}
+    # 定义注入规则：指定要注入到哪个核心 Prompt，以什么方式注入
+    injection_rules = [
+        InjectionRule(
+            target_prompt="planner_prompt",  # 目标 Prompt 名称
+            injection_type=InjectionType.APPEND,  # 注入方式：APPEND(追加) 或 PREPEND(前置)
+            priority=50  # 优先级：0-100，数字越大优先级越高
+        )
+    ]
 
-{{context}}
-
-{{user_input}}
-"""
-
-    def build(self, **kwargs: Any) -> str:
+    async def execute(self) -> str:
         """
-        构建完整的提示词
+        生成要注入的 Prompt 内容
 
-        Args:
-            **kwargs: 构建参数
+        可以访问 self.params 来获取上下文信息：
+        - self.params.user_id: 用户ID
+        - self.params.user_name: 用户名
+        - self.params.bot_name: 机器人名称
+        - self.params.recent_messages: 最近的消息列表
+        - self.params.chat_type: 聊天类型（私聊/群聊）
+        - 等等...
 
         Returns:
-            完整的提示词文本
+            要注入的文本内容
         """
         try:
-            logger.info(f"构建 Prompt: {{self.name}}")
+            logger.info(f"生成 Prompt: {{self.prompt_name}}")
 
-            # TODO: 从 kwargs 中提取所需参数
-            context = kwargs.get("context", "")
-            user_input = kwargs.get("user_input", "")
+            # TODO: 根据 self.params 构建要注入的内容
+            # 示例：根据用户信息生成个性化提示词
+            user_name = self.params.user_name or "用户"
 
-            # 构建系统指令
-            system_instruction = self.get_system_instruction()
+            prompt_content = f"""
+# 特殊指令
 
-            # 格式化提示词
-            prompt = self.template.format(
-                system_instruction=system_instruction,
-                context=context,
-                user_input=user_input
-            )
+你正在与 {{user_name}} 对话。
 
-            logger.debug(f"生成的 Prompt: {{prompt[:100]}}...")
-            return prompt
-
-        except Exception as e:
-            logger.error(f"构建 Prompt 失败: {{e}}")
-            raise
-
-    def get_system_instruction(self) -> str:
-        """
-        获取系统指令
-
-        Returns:
-            系统指令文本
-        """
-        # TODO: 定义系统指令
-        return """
-你是一个智能助手，具有以下特点：
-- 友好、专业
+## 行为规则
+- 保持友好和专业的态度
 - 准确理解用户意图
 - 提供有价值的回答
+
+## 额外能力
+- 你可以执行特定的操作
+- 你有访问某些数据的权限
 """
 
-    def add_context(self, context: str, **kwargs: Any) -> str:
-        """
-        添加上下文信息
+            logger.debug(f"生成的内容: {{prompt_content[:100]}}...")
+            return prompt_content.strip()
 
-        Args:
-            context: 上下文内容
-            **kwargs: 其他参数
-
-        Returns:
-            格式化后的上下文
-        """
-        # TODO: 格式化上下文
-        return f"### 上下文\\n{{context}}\\n"
-
-    def add_examples(self, examples: list[dict]) -> str:
-        """
-        添加示例
-
-        Args:
-            examples: 示例列表，每个示例是一个字典 {{"input": "...", "output": "..."}}
-
-        Returns:
-            格式化后的示例文本
-        """
-        if not examples:
+        except Exception as e:
+            logger.error(f"生成 Prompt 失败: {{e}}")
             return ""
-
-        examples_text = "### 示例\\n"
-        for i, example in enumerate(examples, 1):
-            examples_text += f"示例 {{i}}:\\n"
-            examples_text += f"输入: {{example.get('input', '')}}\\n"
-            examples_text += f"输出: {{example.get('output', '')}}\\n\\n"
-
-        return examples_text
-
-    def validate(self, prompt: str) -> bool:
-        """
-        验证生成的提示词
-
-        Args:
-            prompt: 提示词文本
-
-        Returns:
-            是否有效
-        """
-        # TODO: 实现验证逻辑
-        # 检查长度、格式等
-        if not prompt or len(prompt.strip()) == 0:
-            return False
-
-        # 检查是否超过最大长度
-        max_length = 8000  # 根据模型限制设置
-        if len(prompt) > max_length:
-            logger.warning(f"Prompt 长度 ({{len(prompt)}}) 超过限制 ({{max_length}})")
-            return False
-
-        return True
-
-    def optimize(self, prompt: str) -> str:
-        """
-        优化提示词
-
-        Args:
-            prompt: 原始提示词
-
-        Returns:
-            优化后的提示词
-        """
-        # TODO: 实现优化逻辑
-        # 例如: 压缩空白、移除冗余等
-        optimized = prompt.strip()
-        # 压缩多余的换行
-        while "\\n\\n\\n" in optimized:
-            optimized = optimized.replace("\\n\\n\\n", "\\n\\n")
-
-        return optimized
 '''
 
 

@@ -9,10 +9,8 @@ Created by: {author}
 Created at: {date}
 """
 
-from typing import Any
-
 from src.common.logger import get_logger
-from src.plugin_system import BaseAction
+from src.plugin_system import BaseAction, ActionActivationType, ChatMode
 
 logger = get_logger(__name__)
 
@@ -21,56 +19,81 @@ class {class_name}(BaseAction):
     """
     {description}
 
-    这个 Action 用于执行特定的操作任务。
-
-    Args:
-        context: 执行上下文
-        **kwargs: 其他参数
-
-    Returns:
-        执行结果
+    Action 组件用于执行聊天中的具体动作任务。
     """
 
-    def __init__(self):
-        super().__init__()
-        # TODO: 初始化你的 Action
-        self.name = "{component_name}"
-        self.description = "{description}"
+    # Action 元数据
+    action_name: str = "{component_name}"
+    action_description: str = "{description}"
 
-    {async_keyword}def execute(self, context: Any, **kwargs: Any) -> Any:
+    # 激活配置
+    mode_enable: list[ChatMode] = [ChatMode.FOCUS, ChatMode.NORMAL]  # 支持的聊天模式
+    parallel_action: bool = False  # 是否允许与其他 Action 并行执行
+
+    # 专注模式激活配置
+    focus_activation_type: ActionActivationType = ActionActivationType.KEYWORD
+    # 普通模式激活配置
+    normal_activation_type: ActionActivationType = ActionActivationType.LLM_JUDGE
+
+    # 激活条件
+    activation_keywords: list[str] = ["关键词1", "关键词2"]  # 关键词激活时使用
+    keyword_case_sensitive: bool = False  # 关键词是否区分大小写
+
+    # LLM 判断激活的提示词
+    llm_judge_prompt: str = """
+判断用户是否需要执行某个特定操作。
+如果需要，返回 true，否则返回 false。
+"""
+
+    async def go_activate(self, llm_judge_model=None) -> bool:
         """
-        执行 Action
+        自定义激活逻辑（推荐方式）
 
-        Args:
-            context: 执行上下文
-            **kwargs: 其他参数
+        可以组合使用以下工具函数：
+        - await self._keyword_match(["关键词"])  # 关键词匹配
+        - await self._random_activation(0.3)  # 随机激活（30%概率）
+        - await self._llm_judge_activation(prompt, llm_judge_model)  # LLM判断
 
         Returns:
-            执行结果
+            是否激活此 Action
+        """
+        # 示例：关键词匹配
+        return await self._keyword_match(self.activation_keywords, self.keyword_case_sensitive)
+
+    async def execute(self) -> tuple[bool, str]:
+        """
+        执行 Action 的主要逻辑
+
+        可以使用以下方法：
+        - await self.send_text("文本内容")  # 发送文本消息
+        - await self.send_image(image_base64)  # 发送图片
+        - await self.send_command("command_name", args)  # 调用命令
+        - await self.call_action("action_name", data)  # 调用其他 Action
+        - await self.wait_for_new_message(timeout)  # 等待用户回复
+
+        Returns:
+            (是否成功, 结果消息)
         """
         try:
-            logger.info(f"开始执行 Action: {{self.name}}")
+            logger.info(f"执行 Action: {{self.action_name}}")
 
-            # TODO: 实现你的逻辑
-            result = None
+            # TODO: 实现 Action 的核心逻辑
 
-            logger.info(f"Action {{self.name}} 执行完成")
-            return result
+            # 示例：发送消息
+            await self.send_text("Action 执行成功！")
+
+            # 存储 Action 信息到上下文
+            await self.store_action_info(
+                action_build_into_prompt=True,
+                action_prompt_display=f"执行了 {{self.action_name}}",
+                action_done=True
+            )
+
+            return True, "执行成功"
 
         except Exception as e:
-            logger.error(f"Action {{self.name}} 执行失败: {{e}}")
-            raise
-    def validate(self, **kwargs: Any) -> bool:
-        """
-        验证参数
-        Args:
-            **kwargs: 参数
-
-        Returns:
-            是否有效
-        """
-        # TODO: 实现参数验证逻辑
-        return True
+            logger.error(f"Action 执行失败: {{e}}")
+            return False, f"执行失败: {{e}}"
 '''
 
 

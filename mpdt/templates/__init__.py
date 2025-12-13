@@ -8,9 +8,11 @@ from datetime import datetime
 
 from mpdt.templates.action_template import get_action_template
 from mpdt.templates.adapter_template import get_adapter_template
+from mpdt.templates.chatter_template import get_chatter_template
 from mpdt.templates.event_template import get_event_handler_template
 from mpdt.templates.plus_command_template import get_plus_command_template
 from mpdt.templates.prompt_template import get_prompt_template
+from mpdt.templates.router_template import get_router_template
 from mpdt.templates.tool_template import get_tool_template
 
 # 导出所有模板获取函数
@@ -21,6 +23,8 @@ __all__ = [
     "get_adapter_template",
     "get_prompt_template",
     "get_plus_command_template",
+    "get_chatter_template",
+    "get_router_template",
     "get_component_template",
     "prepare_component_context",
 ]
@@ -31,7 +35,7 @@ def get_component_template(component_type: str) -> str:
     根据组件类型获取对应的模板
 
     Args:
-        component_type: 组件类型 (action, tool, event, adapter, prompt, plus_command)
+        component_type: 组件类型 (action, tool, event, adapter, prompt, plus_command, chatter, router)
 
     Returns:
         模板字符串
@@ -46,6 +50,8 @@ def get_component_template(component_type: str) -> str:
         "adapter": get_adapter_template,
         "prompt": get_prompt_template,
         "plus_command": get_plus_command_template,
+        "chatter": get_chatter_template,
+        "router": get_router_template,
     }
 
     if component_type not in template_map:

@@ -143,6 +143,8 @@ def _interactive_generate() -> dict[str, Any]:
                 questionary.Choice("Adapter 适配器", value="adapter"),
                 questionary.Choice("Prompt 提示词", value="prompt"),
                 questionary.Choice("Plus Command 命令", value="plus-command"),
+                questionary.Choice("Chatter 聊天组件", value="chatter"),
+                questionary.Choice("Router 路由组件", value="router"),
             ],
         ),
         component_name=questionary.text(

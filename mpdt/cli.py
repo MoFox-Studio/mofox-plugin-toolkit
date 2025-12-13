@@ -69,7 +69,7 @@ def init(ctx: click.Context, plugin_name: str | None, template: str, author: str
 
 
 @cli.command()
-@click.argument("component_type", type=click.Choice(["action", "tool", "event", "adapter", "prompt", "plus-command"]), required=False)
+@click.argument("component_type", type=click.Choice(["action", "tool", "event", "adapter", "prompt", "plus-command","router","chatter"]), required=False)
 @click.argument("component_name", required=False)
 @click.option("--description", "-d", help="组件描述")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
@@ -102,7 +102,7 @@ def generate(ctx: click.Context, component_type: str | None, component_name: str
 @click.option("--level", "-l", type=click.Choice(["error", "warning", "info"]), default="warning",
               help="显示的最低级别")
 @click.option("--fix", is_flag=True, help="自动修复可修复的问题")
-@click.option("--report", type=click.Choice(["console", "json", "html", "markdown"]), default="console",
+@click.option("--report", type=click.Choice(["console","markdown"]), default="console",
               help="报告格式")
 @click.option("--output", "-o", type=click.Path(), help="报告输出路径")
 @click.option("--no-structure", is_flag=True, help="跳过结构检查")

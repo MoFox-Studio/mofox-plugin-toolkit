@@ -25,41 +25,41 @@ logger = get_logger(__name__)
 class {class_name}(BaseAction):
     """
     {description}
-    
+
     这个 Action 用于...
-    
+
     Args:
         context: 执行上下文
         **kwargs: 其他参数
-    
+
     Returns:
         执行结果
     """
-    
+
     def __init__(self):
         super().__init__()
         # TODO: 初始化你的 Action
-    
+
     {async_keyword}def execute(self, context: Any, **kwargs: Any) -> Any:
         """
         执行 Action
-        
+
         Args:
             context: 执行上下文
             **kwargs: 其他参数
-        
+
         Returns:
             执行结果
         """
         try:
             logger.info("开始执行 {class_name}")
-            
+
             # TODO: 实现你的逻辑
             result = None
-            
+
             logger.info("执行完成")
             return result
-            
+
         except Exception as e:
             logger.error(f"执行失败: {{e}}")
             raise
@@ -86,15 +86,15 @@ logger = get_logger(__name__)
 class {class_name}(BaseTool):
     """
     {description}
-    
+
     这个 Tool 提供...功能
     """
-    
+
     def __init__(self):
         super().__init__()
         self.name = "{tool_name}"
         self.description = "{description}"
-        
+
         # Tool Schema 定义
         self.schema = {{
             "type": "function",
@@ -114,27 +114,27 @@ class {class_name}(BaseTool):
                 }}
             }}
         }}
-    
+
     {async_keyword}def run(self, **kwargs: Any) -> Any:
         """
         运行 Tool
-        
+
         Args:
             **kwargs: Tool 参数
-        
+
         Returns:
             执行结果
         """
         try:
             logger.info(f"运行 Tool: {{self.name}}")
-            
+
             # TODO: 验证参数
             # TODO: 实现 Tool 逻辑
-            
+
             result = {{"status": "success", "data": None}}
             logger.info("Tool 运行完成")
             return result
-            
+
         except Exception as e:
             logger.error(f"Tool 运行失败: {{e}}")
             raise
@@ -161,45 +161,45 @@ logger = get_logger(__name__)
 class {class_name}(BaseEventHandler):
     """
     {description}
-    
+
     处理的事件类型: {event_type}
     """
-    
+
     def __init__(self):
         super().__init__()
         self.event_type = "{event_type}"  # 事件类型
         self.priority = 100  # 优先级 (0-1000, 数字越小优先级越高)
-    
+
     {async_keyword}def handle(self, event: Any, **kwargs: Any) -> Any:
         """
         处理事件
-        
+
         Args:
             event: 事件对象
             **kwargs: 其他参数
-        
+
         Returns:
             处理结果
         """
         try:
             logger.info(f"处理事件: {{self.event_type}}")
-            
+
             # TODO: 实现事件处理逻辑
-            
+
             logger.info("事件处理完成")
             return True
-            
+
         except Exception as e:
             logger.error(f"事件处理失败: {{e}}")
             raise
-    
+
     def should_handle(self, event: Any) -> bool:
         """
         判断是否应该处理该事件
-        
+
         Args:
             event: 事件对象
-        
+
         Returns:
             是否处理
         """

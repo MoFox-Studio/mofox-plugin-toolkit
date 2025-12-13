@@ -9,8 +9,9 @@ Created by: {author}
 Created at: {date}
 """
 
-from typing import Any, Optional
+from typing import Any
 
+from mofox_wire import MessageEnvelope
 from src.common.logger import get_logger
 from src.plugin_system import BaseAdapter
 
@@ -21,138 +22,105 @@ class {class_name}(BaseAdapter):
     """
     {description}
 
-    适配器用于连接不同的平台或服务，如:
+    Adapter 组件用于连接不同的平台或服务。
+
+    支持的场景：
     - QQ/微信等聊天平台
     - Discord/Telegram 等国际平台
     - 自定义 API 服务
+    - WebSocket/HTTP 协议适配
     """
 
-    def __init__(self, config: Optional[dict] = None):
-        super().__init__()
-        self.name = "{adapter_name}"
-        self.config = config or {{}}
-        self.connected = False
+    # Adapter 元数据
+    adapter_name: str = "{adapter_name}"
+    adapter_version: str = "1.0.0"
+    adapter_author: str = "{author}"
+    adapter_description: str = "{description}"
 
-    {async_keyword}def connect(self) -> bool:
+    # 是否在子进程中运行
+    run_in_subprocess: bool = False
+    # 子进程启动脚本路径（相对于插件目录）
+    subprocess_entry: str | None = None
+
+    async def from_platform_message(self, raw: Any) -> MessageEnvelope:
         """
-        连接到目标平台/服务
-
-        Returns:
-            是否连接成功
-        """
-        try:
-            logger.info(f"正在连接 {{self.name}}")
-
-            # TODO: 实现连接逻辑
-            # 示例:
-            # - 建立 WebSocket 连接
-            # - 进行身份验证
-            # - 初始化会话
-
-            self.connected = True
-            logger.info(f"{{self.name}} 连接成功")
-            return True
-
-        except Exception as e:
-            logger.error(f"连接失败: {{e}}")
-            self.connected = False
-            return False
-
-    {async_keyword}def disconnect(self) -> bool:
-        """
-        断开连接
-
-        Returns:
-            是否断开成功
-        """
-        try:
-            logger.info(f"正在断开 {{self.name}}")
-
-            # TODO: 实现断开连接逻辑
-            # 清理资源、关闭连接等
-
-            self.connected = False
-            logger.info(f"{{self.name}} 已断开")
-            return True
-
-        except Exception as e:
-            logger.error(f"断开连接失败: {{e}}")
-            return False
-
-    {async_keyword}def send_message(self, target: str, message: str, **kwargs: Any) -> bool:
-        """
-        发送消息
+        将平台原始消息转换为标准 MessageEnvelope 格式
 
         Args:
-            target: 目标 (用户ID、群组ID等)
-            message: 消息内容
-            **kwargs: 其他参数
+            raw: 平台原始消息对象
 
         Returns:
-            是否发送成功
+            MessageEnvelope: 标准消息信封
         """
         try:
-            if not self.connected:
-                logger.error("未连接到平台")
-                return False
+            logger.debug(f"转换平台消息: {{raw}}")
 
-            logger.info(f"发送消息到 {{target}}")
+            # TODO: 解析平台消息并转换为 MessageEnvelope
+            # 示例：
+            # message_id = raw.get("message_id")
+            # user_id = raw.get("user_id")
+            # content = raw.get("content")
+            # timestamp = raw.get("timestamp")
+            #
+            # return MessageEnvelope(
+            #     message_id=message_id,
+            #     user_id=user_id,
+            #     content=content,
+            #     timestamp=timestamp,
+            #     platform="your_platform"
+            # )
+
+            raise NotImplementedError("需要实现 from_platform_message 方法")
+
+        except Exception as e:
+            logger.error(f"转换消息失败: {{e}}")
+            raise
+
+    async def _send_platform_message(self, envelope: MessageEnvelope) -> None:
+        """
+        发送消息到平台
+
+        Args:
+            envelope: 要发送的消息信封
+        """
+        try:
+            logger.info(f"发送消息: {{envelope.message_id}}")
 
             # TODO: 实现发送消息逻辑
-            # 根据平台的 API 发送消息
+            # 将 MessageEnvelope 转换为平台格式并发送
+            # 示例：
+            # platform_message = {{
+            #     "target_id": envelope.target_id,
+            #     "content": envelope.content,
+            #     "message_type": envelope.message_type
+            # }}
+            # await self.platform_api.send(platform_message)
 
-            logger.info("消息发送成功")
-            return True
+            raise NotImplementedError("需要实现 _send_platform_message 方法")
 
         except Exception as e:
             logger.error(f"发送消息失败: {{e}}")
-            return False
+            raise
 
-    {async_keyword}def receive_message(self) -> Optional[dict]:
+    async def on_adapter_loaded(self) -> None:
         """
-        接收消息
-
-        Returns:
-            消息对象，如果没有消息则返回 None
+        适配器加载时的钩子
+        可以在这里执行初始化逻辑
         """
-        try:
-            if not self.connected:
-                logger.error("未连接到平台")
-                return None
+        logger.info(f"{{self.adapter_name}} 适配器加载完成")
 
-            # TODO: 实现接收消息逻辑
-            # 从队列或 webhook 中获取消息
+        # TODO: 初始化逻辑
+        # 例如：建立连接、加载配置、启动后台任务等
 
-            return None
-
-        except Exception as e:
-            logger.error(f"接收消息失败: {{e}}")
-            return None
-
-    def is_connected(self) -> bool:
+    async def on_adapter_unloaded(self) -> None:
         """
-        检查是否已连接
-
-        Returns:
-            连接状态
+        适配器卸载时的钩子
+        可以在这里执行清理逻辑
         """
-        return self.connected
+        logger.info(f"{{self.adapter_name}} 适配器卸载")
 
-    {async_keyword}def health_check(self) -> bool:
-        """
-        健康检查
-
-        Returns:
-            服务是否健康
-        """
-        try:
-            # TODO: 实现健康检查逻辑
-            # 检查连接状态、API 可用性等
-            return self.connected
-
-        except Exception as e:
-            logger.error(f"健康检查失败: {{e}}")
-            return False
+        # TODO: 清理逻辑
+        # 例如：关闭连接、保存状态、停止后台任务等
 '''
 
 
