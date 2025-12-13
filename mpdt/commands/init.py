@@ -193,11 +193,7 @@ def _create_plugin_structure(
     # 创建 plugin.py
     plugin_content = _generate_plugin_file(plugin_name, template)
     safe_write_file(plugin_dir / "plugin.py", plugin_content)
-    
-    # 创建 config 目录
-    config_dir = ensure_dir(plugin_dir / "config")
-    config_content = _generate_config_file(plugin_name)
-    safe_write_file(config_dir / "config.toml", config_content)
+
     
     # 创建 components 目录
     components_dir = ensure_dir(plugin_dir / "components")
@@ -311,15 +307,6 @@ class {_to_pascal_case(plugin_name)}Plugin(BasePlugin):
         # TODO: 在这里添加你的组件
 
         return components
-'''
-
-
-def _generate_config_file(plugin_name: str) -> str:
-    """生成 config.toml 文件内容"""
-    return f'''[plugin]
-name = "{plugin_name}"
-version = "1.0.0"
-enabled = true
 '''
 
 

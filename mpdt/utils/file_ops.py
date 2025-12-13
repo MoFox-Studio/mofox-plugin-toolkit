@@ -114,7 +114,7 @@ def validate_component_name(name: str) -> bool:
     """
     验证组件名称是否符合规范
     
-    规范: 使用 PascalCase（首字母大写的驼峰命名）
+    规范: 支持 snake_case 或 PascalCase
     
     Args:
         name: 组件名称
@@ -123,7 +123,8 @@ def validate_component_name(name: str) -> bool:
         是否符合规范
     """
     import re
-    return bool(re.match(r"^[A-Z][a-zA-Z0-9]*$", name))
+    # 支持 snake_case 或 PascalCase
+    return bool(re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", name))
 
 
 def get_git_user_info() -> dict[str, str]:
@@ -157,5 +158,47 @@ def get_git_user_info() -> dict[str, str]:
             result["email"] = email.stdout.strip()
     except Exception:
         pass
-    
+
     return result
+
+
+def to_pascal_case(snake_str: str) -> str:
+    """
+    将 snake_case 转换为 PascalCase
+
+    Args:
+        snake_str: snake_case 字符串
+
+    Returns:
+        PascalCase 字符串
+
+    Examples:
+        >>> to_pascal_case("my_action")
+        'MyAction'
+        >>> to_pascal_case("test_command_handler")
+        'TestCommandHandler'
+    """
+    return "".join(word.capitalize() for word in snake_str.split("_"))
+
+
+def to_snake_case(pascal_str: str) -> str:
+    """
+    将 PascalCase 转换为 snake_case
+
+    Args:
+        pascal_str: PascalCase 字符串
+
+    Returns:
+        snake_case 字符串
+
+    Examples:
+        >>> to_snake_case("MyAction")
+        'my_action'
+        >>> to_snake_case("TestCommandHandler")
+        'test_command_handler'
+    """
+    import re
+    # 在大写字母前插入下划线
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', pascal_str)
+    # 处理连续大写字母
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()

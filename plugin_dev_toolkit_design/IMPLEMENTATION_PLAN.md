@@ -135,7 +135,8 @@ def _interactive_init() -> dict[str, Any]:
 - [x] 目录结构创建 (`_create_plugin_structure`)
 - [x] 文件从模板生成
 - [x] 权限设置
-- [x] Git 初始化（可选，通过 `--with-git` 选项）
+- [x] Git 初始化(可选,通过 `--with-git` 选项)
+- [x] 许可证文件生成 (支持 GPL-v3.0, MIT, Apache-2.0, BSD-3-Clause)
 
 **生成的目录结构:**
 ```
@@ -151,7 +152,9 @@ def _interactive_init() -> dict[str, Any]:
 ├── docs/
 │   └── README.md
 ├── pyproject.toml
-└── README.md
+├── requirements.txt
+├── README.md
+└── LICENSE  # 🆕 自动生成的许可证文件
 ```
 
 #### 2.4 依赖处理 ✅
@@ -165,26 +168,30 @@ def _interactive_init() -> dict[str, Any]:
 
 ### 可交付成果 ✅
 - ✅ 完整的 `mpdt init` 命令
-- ✅ 6 套插件模板（basic, action, tool, command, adapter, full）
-- ✅ 详细的用户文档（README.md）
+- ✅ 6 套插件模板(basic, action, tool, command, adapter, full)
+- ✅ 自动许可证文件生成 (支持 4 种常见开源协议)
+- ✅ 详细的用户文档(README.md)
 
 ---
 
 ## Phase 3: 代码生成命令 🔄 **进行中**
 
+> **更新**: 2025年12月13日 - 开始实施 Phase 3
+> **详细任务清单**: 见 [PHASE3_TODO.md](./PHASE3_TODO.md)
+
 ### 目标
-实现 `mpdt generate` 命令，支持生成各种组件。
+实现 `mpdt generate` 命令,支持生成各种组件。
 
 ### 任务清单
 
-#### 3.1 组件模板 📝 **待实现**
-- [ ] Action 组件模板
-- [ ] Command 组件模板
-- [ ] Tool 组件模板
-- [ ] Event Handler 模板
-- [ ] Adapter 模板
-- [ ] Prompt 模板
-- [ ] PlusCommand 模板
+#### 3.1 组件模板 ✅ **已完成**
+- [x] Action 组件模板
+- [x] Command 组件模板
+- [x] Tool 组件模板
+- [x] Event Handler 模板
+- [ ] Adapter 模板 (待实现)
+- [ ] Prompt 模板 (待实现)
+- [ ] PlusCommand 模板 (待实现)
 
 每个模板需要包含:
 - 完整的类定义
@@ -193,13 +200,13 @@ def _interactive_init() -> dict[str, Any]:
 - 示例实现
 - 对应的测试文件模板
 
-#### 3.2 代码生成逻辑 📝 **待实现**
-- [ ] 解析命令参数
-- [ ] 验证组件名称
-- [ ] 确定输出路径
-- [ ] 渲染模板
-- [ ] 写入文件
-- [ ] 更新插件主类
+#### 3.2 代码生成逻辑 ✅ **已完成**
+- [x] 解析命令参数
+- [x] 验证组件名称
+- [x] 确定输出路径
+- [x] 渲染模板
+- [x] 写入文件
+- [x] 更新插件主类
 
 **计划实现示例:**
 ```python
@@ -229,13 +236,13 @@ def generate_component(
     return True
 ```
 
-**当前状态:** 命令框架已创建（`mpdt/commands/generate.py`），但功能未实现
+**当前状态:** 基础功能已实现,支持 Action、Command、Tool、Event 四种组件类型
 
-#### 3.3 插件注册自动更新 📝 **待实现**
-- [ ] AST 解析 plugin.py
-- [ ] 添加组件导入
-- [ ] 更新 get_plugin_components 方法
-- [ ] 保持代码格式
+#### 3.3 插件注册自动更新 ✅ **已完成**
+- [x] 添加组件导入 (文本处理方式)
+- [x] 在 get_plugin_components 方法中添加 TODO 注释
+- [ ] AST 解析 plugin.py (可选,用于更复杂的场景)
+- [ ] 完全自动化注册 (需要 ComponentInfo 配置)
 
 #### 3.4 测试文件生成 📝 **待实现**
 - [ ] 组件测试模板
