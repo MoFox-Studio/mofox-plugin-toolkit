@@ -46,13 +46,13 @@ def print_panel(title: str, content: str, style: str = "green") -> None:
 def print_table(title: str, columns: list[str], rows: list[list[str]]) -> None:
     """打印表格"""
     table = Table(title=title)
-    
+
     for col in columns:
         table.add_column(col, style="cyan")
-    
+
     for row in rows:
         table.add_row(*row)
-    
+
     console.print(table)
 
 
@@ -65,7 +65,7 @@ def print_tree(root_label: str, tree_data: dict[str, Any]) -> None:
         tree_data: 树形数据（字典或列表）
     """
     tree = Tree(f"[bold blue]{root_label}[/bold blue]")
-    
+
     def add_branch(parent: Tree, data: Any) -> None:
         if isinstance(data, dict):
             for key, value in data.items():
@@ -80,7 +80,7 @@ def print_tree(root_label: str, tree_data: dict[str, Any]) -> None:
                     parent.add(f"[green]{item}[/green]")
                 else:
                     add_branch(parent, item)
-    
+
     add_branch(tree, tree_data)
     console.print(tree)
 

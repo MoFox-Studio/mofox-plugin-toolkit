@@ -351,13 +351,13 @@ def prepare_component_context(
         模板上下文字典
     """
     from mpdt.utils.file_ops import to_pascal_case
-    
+
     class_name = to_pascal_case(component_name)
     if not class_name.endswith(component_type.title()):
         class_name = f"{class_name}{component_type.title()}"
-    
+
     date = datetime.now().strftime("%Y-%m-%d")
-    
+
     context = {
         "component_name": component_name,
         "class_name": class_name,
@@ -373,7 +373,7 @@ def prepare_component_context(
         "method_name": "execute" if component_type in ["action", "command"] else ("run" if component_type == "tool" else "handle"),
         "test_name": component_name,
     }
-    
+
     # 特定组件类型的额外字段
     if component_type == "command":
         context["command_name"] = component_name
@@ -381,5 +381,5 @@ def prepare_component_context(
         context["tool_name"] = component_name
     elif component_type == "event":
         context["event_type"] = component_name.replace("_handler", "")
-    
+
     return context

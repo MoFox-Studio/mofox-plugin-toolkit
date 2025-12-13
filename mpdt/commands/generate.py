@@ -23,7 +23,6 @@ from mpdt.utils.file_ops import (
     ensure_dir,
     get_git_user_info,
     safe_write_file,
-    to_pascal_case,
     to_snake_case,
     validate_component_name,
 )
@@ -53,31 +52,31 @@ def generate_component(
         verbose: 详细输出
     """
     print_step(f"生成 {component_type.upper()} 组件: {component_name}")
-    
+
     # 验证组件名称
     if not validate_component_name(component_name):
         print_error("组件名称无效！必须使用小写字母、数字和下划线，以字母开头")
         return
-    
+
     # 确定工作目录
     if output_dir:
         work_dir = Path(output_dir)
     else:
         work_dir = Path.cwd()
-    
+
     # 检查是否在插件目录中
     plugin_name = _detect_plugin_name(work_dir)
     if not plugin_name:
         print_error("未检测到插件目录！请在插件根目录下运行此命令")
         print_warning("提示: 插件目录应包含 plugin.py 文件")
         return
-    
+
     if verbose:
         console.print(f"[dim]检测到插件: {plugin_name}[/dim]")
-    
+
     # 确保组件名称为 snake_case
     component_name = to_snake_case(component_name)
-    
+
     # 准备上下文
     git_info = get_git_user_info()
     context = prepare_component_context(
@@ -88,7 +87,7 @@ def generate_component(
         description=description,
         is_async=is_async,
     )
-    
+
     # 生成组件文件
     component_file = _generate_component_file(
         work_dir=work_dir,
@@ -98,10 +97,10 @@ def generate_component(
         force=force,
         verbose=verbose,
     )
-    
+
     if not component_file:
         return
-    
+
     # 生成测试文件
     test_file = None
     if with_test:
@@ -113,7 +112,7 @@ def generate_component(
             force=force,
             verbose=verbose,
         )
-    
+
     # 更新插件注册
     if not _update_plugin_registration(
         work_dir=work_dir,
@@ -123,15 +122,15 @@ def generate_component(
         verbose=verbose,
     ):
         print_warning("⚠️  请手动将组件添加到 plugin.py 的 get_plugin_components 方法中")
-    
+
     # 打印成功信息
     print_success(f"✨ {context['class_name']} 生成成功！")
-    console.print(f"\n[bold cyan]生成的文件:[/bold cyan]")
+    console.print("\n[bold cyan]生成的文件:[/bold cyan]")
     console.print(f"  📄 {component_file.relative_to(work_dir)}")
     if test_file:
         console.print(f"  🧪 {test_file.relative_to(work_dir)}")
-    
-    console.print(f"\n[bold cyan]下一步:[/bold cyan]")
+
+    console.print("\n[bold cyan]下一步:[/bold cyan]")
     console.print(f"  1. 编辑 {component_file.name} 实现具体逻辑")
     if test_file:
         console.print(f"  2. 编辑 {test_file.name} 添加测试用例")

@@ -4,7 +4,6 @@
 
 import shutil
 from pathlib import Path
-from typing import List
 
 
 def ensure_dir(path: Path | str) -> Path:
@@ -38,13 +37,13 @@ def safe_write_file(path: Path | str, content: str, force: bool = False) -> bool
         FileExistsError: 文件已存在且 force=False
     """
     path = Path(path)
-    
+
     if path.exists() and not force:
         raise FileExistsError(f"文件已存在: {path}")
-    
+
     # 确保父目录存在
     ensure_dir(path.parent)
-    
+
     # 写入文件
     path.write_text(content, encoding="utf-8")
     return True
@@ -64,18 +63,18 @@ def copy_directory(src: Path | str, dst: Path | str, force: bool = False) -> boo
     """
     src = Path(src)
     dst = Path(dst)
-    
+
     if dst.exists() and not force:
         raise FileExistsError(f"目标目录已存在: {dst}")
-    
+
     if dst.exists():
         shutil.rmtree(dst)
-    
+
     shutil.copytree(src, dst)
     return True
 
 
-def list_python_files(path: Path | str, recursive: bool = True) -> List[Path]:
+def list_python_files(path: Path | str, recursive: bool = True) -> list[Path]:
     """
     列出目录中的所有 Python 文件
     
@@ -87,7 +86,7 @@ def list_python_files(path: Path | str, recursive: bool = True) -> List[Path]:
         Python 文件路径列表
     """
     path = Path(path)
-    
+
     if recursive:
         return list(path.rglob("*.py"))
     else:
@@ -135,9 +134,9 @@ def get_git_user_info() -> dict[str, str]:
         包含 name 和 email 的字典
     """
     import subprocess
-    
+
     result = {"name": "", "email": ""}
-    
+
     try:
         name = subprocess.run(
             ["git", "config", "--get", "user.name"],
@@ -147,7 +146,7 @@ def get_git_user_info() -> dict[str, str]:
         )
         if name.returncode == 0:
             result["name"] = name.stdout.strip()
-        
+
         email = subprocess.run(
             ["git", "config", "--get", "user.email"],
             capture_output=True,

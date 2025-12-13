@@ -19,7 +19,7 @@ def get_license_text(license_type: str, author: str = "", year: str | None = Non
     """
     if year is None:
         year = str(datetime.now().year)
-    
+
     license_generators = {
         "GPL-v3.0": _generate_gpl_v3,
         "MIT": _generate_mit,

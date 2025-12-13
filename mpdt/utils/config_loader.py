@@ -10,7 +10,7 @@ import toml
 
 class ConfigLoader:
     """配置加载器"""
-    
+
     def __init__(self, config_path: Path | str | None = None):
         """
         初始化配置加载器
@@ -20,10 +20,10 @@ class ConfigLoader:
         """
         self.config_path = Path(config_path) if config_path else None
         self.config: dict[str, Any] = {}
-        
+
         if self.config_path and self.config_path.exists():
             self.load()
-    
+
     def load(self) -> dict[str, Any]:
         """
         加载配置文件
@@ -33,10 +33,10 @@ class ConfigLoader:
         """
         if not self.config_path or not self.config_path.exists():
             return {}
-        
+
         self.config = toml.load(str(self.config_path))
         return self.config
-    
+
     def get(self, key: str, default: Any = None) -> Any:
         """
         获取配置项
@@ -52,15 +52,15 @@ class ConfigLoader:
         """
         keys = key.split(".")
         value = self.config
-        
+
         for k in keys:
             if isinstance(value, dict) and k in value:
                 value = value[k]
             else:
                 return default
-        
+
         return value
-    
+
     def set(self, key: str, value: Any) -> None:
         """
         设置配置项
@@ -71,14 +71,14 @@ class ConfigLoader:
         """
         keys = key.split(".")
         config = self.config
-        
+
         for k in keys[:-1]:
             if k not in config:
                 config[k] = {}
             config = config[k]
-        
+
         config[keys[-1]] = value
-    
+
     def save(self, path: Path | str | None = None) -> None:
         """
         保存配置到文件
@@ -87,12 +87,12 @@ class ConfigLoader:
             path: 保存路径，如果为 None 则使用初始化时的路径
         """
         save_path = Path(path) if path else self.config_path
-        
+
         if not save_path:
             raise ValueError("未指定配置文件路径")
-        
+
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(save_path, "w", encoding="utf-8") as f:
             toml.dump(self.config, f)
 
@@ -112,12 +112,12 @@ def load_mpdt_config(project_dir: Path | str = ".") -> ConfigLoader:
         ConfigLoader 对象
     """
     project_dir = Path(project_dir)
-    
+
     # 首先尝试加载 .mpdtrc.toml
     mpdtrc_path = project_dir / ".mpdtrc.toml"
     if mpdtrc_path.exists():
         return ConfigLoader(mpdtrc_path)
-    
+
     # 然后尝试从 pyproject.toml 加载
     pyproject_path = project_dir / "pyproject.toml"
     if pyproject_path.exists():
@@ -126,7 +126,7 @@ def load_mpdt_config(project_dir: Path | str = ".") -> ConfigLoader:
             loader = ConfigLoader()
             loader.config = config["tool"]["mpdt"]
             return loader
-    
+
     # 返回空配置
     return ConfigLoader()
 

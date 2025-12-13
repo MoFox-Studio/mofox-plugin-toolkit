@@ -25,11 +25,11 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
     ctx.obj["no_color"] = no_color
-    
+
     # 禁用彩色输出
     if no_color:
         console._color_system = None
-    
+
     if verbose:
         console.print(f"[bold green]MPDT v{__version__}[/bold green]")
 
@@ -50,7 +50,7 @@ def init(ctx: click.Context, plugin_name: str | None, template: str, author: str
          license: str, with_examples: bool, with_tests: bool, with_docs: bool, output: str | None) -> None:
     """初始化新插件项目"""
     from mpdt.commands.init import init_plugin
-    
+
     try:
         init_plugin(
             plugin_name=plugin_name,
@@ -81,7 +81,7 @@ def generate(ctx: click.Context, component_type: str, component_name: str, descr
              is_async: bool, with_test: bool, output: str | None, force: bool) -> None:
     """生成插件组件"""
     from mpdt.commands.generate import generate_component
-    
+
     try:
         generate_component(
             component_type=component_type,
@@ -118,7 +118,7 @@ def check(ctx: click.Context, path: str, level: str, fix: bool, report: str, out
           no_style: bool, no_security: bool) -> None:
     """对插件进行静态检查"""
     from mpdt.commands.check import check_plugin
-    
+
     try:
         check_plugin(
             plugin_path=path,

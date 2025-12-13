@@ -45,7 +45,7 @@ def init_plugin(
         verbose: 是否详细输出
     """
     print_step("开始初始化插件...")
-    
+
     # 交互式获取插件信息
     if not plugin_name:
         plugin_info = _interactive_init()
@@ -56,25 +56,25 @@ def init_plugin(
         with_examples = plugin_info.get("with_examples", False)
         with_tests = plugin_info.get("with_tests", False)
         with_docs = plugin_info.get("with_docs", False)
-    
+
     # 验证插件名称
     if not validate_plugin_name(plugin_name):
         print_error("插件名称无效！必须使用小写字母、数字和下划线，以字母开头")
         return
-    
+
     # 确定输出目录
     if output_dir:
         base_dir = Path(output_dir)
     else:
         base_dir = Path.cwd()
-    
+
     plugin_dir = base_dir / plugin_name
-    
+
     # 检查目录是否已存在
     if plugin_dir.exists():
         print_error(f"目录已存在: {plugin_dir}")
         return
-    
+
     # 创建插件结构
     _create_plugin_structure(
         plugin_dir=plugin_dir,
@@ -87,7 +87,7 @@ def init_plugin(
         with_docs=with_docs,
         verbose=verbose,
     )
-    
+
     # 打印成功信息
     print_success("插件创建成功！")
     print_tree(
@@ -106,7 +106,7 @@ def init_plugin(
             "LICENSE": None,
         },
     )
-    
+
     # 打印下一步指引
     next_steps = f"""
 1. cd {plugin_name}
@@ -120,9 +120,9 @@ def init_plugin(
 def _interactive_init() -> dict[str, Any]:
     """交互式初始化"""
     console.print("\n[bold cyan]🚀 欢迎使用 MPDT 插件初始化向导[/bold cyan]\n")
-    
+
     git_info = get_git_user_info()
-    
+
     answers = questionary.form(
         plugin_name=questionary.text(
             "插件名称 (使用下划线命名):",
@@ -166,7 +166,7 @@ def _interactive_init() -> dict[str, Any]:
             default=True,
         ),
     ).ask()
-    
+
     return answers
 
 
@@ -182,47 +182,47 @@ def _create_plugin_structure(
     verbose: bool,
 ) -> None:
     """创建插件目录结构"""
-    
+
     # 创建主目录
     ensure_dir(plugin_dir)
-    
+
     # 创建 __init__.py
     init_content = _generate_init_file(plugin_name, author, license_type)
     safe_write_file(plugin_dir / "__init__.py", init_content)
-    
+
     # 创建 plugin.py
     plugin_content = _generate_plugin_file(plugin_name, template)
     safe_write_file(plugin_dir / "plugin.py", plugin_content)
 
-    
+
     # 创建 components 目录
     components_dir = ensure_dir(plugin_dir / "components")
     safe_write_file(components_dir / "__init__.py", '"""\n组件模块\n"""\n')
-    
+
     for comp_type in ["actions", "commands", "tools", "events"]:
         comp_dir = ensure_dir(components_dir / comp_type)
         safe_write_file(comp_dir / "__init__.py", f'"""\n{comp_type.title()} 组件\n"""\n')
-    
+
     # 创建 utils 目录
     utils_dir = ensure_dir(plugin_dir / "utils")
     safe_write_file(utils_dir / "__init__.py", '"""\n工具函数\n"""\n')
-    
+
     # 创建测试目录
     if with_tests:
         tests_dir = ensure_dir(plugin_dir / "tests")
         safe_write_file(tests_dir / "__init__.py", "")
         safe_write_file(tests_dir / "conftest.py", _generate_conftest_file())
         safe_write_file(tests_dir / "test_plugin.py", _generate_test_file(plugin_name))
-    
+
     # 创建文档目录
     if with_docs:
         docs_dir = ensure_dir(plugin_dir / "docs")
         safe_write_file(docs_dir / "README.md", _generate_readme_file(plugin_name))
-    
+
     # 创建 pyproject.toml
     pyproject_content = _generate_pyproject_file(plugin_name, author, license_type)
     safe_write_file(plugin_dir / "pyproject.toml", pyproject_content)
-    
+
     # 创建 requirements.txt
     safe_write_file(plugin_dir / "requirements.txt", "# 插件依赖列表\n")
 
@@ -240,13 +240,13 @@ def _create_plugin_structure(
 def _generate_init_file(plugin_name: str, author: str | None, license_type: str) -> str:
     """生成 __init__.py 文件内容"""
     from mpdt.utils.template_engine import prepare_common_context
-    
+
     context = prepare_common_context(
         plugin_name=plugin_name,
         author=author or "",
         license=license_type,
     )
-    
+
     return f'''"""
 {plugin_name} - MoFox-Bot Plugin
 
