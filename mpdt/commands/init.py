@@ -16,6 +16,7 @@ from mpdt.utils.color_printer import (
     print_tree,
 )
 from mpdt.utils.file_ops import ensure_dir, get_git_user_info, safe_write_file, validate_plugin_name
+from mpdt.utils.license_generator import get_license_text
 
 
 def init_plugin(
@@ -99,6 +100,10 @@ def init_plugin(
             "utils": ["__init__.py"],
             "tests": ["conftest.py", "test_plugin.py"] if with_tests else [],
             "docs": ["README.md"] if with_docs else [],
+            "pyproject.toml": None,
+            "requirements.txt": None,
+            "README.md": None,
+            "LICENSE": None,
         },
     )
     
@@ -224,10 +229,16 @@ def _create_plugin_structure(
     
     # 创建 requirements.txt
     safe_write_file(plugin_dir / "requirements.txt", "# 插件依赖列表\n")
-    
+
     # 创建 README.md
-    readme_content = _generate_main_readme_file(plugin_name)
+    readme_content = _generate_main_readme_file(plugin_name, license_type)
     safe_write_file(plugin_dir / "README.md", readme_content)
+
+    # 创建 LICENSE 文件
+    license_content = get_license_text(license_type, author or "")
+    safe_write_file(plugin_dir / "LICENSE", license_content)
+    if verbose:
+        console.print(f"[dim]✓ 生成许可证文件: {license_type}[/dim]")
 
 
 def _generate_init_file(plugin_name: str, author: str | None, license_type: str) -> str:
@@ -397,7 +408,7 @@ dependencies = []
 '''
 
 
-def _generate_main_readme_file(plugin_name: str) -> str:
+def _generate_main_readme_file(plugin_name: str, license_type: str = "GPL-v3.0") -> str:
     """生成主 README.md 文件内容"""
     return f'''# {plugin_name}
 
@@ -430,7 +441,7 @@ mpdt test
 
 ## 许可证
 
-TODO: 添加许可证信息
+本项目基于 {license_type} 许可证开源,详见 [LICENSE](./LICENSE) 文件。
 '''
 
 
