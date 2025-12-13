@@ -116,7 +116,7 @@ def generate_component(
         context=context,
         verbose=verbose,
     ):
-        print_warning("⚠️  请手动将组件添加到 plugin.py 的 get_plugin_components 方法中")
+        print_warning("⚠️  自动更新插件注册失败，请手动添加到 plugin.py")
 
     # 打印成功信息
     print_success(f"✨ {context['class_name']} 生成成功！")
@@ -305,14 +305,14 @@ def _update_plugin_registration(
                 content = "\n".join(lines)
 
         # 在 get_plugin_components 中添加组件注册
-        # 这里只是简单的文本处理,更复杂的情况可能需要 AST 解析
-        registration_comment = f"\n        # TODO: 添加 {context['class_name']} 到组件列表\n        # components.append((ComponentInfo(...), {context['class_name']}))\n"
+        # 根据组件类型生成正确的注册代码
+        registration_code = _generate_registration_code(component_type, context)
 
-        if "get_plugin_components" in content and registration_comment not in content:
-            # 找到 return components 前插入注释
+        if "get_plugin_components" in content and registration_code not in content:
+            # 找到 return components 前插入注册代码
             content = content.replace(
                 "return components",
-                f"{registration_comment}        return components"
+                f"{registration_code}\n        return components"
             )
 
         plugin_file.write_text(content, encoding="utf-8")
@@ -326,3 +326,35 @@ def _update_plugin_registration(
         if verbose:
             console.print(f"[dim]⚠  自动更新插件注册失败: {e}[/dim]")
         return False
+
+
+def _generate_registration_code(component_type: str, context: dict) -> str:
+    """
+    根据组件类型生成正确的注册代码
+
+    Args:
+        component_type: 组件类型
+        context: 模板上下文
+
+    Returns:
+        注册代码字符串
+    """
+    class_name = context['class_name']
+
+    # 根据组件类型生成对应的 get_xxx_info() 方法调用
+    info_method_map = {
+        "action": "get_action_info",
+        "tool": "get_tool_info",
+        "event": "get_event_handler_info",
+        "adapter": "get_adapter_info",
+        "prompt": "get_prompt_info",
+        "plus_command": "get_command_info",
+    }
+
+    info_method = info_method_map.get(component_type, "get_component_info")
+
+    registration = f"""
+        # 注册 {class_name}
+        components.append(({class_name}.{info_method}(), {class_name}))"""
+
+    return registration
