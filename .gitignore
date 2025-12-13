@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Python egg-info
+mofox-plugin-toolkit/mofox_plugin_toolkit.egg-info/
+
 # Distribution / packaging
 .Python
 build/
