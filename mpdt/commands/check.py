@@ -2,7 +2,20 @@
 静态检查命令实现
 """
 
-from mpdt.utils.color_printer import console, print_warning
+from pathlib import Path
+
+from rich.panel import Panel
+from rich.table import Table
+
+from mpdt.utils.color_printer import console, print_error, print_info, print_success, print_warning
+from mpdt.validators import (
+    ComponentValidator,
+    ConfigValidator,
+    MetadataValidator,
+    StructureValidator,
+    ValidationLevel,
+    ValidationResult,
+)
 
 
 def check_plugin(
@@ -24,9 +37,9 @@ def check_plugin(
 
     Args:
         plugin_path: 插件路径
-        level: 显示级别
+        level: 显示级别 (error, warning, info)
         auto_fix: 自动修复
-        report_format: 报告格式
+        report_format: 报告格式 (console, markdown)
         output_path: 输出路径
         skip_structure: 跳过结构检查
         skip_metadata: 跳过元数据检查
@@ -36,5 +49,254 @@ def check_plugin(
         skip_security: 跳过安全检查
         verbose: 详细输出
     """
-    print_warning("检查功能尚未实现")
-    console.print(f"[dim]将检查: {plugin_path}[/dim]")
+    path = Path(plugin_path).resolve()
+
+    if not path.exists():
+        print_error(f"插件路径不存在: {plugin_path}")
+        return
+
+    if not path.is_dir():
+        print_error(f"插件路径不是目录: {plugin_path}")
+        return
+
+    console.print(Panel.fit(f"🔍 检查插件: [cyan]{path.name}[/cyan]", border_style="blue"))
+
+    # 收集所有验证结果
+    all_results: list[ValidationResult] = []
+
+    # 结构验证
+    if not skip_structure:
+        print_info("正在检查插件结构...")
+        validator = StructureValidator(path)
+        result = validator.validate()
+        all_results.append(result)
+        _print_validation_summary(result, verbose)
+
+    # 元数据验证
+    if not skip_metadata:
+        print_info("正在检查插件元数据...")
+        validator = MetadataValidator(path)
+        result = validator.validate()
+        all_results.append(result)
+        _print_validation_summary(result, verbose)
+
+    # 组件验证
+    if not skip_component:
+        print_info("正在检查组件元数据...")
+        validator = ComponentValidator(path)
+        result = validator.validate()
+        all_results.append(result)
+        _print_validation_summary(result, verbose)
+
+    # 配置验证
+    print_info("正在检查配置文件...")
+    validator = ConfigValidator(path)
+    result = validator.validate()
+    all_results.append(result)
+    _print_validation_summary(result, verbose)
+
+    # 类型检查（待实现）
+    if not skip_type:
+        print_warning("类型检查功能尚未实现")
+
+    # 代码风格检查（待实现）
+    if not skip_style:
+        print_warning("代码风格检查功能尚未实现")
+
+    # 安全检查（待实现）
+    if not skip_security:
+        print_warning("安全检查功能尚未实现")
+
+    # 生成总体报告
+    _print_overall_report(all_results, level)
+
+    # 保存报告（如果需要）
+    if output_path:
+        _save_report(all_results, output_path, report_format)
+
+
+def _print_validation_summary(result: ValidationResult, verbose: bool = False) -> None:
+    """打印验证摘要
+
+    Args:
+        result: 验证结果
+        verbose: 是否详细输出
+    """
+    if result.success:
+        print_success(f"  ✓ {result.validator_name}: 通过")
+    else:
+        print_error(f"  ✗ {result.validator_name}: 发现 {result.error_count} 个错误")
+
+    if verbose and result.issues:
+        for issue in result.issues:
+            _print_issue(issue)
+
+
+def _print_issue(issue) -> None:
+    """打印单个问题
+
+    Args:
+        issue: 验证问题
+    """
+    level_colors = {
+        ValidationLevel.ERROR: "red",
+        ValidationLevel.WARNING: "yellow",
+        ValidationLevel.INFO: "blue",
+    }
+
+    level_icons = {
+        ValidationLevel.ERROR: "✗",
+        ValidationLevel.WARNING: "⚠",
+        ValidationLevel.INFO: "ℹ",
+    }
+
+    color = level_colors.get(issue.level, "white")
+    icon = level_icons.get(issue.level, "•")
+
+    message = f"    [{color}]{icon}[/{color}] {issue.message}"
+
+    if issue.file_path:
+        message += f" ([dim]{issue.file_path}"
+        if issue.line_number:
+            message += f":{issue.line_number}"
+        message += "[/dim])"
+
+    console.print(message)
+
+    if issue.suggestion:
+        console.print(f"      [dim]💡 {issue.suggestion}[/dim]")
+
+
+def _print_overall_report(results: list[ValidationResult], level: str) -> None:
+    """打印总体报告
+
+    Args:
+        results: 所有验证结果
+        level: 显示级别
+    """
+    console.print()
+    console.print("=" * 60)
+    console.print()
+
+    # 统计总数
+    total_errors = sum(r.error_count for r in results)
+    total_warnings = sum(r.warning_count for r in results)
+
+    # 创建统计表格
+    table = Table(title="检查结果汇总", show_header=True, header_style="bold")
+    table.add_column("验证器", style="cyan")
+    table.add_column("错误", style="red")
+    table.add_column("警告", style="yellow")
+    table.add_column("信息", style="blue")
+    table.add_column("状态", style="green")
+
+    for result in results:
+        status = "✓ 通过" if result.success else "✗ 失败"
+        status_style = "green" if result.success else "red"
+        table.add_row(
+            result.validator_name,
+            str(result.error_count),
+            str(result.warning_count),
+            str(result.info_count),
+            f"[{status_style}]{status}[/{status_style}]",
+        )
+
+    console.print(table)
+    console.print()
+
+    # 打印详细问题列表
+    level_filter = ValidationLevel(level)
+    for result in results:
+        filtered_issues = [
+            issue
+            for issue in result.issues
+            if (issue.level == ValidationLevel.ERROR)
+            or (issue.level == ValidationLevel.WARNING and level_filter in [ValidationLevel.WARNING, ValidationLevel.INFO])
+            or (issue.level == ValidationLevel.INFO and level_filter == ValidationLevel.INFO)
+        ]
+
+        if filtered_issues:
+            console.print(f"\n[bold]{result.validator_name}:[/bold]")
+            for issue in filtered_issues:
+                _print_issue(issue)
+
+    # 总结
+    console.print()
+    if total_errors > 0:
+        print_error(f"发现 {total_errors} 个错误，{total_warnings} 个警告")
+    elif total_warnings > 0:
+        print_warning(f"发现 {total_warnings} 个警告")
+    else:
+        print_success("所有检查通过！")
+
+
+def _save_report(results: list[ValidationResult], output_path: str, report_format: str) -> None:
+    """保存检查报告
+
+    Args:
+        results: 验证结果列表
+        output_path: 输出路径
+        report_format: 报告格式
+    """
+    if report_format == "markdown":
+        _save_markdown_report(results, output_path)
+    else:
+        print_warning(f"不支持的报告格式: {report_format}")
+
+
+def _save_markdown_report(results: list[ValidationResult], output_path: str) -> None:
+    """保存 Markdown 格式的报告
+
+    Args:
+        results: 验证结果列表
+        output_path: 输出路径
+    """
+    lines = ["# 插件检查报告\n"]
+
+    # 统计
+    total_errors = sum(r.error_count for r in results)
+    total_warnings = sum(r.warning_count for r in results)
+
+    lines.append("## 摘要\n")
+    lines.append(f"- 错误: {total_errors}\n")
+    lines.append(f"- 警告: {total_warnings}\n")
+    lines.append("\n")
+
+    # 详细结果
+    for result in results:
+        lines.append(f"## {result.validator_name}\n")
+
+        if result.success:
+            lines.append("✓ 通过\n\n")
+        else:
+            lines.append(f"✗ 发现 {result.error_count} 个错误\n\n")
+
+        if result.issues:
+            lines.append("### 问题列表\n\n")
+            for issue in result.issues:
+                level_icons = {
+                    ValidationLevel.ERROR: "❌",
+                    ValidationLevel.WARNING: "⚠️",
+                    ValidationLevel.INFO: "ℹ️",
+                }
+                icon = level_icons.get(issue.level, "•")
+                lines.append(f"- {icon} **{issue.level.value.upper()}**: {issue.message}\n")
+
+                if issue.file_path:
+                    lines.append(f"  - 文件: `{issue.file_path}`")
+                    if issue.line_number:
+                        lines.append(f":{issue.line_number}")
+                    lines.append("\n")
+
+                if issue.suggestion:
+                    lines.append(f"  - 建议: {issue.suggestion}\n")
+
+            lines.append("\n")
+
+    # 写入文件
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+        print_success(f"报告已保存到: {output_path}")
+    except Exception as e:
+        print_error(f"保存报告失败: {e}")
