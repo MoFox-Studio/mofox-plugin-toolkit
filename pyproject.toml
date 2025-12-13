@@ -30,6 +30,8 @@ dependencies = [
     "toml>=0.10.2",
     "pydantic>=2.5.0",
     "watchdog>=3.0.0",
+    "ruff>=0.1.6",
+    "mypy>=1.7.0"
 ]
 
 [project.optional-dependencies]
