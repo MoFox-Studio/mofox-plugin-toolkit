@@ -3,13 +3,11 @@
 """
 
 from pathlib import Path
+from typing import Any
 
-from mpdt.templates.component_templates import (
-    get_action_template,
-    get_event_handler_template,
-    get_tool_template,
-    prepare_component_context,
-)
+import questionary
+
+from mpdt.templates.component_templates import prepare_component_context
 from mpdt.utils.color_printer import (
     console,
     print_error,
@@ -27,8 +25,8 @@ from mpdt.utils.file_ops import (
 
 
 def generate_component(
-    component_type: str,
-    component_name: str,
+    component_type: str | None = None,
+    component_name: str | None = None,
     description: str | None = None,
     output_dir: str | None = None,
     force: bool = False,
@@ -38,13 +36,25 @@ def generate_component(
     生成插件组件(始终生成异步方法)
 
     Args:
-        component_type: 组件类型
-        component_name: 组件名称
+        component_type: 组件类型 (None 表示交互式询问)
+        component_name: 组件名称 (None 表示交互式询问)
         description: 组件描述
         output_dir: 输出目录
         force: 是否覆盖
         verbose: 详细输出
     """
+    # 交互式获取组件信息
+    if not component_type or not component_name:
+        component_info = _interactive_generate()
+        component_type = component_info["component_type"]
+        component_name = component_info["component_name"]
+        description = component_info.get("description") or description
+        force = component_info.get("force", force)
+
+    # 此时 component_type 和 component_name 必定不为 None
+    assert component_type is not None
+    assert component_name is not None
+
     print_step(f"生成 {component_type.upper()} 组件: {component_name}")
 
     # 验证组件名称
@@ -71,10 +81,13 @@ def generate_component(
     # 确保组件名称为 snake_case
     component_name = to_snake_case(component_name)
 
+    # 标准化组件类型（命令行参数 plus-command -> plus_command）
+    normalized_type = component_type.replace("-", "_")
+
     # 准备上下文
     git_info = get_git_user_info()
     context = prepare_component_context(
-        component_type=component_type,
+        component_type=normalized_type,
         component_name=component_name,
         plugin_name=plugin_name,
         author=git_info.get("name", ""),
@@ -85,7 +98,7 @@ def generate_component(
     # 生成组件文件
     component_file = _generate_component_file(
         work_dir=work_dir,
-        component_type=component_type,
+        component_type=normalized_type,  # 使用标准化的类型
         component_name=component_name,
         context=context,
         force=force,
@@ -98,7 +111,7 @@ def generate_component(
     # 更新插件注册
     if not _update_plugin_registration(
         work_dir=work_dir,
-        component_type=component_type,
+        component_type=normalized_type,  # 使用标准化的类型
         component_name=component_name,
         context=context,
         verbose=verbose,
@@ -114,6 +127,39 @@ def generate_component(
     console.print(f"  1. 编辑 {component_file.name} 实现具体逻辑")
     console.print("  2. 运行 mpdt check 检查代码")
     console.print("  3. 运行 mpdt test 测试功能")
+
+
+def _interactive_generate() -> dict[str, Any]:
+    """交互式生成组件"""
+    console.print("\n[bold cyan]🔧 组件生成向导[/bold cyan]\n")
+
+    answers = questionary.form(
+        component_type=questionary.select(
+            "选择组件类型:",
+            choices=[
+                questionary.Choice("Action 组件", value="action"),
+                questionary.Choice("Tool 组件", value="tool"),
+                questionary.Choice("Event 事件", value="event"),
+                questionary.Choice("Adapter 适配器", value="adapter"),
+                questionary.Choice("Prompt 提示词", value="prompt"),
+                questionary.Choice("Plus Command 命令", value="plus-command"),
+            ],
+        ),
+        component_name=questionary.text(
+            "组件名称 (使用下划线命名):",
+            validate=lambda x: validate_component_name(x) or "组件名称格式无效",
+        ),
+        description=questionary.text(
+            "组件描述 (可选):",
+            default="",
+        ),
+        force=questionary.confirm(
+            "如果文件存在，是否覆盖?",
+            default=False,
+        ),
+    ).ask()
+
+    return answers
 
 
 def _detect_plugin_name(work_dir: Path) -> str | None:
@@ -173,19 +219,23 @@ def _generate_component_file(
     # 生成组件文件
     component_file = component_dir / f"{component_name}.py"
 
-    # 选择模板
-    template_map = {
-        "action": get_action_template,
-        "tool": get_tool_template,
-        "event": get_event_handler_template,
-    }
 
-    template_func = template_map.get(component_type)
-    if not template_func:
+    # 组件类型到模板 key 的映射（此时 component_type 已经是标准化的下划线格式）
+    type_map = {
+        "action": "action",
+        "tool": "tool",
+        "event": "event",
+        "adapter": "adapter",
+        "prompt": "prompt",
+        "plus_command": "plus_command",
+    }
+    template_key = type_map.get(component_type)
+    if not template_key:
         print_error(f"不支持的组件类型: {component_type}")
         return None
 
-    template = template_func()
+    from mpdt.templates import get_component_template
+    template = get_component_template(template_key)
     content = template.format(**context)
 
     try:

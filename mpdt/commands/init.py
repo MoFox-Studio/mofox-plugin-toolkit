@@ -27,6 +27,7 @@ def init_plugin(
     with_examples: bool = False,
     with_docs: bool = False,
     output_dir: str | None = None,
+    init_git: bool | None = None,
     verbose: bool = False,
 ) -> None:
     """
@@ -40,6 +41,7 @@ def init_plugin(
         with_examples: 是否包含示例
         with_docs: 是否创建文档
         output_dir: 输出目录
+        init_git: 是否初始化 Git 仓库 (None 表示交互式询问)
         verbose: 是否详细输出
     """
     print_step("开始初始化插件...")
@@ -53,6 +55,7 @@ def init_plugin(
         license_type = plugin_info["license"]
         with_examples = plugin_info.get("with_examples", False)
         with_docs = plugin_info.get("with_docs", False)
+        init_git = plugin_info.get("init_git", False)
 
     # 此时 plugin_name 必定不为 None
     assert plugin_name is not None
@@ -87,11 +90,23 @@ def init_plugin(
         verbose=verbose,
     )
 
+    # 初始化 Git 仓库
+    if init_git is None:
+        # 如果未指定，则询问用户
+        init_git = questionary.confirm(
+            "是否初始化 Git 仓库?",
+            default=True,
+        ).ask()
+
+    if init_git:
+        _init_git_repository(plugin_dir, verbose)
+
     # 打印成功信息
     print_success("插件创建成功！")
     print_tree(
         plugin_name,
         {
+            ".gitignore":None,
             "__init__.py": None,
             "plugin.py": None,
             "config": ["config.toml"],
@@ -157,6 +172,10 @@ def _interactive_init() -> dict[str, Any]:
         ),
         with_docs=questionary.confirm(
             "创建文档文件?",
+            default=True,
+        ),
+        init_git=questionary.confirm(
+            "初始化 Git 仓库?",
             default=True,
         ),
     ).ask()
@@ -370,3 +389,99 @@ mpdt test
 def _to_pascal_case(snake_str: str) -> str:
     """将 snake_case 转换为 PascalCase"""
     return "".join(word.capitalize() for word in snake_str.split("_"))
+
+
+def _init_git_repository(plugin_dir: Path, verbose: bool) -> None:
+    """
+    初始化 Git 仓库
+
+    Args:
+        plugin_dir: 插件目录
+        verbose: 是否详细输出
+    """
+    import subprocess
+
+    try:
+        # 初始化 Git 仓库
+        subprocess.run(
+            ["git", "init"],
+            cwd=plugin_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        # 创建 .gitignore 文件
+        gitignore_content = """# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# MoFox-Bot specific
+config/local_*.toml
+*.log
+"""
+        safe_write_file(plugin_dir / ".gitignore", gitignore_content)
+
+        # 执行初始提交
+        subprocess.run(
+            ["git", "add", "."],
+            cwd=plugin_dir,
+            check=True,
+            capture_output=True,
+        )
+
+        subprocess.run(
+            ["git", "commit", "-m", "Initial commit"],
+            cwd=plugin_dir,
+            check=True,
+            capture_output=True,
+        )
+
+        if verbose:
+            console.print("[dim]✓ 初始化 Git 仓库[/dim]")
+        print_success("Git 仓库初始化成功")
+
+    except subprocess.CalledProcessError as e:
+        print_error(f"Git 初始化失败: {e}")
+    except FileNotFoundError:
+        print_error("未找到 Git 命令，请确保已安装 Git")
+

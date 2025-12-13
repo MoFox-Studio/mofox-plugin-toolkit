@@ -220,7 +220,7 @@ def prepare_component_context(
     准备组件模板上下文
 
     Args:
-        component_type: 组件类型 (action, tool, event)
+        component_type: 组件类型 (action, tool, event, adapter, prompt, plus_command)
         component_name: 组件名称 (snake_case)
         plugin_name: 插件名称
         author: 作者
@@ -232,11 +232,32 @@ def prepare_component_context(
     """
     from mpdt.utils.file_ops import to_pascal_case
 
+    # 处理类型后缀映射
+    suffix_map = {
+        "action": "Action",
+        "tool": "Tool",
+        "event": "EventHandler",
+        "adapter": "Adapter",
+        "prompt": "Prompt",
+        "plus_command": "PlusCommand",
+    }
+
     class_name = to_pascal_case(component_name)
-    if not class_name.endswith(component_type.title()):
-        class_name = f"{class_name}{component_type.title()}"
+    suffix = suffix_map.get(component_type, component_type.title())
+    if not class_name.endswith(suffix):
+        class_name = f"{class_name}{suffix}"
 
     date = datetime.now().strftime("%Y-%m-%d")
+
+    # 方法名映射
+    method_map = {
+        "action": "execute",
+        "tool": "run",
+        "event": "handle",
+        "adapter": "connect",
+        "prompt": "build",
+        "plus_command": "execute",
+    }
 
     context = {
         "component_name": component_name,
@@ -249,13 +270,19 @@ def prepare_component_context(
         "await_keyword": "await " if is_async else "",
         "component_type": component_type + "s",  # actions, tools, etc.
         "module_name": component_name,
-        "method_name": "execute" if component_type == "action" else ("run" if component_type == "tool" else "handle"),
+        "method_name": method_map.get(component_type, "execute"),
     }
 
     # 特定组件类型的额外字段
     if component_type == "tool":
         context["tool_name"] = component_name
     elif component_type == "event":
-        context["event_type"] = component_name.replace("_handler", "")
+        context["event_type"] = component_name.replace("_handler", "").replace("_event", "")
+    elif component_type == "adapter":
+        context["adapter_name"] = component_name
+    elif component_type == "prompt":
+        context["prompt_name"] = component_name
+    elif component_type == "plus_command":
+        context["command_name"] = component_name
 
     return context

@@ -43,10 +43,11 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
               default="GPL-v3.0", help="开源协议")
 @click.option("--with-examples", is_flag=True, help="包含示例代码")
 @click.option("--with-docs", is_flag=True, help="创建文档文件")
+@click.option("--init-git/--no-init-git", default=None, help="是否初始化 Git 仓库")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.pass_context
 def init(ctx: click.Context, plugin_name: str | None, template: str, author: str | None,
-         license: str, with_examples: bool, with_docs: bool, output: str | None) -> None:
+         license: str, with_examples: bool, with_docs: bool, init_git: bool | None, output: str | None) -> None:
     """初始化新插件项目"""
     from mpdt.commands.init import init_plugin
 
@@ -58,6 +59,7 @@ def init(ctx: click.Context, plugin_name: str | None, template: str, author: str
             license_type=license,
             with_examples=with_examples,
             with_docs=with_docs,
+            init_git=init_git,
             output_dir=output,
             verbose=ctx.obj["verbose"],
         )
@@ -67,15 +69,18 @@ def init(ctx: click.Context, plugin_name: str | None, template: str, author: str
 
 
 @cli.command()
-@click.argument("component_type", type=click.Choice(["action", "tool", "event", "adapter", "prompt", "plus-command"]))
-@click.argument("component_name")
+@click.argument("component_type", type=click.Choice(["action", "tool", "event", "adapter", "prompt", "plus-command"]), required=False)
+@click.argument("component_name", required=False)
 @click.option("--description", "-d", help="组件描述")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.option("--force", "-f", is_flag=True, help="覆盖已存在的文件")
 @click.pass_context
-def generate(ctx: click.Context, component_type: str, component_name: str, description: str | None,
+def generate(ctx: click.Context, component_type: str | None, component_name: str | None, description: str | None,
              output: str | None, force: bool) -> None:
-    """生成插件组件(始终生成异步方法)"""
+    """生成插件组件(始终生成异步方法)
+
+    如果不提供参数，将进入交互式问答模式
+    """
     from mpdt.commands.generate import generate_component
 
     try:
