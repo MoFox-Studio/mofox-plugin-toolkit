@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mofox-plugin-toolkit"
+version = "0.1.0"
+description = "开发工具集，用于快速创建、开发和测试 MoFox-Bot 插件"
+authors = [
+    {name = "MoFox-Studio", email = "mofox.studio@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "GPL-3.0-or-later"}
+keywords = ["mofox", "plugin", "toolkit", "cli", "development"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "click>=8.1.7",
+    "rich>=13.7.0",
+    "questionary>=2.0.1",
+    "jinja2>=3.1.2",
+    "toml>=0.10.2",
+    "pydantic>=2.5.0",
+    "watchdog>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.1",
+    "pytest-mock>=3.12.0",
+    "mypy>=1.7.0",
+    "ruff>=0.1.6",
+]
+
+check = [
+    "mypy>=1.7.0",
+    "ruff>=0.1.6",
+    "bandit>=1.7.5",
+]
+
+docs = [
+    "mkdocs>=1.5.3",
+    "mkdocs-material>=9.4.0",
+]
+
+[project.scripts]
+mpdt = "mpdt.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/MoFox-Studio/mofox-plugin-toolkit"
+Documentation = "https://docs.mofox.studio/mpdt"
+Repository = "https://github.com/MoFox-Studio/mofox-plugin-toolkit"
+"Bug Tracker" = "https://github.com/MoFox-Studio/mofox-plugin-toolkit/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mpdt*"]
+exclude = ["tests*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
