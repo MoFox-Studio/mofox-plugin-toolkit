@@ -67,7 +67,7 @@ def init(ctx: click.Context, plugin_name: str | None, template: str, author: str
 
 
 @cli.command()
-@click.argument("component_type", type=click.Choice(["action", "command", "tool", "event", "adapter", "prompt", "plus-command"]))
+@click.argument("component_type", type=click.Choice(["action", "tool", "event", "adapter", "prompt", "plus-command"]))
 @click.argument("component_name")
 @click.option("--description", "-d", help="组件描述")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")

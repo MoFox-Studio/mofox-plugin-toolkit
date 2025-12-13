@@ -13,7 +13,14 @@ mpdt/commands/__init__.py
 mpdt/commands/check.py
 mpdt/commands/generate.py
 mpdt/commands/init.py
+mpdt/templates/__init__.py
+mpdt/templates/action_template.py
+mpdt/templates/adapter_template.py
 mpdt/templates/component_templates.py
+mpdt/templates/event_template.py
+mpdt/templates/plus_command_template.py
+mpdt/templates/prompt_template.py
+mpdt/templates/tool_template.py
 mpdt/utils/__init__.py
 mpdt/utils/color_printer.py
 mpdt/utils/config_loader.py

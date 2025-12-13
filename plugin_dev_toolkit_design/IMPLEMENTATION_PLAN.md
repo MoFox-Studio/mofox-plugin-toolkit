@@ -186,19 +186,23 @@ def _interactive_init() -> dict[str, Any]:
 
 #### 3.1 组件模板 ✅ **已完成**
 - [x] Action 组件模板
-- [x] Command 组件模板
+- [x] ~~Command 组件模板~~ (已弃用，使用 PlusCommand)
 - [x] Tool 组件模板
 - [x] Event Handler 模板
-- [ ] Adapter 模板 (待实现)
-- [ ] Prompt 模板 (待实现)
-- [ ] PlusCommand 模板 (待实现)
+- [x] Adapter 模板
+- [x] Prompt 模板
+- [x] PlusCommand 模板
 
-每个模板需要包含:
+**注意**: 
+- Command 模板已被弃用，统一使用增强型 PlusCommand
+- 测试相关功能已移交给 NPDT (Napcat Plugin Dev Toolkit)
+
+每个模板已包含:
 - 完整的类定义
 - 类型注解
 - 文档字符串
 - 示例实现
-- 对应的测试文件模板
+- ~~对应的测试文件模板~~ (测试交由 NPDT 处理)
 
 #### 3.2 代码生成逻辑 ✅ **已完成**
 - [x] 解析命令参数
@@ -244,15 +248,18 @@ def generate_component(
 - [ ] AST 解析 plugin.py (可选,用于更复杂的场景)
 - [ ] 完全自动化注册 (需要 ComponentInfo 配置)
 
-#### 3.4 测试文件生成 📝 **待实现**
-- [ ] 组件测试模板
-- [ ] Mock 对象配置
-- [ ] 测试用例示例
+#### 3.4 测试文件生成 ⚠️ **已移交 NPDT**
+- [ ] ~~组件测试模板~~
+- [ ] ~~Mock 对象配置~~
+- [ ] ~~测试用例示例~~
+
+**注意**: 测试相关功能已完全移交给 NPDT (Napcat Plugin Dev Toolkit) 处理。MPDT 专注于插件结构和组件生成。
 
 ### 可交付成果
-- 完整的 `mpdt generate` 命令
-- 7 种组件模板
-- 自动注册功能
+- ✅ 完整的 `mpdt generate` 命令
+- ✅ 6 种组件模板 (Action, Tool, Event, Adapter, Prompt, PlusCommand)
+- ⚠️ ~~自动注册功能~~ (部分完成，需要手动配置 ComponentInfo)
+- ⚠️ ~~测试文件生成~~ (已移交 NPDT)
 
 ---
 

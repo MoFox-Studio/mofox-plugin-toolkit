@@ -6,7 +6,6 @@ from pathlib import Path
 
 from mpdt.templates.component_templates import (
     get_action_template,
-    get_command_template,
     get_event_handler_template,
     get_tool_template,
     prepare_component_context,
@@ -177,7 +176,6 @@ def _generate_component_file(
     # 选择模板
     template_map = {
         "action": get_action_template,
-        "command": get_command_template,
         "tool": get_tool_template,
         "event": get_event_handler_template,
     }
