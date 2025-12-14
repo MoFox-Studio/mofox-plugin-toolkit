@@ -110,11 +110,10 @@ def generate(ctx: click.Context, component_type: str | None, component_name: str
 @click.option("--no-component", is_flag=True, help="跳过组件检查")
 @click.option("--no-type", is_flag=True, help="跳过类型检查")
 @click.option("--no-style", is_flag=True, help="跳过代码风格检查")
-@click.option("--no-security", is_flag=True, help="跳过安全检查")
 @click.pass_context
 def check(ctx: click.Context, path: str, level: str, fix: bool, report: str, output: str | None,
           no_structure: bool, no_metadata: bool, no_component: bool, no_type: bool,
-          no_style: bool, no_security: bool) -> None:
+          no_style: bool) -> None:
     """对插件进行静态检查"""
     from mpdt.commands.check import check_plugin
 
@@ -130,7 +129,6 @@ def check(ctx: click.Context, path: str, level: str, fix: bool, report: str, out
             skip_component=no_component,
             skip_type=no_type,
             skip_style=no_style,
-            skip_security=no_security,
             verbose=ctx.obj["verbose"],
         )
     except Exception as e:

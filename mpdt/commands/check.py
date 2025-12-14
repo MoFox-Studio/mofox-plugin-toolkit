@@ -32,7 +32,6 @@ def check_plugin(
     skip_component: bool = False,
     skip_type: bool = False,
     skip_style: bool = False,
-    skip_security: bool = False,
     verbose: bool = False,
 ) -> None:
     """
@@ -113,10 +112,6 @@ def check_plugin(
         result = validator.validate()
         all_results.append(result)
         _print_validation_summary(result, verbose)
-
-    # 安全检查（待实现）
-    if not skip_security:
-        print_warning("安全检查功能尚未实现")
 
     # 自动修复（如果启用）
     if auto_fix:

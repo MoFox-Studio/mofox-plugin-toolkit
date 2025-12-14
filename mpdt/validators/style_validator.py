@@ -88,7 +88,8 @@ class StyleValidator(BaseValidator):
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True
+                text=True,
+                encoding='utf-8'
             )
             
             # 解析输出
