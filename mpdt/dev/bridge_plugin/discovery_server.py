@@ -3,8 +3,6 @@
 固定端口 12318，用于 mpdt dev 获取主程序的动态端口
 """
 
-import asyncio
-from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI
@@ -22,7 +20,7 @@ except ImportError:
 DISCOVERY_PORT = 12318
 
 # 全局变量
-_server_instance: Optional[uvicorn.Server] = None
+_server_instance: uvicorn.Server | None = None
 
 
 class ServerInfo(BaseModel):
@@ -38,7 +36,7 @@ def create_discovery_app(main_host: str, main_port: int) -> FastAPI:
         description="开发模式服务发现",
         version="1.0.0"
     )
-    
+
     # 添加 CORS 中间件
     app.add_middleware(
         CORSMiddleware,
@@ -47,7 +45,7 @@ def create_discovery_app(main_host: str, main_port: int) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     @app.get("/api/health")
     async def health_check():
         """健康检查"""
@@ -55,7 +53,7 @@ def create_discovery_app(main_host: str, main_port: int) -> FastAPI:
             "status": "ok",
             "service": "MoFox Dev Discovery"
         }
-    
+
     @app.get("/api/server-info", response_model=ServerInfo)
     async def get_server_info():
         """获取主程序服务器信息
@@ -70,7 +68,7 @@ def create_discovery_app(main_host: str, main_port: int) -> FastAPI:
             WebSocket: ws://127.0.0.1:8000/plugin-api/dev_bridge/dev_bridge_router/ws
         """
         return ServerInfo(host=main_host, port=main_port)
-    
+
     return app
 
 
@@ -87,13 +85,13 @@ async def start_discovery_server(
         discovery_host: 发现服务器绑定的 host
     """
     global _server_instance
-    
+
     if _server_instance is not None:
         logger.warning("发现服务器已经在运行")
         return
-    
+
     app = create_discovery_app(main_host, main_port)
-    
+
     config = uvicorn.Config(
         app,
         host=discovery_host,
@@ -101,12 +99,12 @@ async def start_discovery_server(
         log_level="error",  # 减少日志输出
         access_log=False
     )
-    
+
     _server_instance = uvicorn.Server(config)
-    
+
     logger.info(f"发现服务器启动在 http://{discovery_host}:{DISCOVERY_PORT}")
     logger.info(f"主程序地址: http://{main_host}:{main_port}")
-    
+
     try:
         await _server_instance.serve()
     except Exception as e:
@@ -117,10 +115,10 @@ async def start_discovery_server(
 async def stop_discovery_server() -> None:
     """停止发现服务器"""
     global _server_instance
-    
+
     if _server_instance is None:
         return
-    
+
     logger.info("正在停止发现服务器...")
     _server_instance.should_exit = True
     _server_instance = None

@@ -23,7 +23,10 @@ class StyleValidator(BaseValidator):
 
     def validate(self) -> ValidationResult:
         """执行代码风格检查"""
-        result = ValidationResult(validator_name="StyleValidator", success=True)
+        result = ValidationResult(
+            validator_name="StyleValidator",
+            success=True
+        )
 
         plugin_name = self._get_plugin_name()
         if not plugin_name:
@@ -75,7 +78,12 @@ class StyleValidator(BaseValidator):
             cmd.extend(["--output-format", "json", str(self.plugin_path)])
 
             # 运行 ruff
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding='utf-8'
+            )
 
             # 解析输出
             if result.stdout.strip():
@@ -96,7 +104,12 @@ class StyleValidator(BaseValidator):
 
         except Exception as e:
             # 不抛出异常，只记录问题
-            issues.append({"file": None, "line": None, "message": f"运行 ruff 时出错: {e}", "suggestion": None})
+            issues.append({
+                "file": None,
+                "line": None,
+                "message": f"运行 ruff 时出错: {e}",
+                "suggestion": None
+            })
 
         return issues
 

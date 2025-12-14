@@ -7,22 +7,18 @@ import asyncio
 import json
 import shutil
 import subprocess
-import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 import aiohttp
 import websockets
 from rich.console import Console
-from rich.live import Live
 from rich.panel import Panel
-from rich.text import Text
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from mpdt.utils.config_manager import MPDTConfig, interactive_config
-from mpdt.utils.plugin_parser import extract_plugin_name, get_plugin_info
+from mpdt.utils.plugin_parser import extract_plugin_name
 
 console = Console()
 
@@ -151,7 +147,7 @@ class DevServer:
             console.print("[cyan]🛑 正在关闭主程序...[/cyan]")
             try:
                 import os
-                
+
                 # Windows: 使用 taskkill 杀死整个进程树
                 if os.name == "nt":
                     try:
@@ -439,7 +435,7 @@ class DevServer:
                         else:
                             console.print(f"[yellow]⚠️  插件未找到: {self.plugin_name}[/yellow]")
                             raise RuntimeError(f"插件未找到: {self.plugin_name}")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             console.print("[yellow]⚠️  等待插件加载超时[/yellow]")
             raise RuntimeError("等待插件加载超时")
 
@@ -448,7 +444,7 @@ class DevServer:
         console.print(f"[cyan]👀 开始监控: {self.plugin_path}[/cyan]")
 
         handler = PluginFileWatcher(
-            self.plugin_path, 
+            self.plugin_path,
             self._on_file_changed,
             asyncio.get_running_loop()  # 传递当前事件循环
         )
