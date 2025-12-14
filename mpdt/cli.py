@@ -11,7 +11,7 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version=__version__, prog_name="MPDT")
+@click.version_option(version=__version__, prog_name="MPDT - MoFox-Bot 插件开发工具")
 @click.option("--verbose", "-v", is_flag=True, help="详细输出模式")
 @click.option("--no-color", is_flag=True, help="禁用彩色输出")
 @click.pass_context
@@ -139,21 +139,6 @@ def check(ctx: click.Context, path: str, level: str, fix: bool, report: str, out
 
 
 @cli.command()
-@click.argument("test_path", type=click.Path(exists=True), required=False)
-@click.option("--coverage", "-c", is_flag=True, help="生成覆盖率报告")
-@click.option("--min-coverage", type=int, default=80, help="最低覆盖率要求")
-@click.option("--verbose", "-v", is_flag=True, help="详细输出")
-@click.option("--markers", "-m", help="只运行特定标记的测试")
-@click.option("--keyword", "-k", help="只运行匹配关键词的测试")
-@click.option("--parallel", "-n", type=int, default=1, help="并行运行测试的进程数")
-@click.pass_context
-def test(ctx: click.Context, test_path: str | None, coverage: bool, min_coverage: int,
-         verbose: bool, markers: str | None, keyword: str | None, parallel: int) -> None:
-    """运行插件测试"""
-    console.print("[yellow]⚠️  测试命令尚未实现[/yellow]")
-
-
-@cli.command()
 @click.option("--output", "-o", type=click.Path(), default="dist", help="输出目录")
 @click.option("--with-docs", is_flag=True, help="包含文档")
 @click.option("--format", type=click.Choice(["zip", "tar.gz", "wheel"]), default="zip", help="构建格式")
@@ -165,14 +150,161 @@ def build(ctx: click.Context, output: str, with_docs: bool, format: str, bump: s
 
 
 @cli.command()
-@click.option("--port", "-p", type=int, default=8080, help="开发服务器端口")
-@click.option("--host", default="127.0.0.1", help="绑定的主机地址")
-@click.option("--no-reload", is_flag=True, help="禁用自动重载")
-@click.option("--debug", is_flag=True, help="启用调试模式")
+@click.option("--mmc-path", type=click.Path(exists=True), help="mmc 主程序路径")
+@click.option("--plugin-path", type=click.Path(exists=True), help="插件路径（默认当前目录）")
 @click.pass_context
-def dev(ctx: click.Context, port: int, host: str, no_reload: bool, debug: bool) -> None:
-    """启动开发模式"""
-    console.print("[yellow]⚠️  开发模式命令尚未实现[/yellow]")
+def dev(ctx: click.Context, mmc_path: str | None, plugin_path: str | None) -> None:
+    """启动开发模式，支持热重载"""
+    import asyncio
+    from pathlib import Path
+    from mpdt.commands.dev import dev_command
+    
+    try:
+        asyncio.run(dev_command(
+            plugin_path=Path(plugin_path) if plugin_path else None,
+            mmc_path=Path(mmc_path) if mmc_path else None
+        ))
+    except Exception as e:
+        console.print(f"[bold red]❌ 启动失败: {e}[/bold red]")
+        if ctx.obj.get("verbose"):
+            import traceback
+            traceback.print_exc()
+        raise click.Abort()
+
+
+@cli.group()
+def config() -> None:
+    """配置管理"""
+    pass
+
+
+@config.command("init")
+def config_init() -> None:
+    """交互式配置向导"""
+    from mpdt.utils.config_manager import interactive_config
+    
+    try:
+        interactive_config()
+    except Exception as e:
+        console.print(f"[bold red]❌ 配置失败: {e}[/bold red]")
+        raise click.Abort()
+
+
+@config.command("show")
+def config_show() -> None:
+    """显示当前配置"""
+    from mpdt.utils.config_manager import MPDTConfig
+    from rich.table import Table
+    
+    try:
+        config = MPDTConfig()
+        
+        if not config.is_configured():
+            console.print("[yellow]⚠️  未找到配置文件[/yellow]")
+            console.print("请运行 [cyan]mpdt config init[/cyan] 进行配置")
+            return
+        
+        table = Table(title="MPDT 配置")
+        table.add_column("配置项", style="cyan")
+        table.add_column("值", style="green")
+        
+        table.add_row("配置文件", str(config.config_path))
+        table.add_row("mmc 路径", str(config.mmc_path) if config.mmc_path else "[red]未配置[/red]")
+        table.add_row("虚拟环境类型", config.venv_type)
+        table.add_row("虚拟环境路径", str(config.venv_path) if config.venv_path else "[dim]无[/dim]")
+        table.add_row("自动重载", "是" if config.auto_reload else "否")
+        table.add_row("重载延迟", f"{config.reload_delay}秒")
+        
+        console.print(table)
+        
+        # 显示 Python 命令
+        console.print("\n[bold]Python 命令:[/bold]")
+        console.print(f"  {' '.join(config.get_python_command())}")
+    
+    except Exception as e:
+        console.print(f"[bold red]❌ 读取配置失败: {e}[/bold red]")
+        raise click.Abort()
+
+
+@config.command("test")
+def config_test() -> None:
+    """测试配置是否有效"""
+    from mpdt.utils.config_manager import MPDTConfig
+    
+    try:
+        config = MPDTConfig()
+        
+        if not config.is_configured():
+            console.print("[yellow]⚠️  未找到配置文件[/yellow]")
+            console.print("请运行 [cyan]mpdt config init[/cyan] 进行配置")
+            return
+        
+        console.print("[cyan]正在验证配置...[/cyan]\n")
+        
+        valid, errors = config.validate()
+        
+        if valid:
+            console.print("[bold green]✓ 配置有效！[/bold green]")
+            console.print(f"\nmmc 路径: {config.mmc_path}")
+            console.print(f"Python 命令: {' '.join(config.get_python_command())}")
+        else:
+            console.print("[bold red]✗ 配置验证失败：[/bold red]")
+            for error in errors:
+                console.print(f"  - {error}")
+            console.print("\n请运行 [cyan]mpdt config init[/cyan] 重新配置")
+    
+    except Exception as e:
+        console.print(f"[bold red]❌ 测试失败: {e}[/bold red]")
+        raise click.Abort()
+
+
+@config.command("set-mmc")
+@click.argument("path", type=click.Path(exists=True))
+def config_set_mmc(path: str) -> None:
+    """设置 mmc 主程序路径"""
+    from pathlib import Path
+    from mpdt.utils.config_manager import MPDTConfig
+    
+    try:
+        config = MPDTConfig()
+        config.mmc_path = Path(path)
+        config.save()
+        
+        console.print(f"[green]✓ mmc 路径已设置: {path}[/green]")
+    
+    except Exception as e:
+        console.print(f"[bold red]❌ 设置失败: {e}[/bold red]")
+        raise click.Abort()
+
+
+@config.command("set-venv")
+@click.argument("path", type=click.Path(exists=True), required=False)
+@click.option("--type", "venv_type", type=click.Choice(["venv", "uv", "conda", "poetry", "none"]),
+              default="venv", help="虚拟环境类型")
+def config_set_venv(path: str | None, venv_type: str) -> None:
+    """设置虚拟环境"""
+    from pathlib import Path
+    from mpdt.utils.config_manager import MPDTConfig
+    
+    try:
+        config = MPDTConfig()
+        config.venv_type = venv_type
+        
+        if venv_type == "none":
+            config.venv_path = None
+            console.print("[green]✓ 已设置为使用系统 Python[/green]")
+        elif path:
+            config.venv_path = Path(path)
+            console.print(f"[green]✓ 虚拟环境已设置: {path} (类型: {venv_type})[/green]")
+        else:
+            console.print("[red]❌ 请提供虚拟环境路径[/red]")
+            raise click.Abort()
+        
+        config.save()
+    
+    except Exception as e:
+        console.print(f"[bold red]❌ 设置失败: {e}[/bold red]")
+        raise click.Abort()
 
 
 def main() -> None:
