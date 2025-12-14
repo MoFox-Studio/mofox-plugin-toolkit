@@ -155,8 +155,9 @@ def dev(ctx: click.Context, mmc_path: str | None, plugin_path: str | None) -> No
     """启动开发模式，支持热重载"""
     import asyncio
     from pathlib import Path
+
     from mpdt.commands.dev import dev_command
-    
+
     try:
         asyncio.run(dev_command(
             plugin_path=Path(plugin_path) if plugin_path else None,
@@ -180,7 +181,7 @@ def config() -> None:
 def config_init() -> None:
     """交互式配置向导"""
     from mpdt.utils.config_manager import interactive_config
-    
+
     try:
         interactive_config()
     except Exception as e:
@@ -191,34 +192,35 @@ def config_init() -> None:
 @config.command("show")
 def config_show() -> None:
     """显示当前配置"""
-    from mpdt.utils.config_manager import MPDTConfig
     from rich.table import Table
-    
+
+    from mpdt.utils.config_manager import MPDTConfig
+
     try:
         config = MPDTConfig()
-        
+
         if not config.is_configured():
             console.print("[yellow]⚠️  未找到配置文件[/yellow]")
             console.print("请运行 [cyan]mpdt config init[/cyan] 进行配置")
             return
-        
+
         table = Table(title="MPDT 配置")
         table.add_column("配置项", style="cyan")
         table.add_column("值", style="green")
-        
+
         table.add_row("配置文件", str(config.config_path))
         table.add_row("mmc 路径", str(config.mmc_path) if config.mmc_path else "[red]未配置[/red]")
         table.add_row("虚拟环境类型", config.venv_type)
         table.add_row("虚拟环境路径", str(config.venv_path) if config.venv_path else "[dim]无[/dim]")
         table.add_row("自动重载", "是" if config.auto_reload else "否")
         table.add_row("重载延迟", f"{config.reload_delay}秒")
-        
+
         console.print(table)
-        
+
         # 显示 Python 命令
         console.print("\n[bold]Python 命令:[/bold]")
         console.print(f"  {' '.join(config.get_python_command())}")
-    
+
     except Exception as e:
         console.print(f"[bold red]❌ 读取配置失败: {e}[/bold red]")
         raise click.Abort()
@@ -228,19 +230,19 @@ def config_show() -> None:
 def config_test() -> None:
     """测试配置是否有效"""
     from mpdt.utils.config_manager import MPDTConfig
-    
+
     try:
         config = MPDTConfig()
-        
+
         if not config.is_configured():
             console.print("[yellow]⚠️  未找到配置文件[/yellow]")
             console.print("请运行 [cyan]mpdt config init[/cyan] 进行配置")
             return
-        
+
         console.print("[cyan]正在验证配置...[/cyan]\n")
-        
+
         valid, errors = config.validate()
-        
+
         if valid:
             console.print("[bold green]✓ 配置有效！[/bold green]")
             console.print(f"\nmmc 路径: {config.mmc_path}")
@@ -250,7 +252,7 @@ def config_test() -> None:
             for error in errors:
                 console.print(f"  - {error}")
             console.print("\n请运行 [cyan]mpdt config init[/cyan] 重新配置")
-    
+
     except Exception as e:
         console.print(f"[bold red]❌ 测试失败: {e}[/bold red]")
         raise click.Abort()
@@ -261,15 +263,16 @@ def config_test() -> None:
 def config_set_mmc(path: str) -> None:
     """设置 mmc 主程序路径"""
     from pathlib import Path
+
     from mpdt.utils.config_manager import MPDTConfig
-    
+
     try:
         config = MPDTConfig()
         config.mmc_path = Path(path)
         config.save()
-        
+
         console.print(f"[green]✓ mmc 路径已设置: {path}[/green]")
-    
+
     except Exception as e:
         console.print(f"[bold red]❌ 设置失败: {e}[/bold red]")
         raise click.Abort()
@@ -282,12 +285,13 @@ def config_set_mmc(path: str) -> None:
 def config_set_venv(path: str | None, venv_type: str) -> None:
     """设置虚拟环境"""
     from pathlib import Path
+
     from mpdt.utils.config_manager import MPDTConfig
-    
+
     try:
         config = MPDTConfig()
         config.venv_type = venv_type
-        
+
         if venv_type == "none":
             config.venv_path = None
             console.print("[green]✓ 已设置为使用系统 Python[/green]")
@@ -297,9 +301,9 @@ def config_set_venv(path: str | None, venv_type: str) -> None:
         else:
             console.print("[red]❌ 请提供虚拟环境路径[/red]")
             raise click.Abort()
-        
+
         config.save()
-    
+
     except Exception as e:
         console.print(f"[bold red]❌ 设置失败: {e}[/bold red]")
         raise click.Abort()

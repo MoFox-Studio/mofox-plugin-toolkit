@@ -16,23 +16,23 @@ class StyleValidator(BaseValidator):
     
     使用 ruff 检查代码风格和代码质量问题
     """
-    
+
     def __init__(self, plugin_path: Path, auto_fix: bool = False):
         super().__init__(plugin_path)
         self.auto_fix = auto_fix
-        
+
     def validate(self) -> ValidationResult:
         """执行代码风格检查"""
         result = ValidationResult(
             validator_name="StyleValidator",
             success=True
         )
-        
+
         plugin_name = self._get_plugin_name()
         if not plugin_name:
             result.add_error("无法确定插件名称")
             return result
-            
+
         # 检查 ruff 是否安装
         if not self._is_ruff_installed():
             result.add_warning(
@@ -40,10 +40,10 @@ class StyleValidator(BaseValidator):
                 suggestion="运行 'pip install ruff' 安装"
             )
             return result
-            
+
         # 运行 ruff check
         issues = self._run_ruff_check()
-        
+
         if issues:
             for issue in issues:
                 result.add_warning(
@@ -54,9 +54,9 @@ class StyleValidator(BaseValidator):
                 )
         else:
             result.add_info("代码风格检查通过，未发现问题")
-            
+
         return result
-        
+
     def _is_ruff_installed(self) -> bool:
         """检查 ruff 是否安装"""
         try:
@@ -68,7 +68,7 @@ class StyleValidator(BaseValidator):
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
-            
+
     def _run_ruff_check(self) -> list[dict[str, Any]]:
         """运行 ruff 检查
         
@@ -76,14 +76,14 @@ class StyleValidator(BaseValidator):
             问题列表
         """
         issues = []
-        
+
         try:
             # 构建命令
             cmd = ["ruff", "check"]
             if self.auto_fix:
                 cmd.append("--fix")
             cmd.extend(["--output-format", "json", str(self.plugin_path)])
-            
+
             # 运行 ruff
             result = subprocess.run(
                 cmd,
@@ -91,7 +91,7 @@ class StyleValidator(BaseValidator):
                 text=True,
                 encoding='utf-8'
             )
-            
+
             # 解析输出
             if result.stdout.strip():
                 try:
@@ -106,7 +106,7 @@ class StyleValidator(BaseValidator):
                 except json.JSONDecodeError:
                     # 如果不是 JSON 格式，尝试解析纯文本
                     pass
-                    
+
         except Exception as e:
             # 不抛出异常，只记录问题
             issues.append({
@@ -115,9 +115,9 @@ class StyleValidator(BaseValidator):
                 "message": f"运行 ruff 时出错: {e}",
                 "suggestion": None
             })
-            
+
         return issues
-        
+
     def _get_fix_suggestion(self, item: dict) -> str | None:
         """获取修复建议"""
         if item.get("fix"):
