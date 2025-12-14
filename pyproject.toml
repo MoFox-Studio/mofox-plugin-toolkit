@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mofox-plugin-dev-toolkit"
-version = "0.2.1"
+version = "0.2.2"
 description = "开发工具集，用于快速创建、开发和测试 MoFox-Bot 插件"
 authors = [
     {name = "MoFox-Studio", email = "mofox.studio@example.com"}

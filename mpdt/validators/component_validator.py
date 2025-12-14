@@ -64,6 +64,9 @@ class ComponentValidator(BaseValidator):
             self.result.add_error("插件文件不存在: plugin.py")
             return self.result
 
+        # 验证插件类本身的元数据
+        self._validate_plugin_class(plugin_file, plugin_name)
+
         # 解析 plugin.py 获取组件信息
         components = self._extract_components_from_plugin(plugin_file, plugin_name)
 
@@ -80,6 +83,82 @@ class ComponentValidator(BaseValidator):
             self._validate_component(component_info, plugin_dir, plugin_name)
 
         return self.result
+
+    def _validate_plugin_class(self, plugin_file: Path, plugin_name: str) -> None:
+        """验证插件类本身的元数据
+
+        检查 plugin.py 中的插件主类是否定义了必需的属性
+
+        Args:
+            plugin_file: plugin.py 文件路径
+            plugin_name: 插件名称
+        """
+        try:
+            with open(plugin_file, encoding="utf-8") as f:
+                tree = ast.parse(f.read(), filename=str(plugin_file))
+        except Exception as e:
+            self.result.add_error(f"解析 plugin.py 失败: {e}")
+            return
+
+        # 查找继承自 BasePlugin 的类
+        plugin_class = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                # 检查是否继承自 BasePlugin
+                for base in node.bases:
+                    base_name = ""
+                    if isinstance(base, ast.Name):
+                        base_name = base.id
+                    elif isinstance(base, ast.Attribute):
+                        base_name = base.attr
+
+                    if base_name == "BasePlugin":
+                        plugin_class = node
+                        break
+                if plugin_class:
+                    break
+
+        if not plugin_class:
+            self.result.add_warning(
+                "未找到继承自 BasePlugin 的插件类",
+                file_path="plugin.py",
+                suggestion="插件主类应该继承自 BasePlugin",
+            )
+            return
+
+        # 提取类属性
+        class_attributes = self._extract_class_attributes(plugin_class)
+
+        # 检查必需的类属性
+        # plugin_name 是必需的
+        if "plugin_name" not in class_attributes:
+            self.result.add_error(
+                f"插件类 {plugin_class.name} 缺少必需的类属性: plugin_name",
+                file_path="plugin.py",
+                suggestion="在类中添加: plugin_name = '...'",
+            )
+        elif not class_attributes["plugin_name"]:
+            self.result.add_error(
+                f"插件类 {plugin_class.name} 的 plugin_name 属性为空",
+                file_path="plugin.py",
+            )
+
+        # config_file_name 必需有
+        if "config_file_name" not in class_attributes:
+            self.result.add_error(
+                f"插件类 {plugin_class.name} 未定义 config_file_name",
+                file_path="plugin.py",
+                suggestion="在类中添加: config_file_name = 'config.toml'",
+            )
+
+        # 检查 enable_plugin 属性（有默认值，但可以检查是否自定义）
+        if "enable_plugin" in class_attributes:
+            enable_value = class_attributes["enable_plugin"]
+            if enable_value and enable_value.lower() not in ["true", "false"]:
+                self.result.add_warning(
+                    f"插件类 {plugin_class.name} 的 enable_plugin 应该是布尔值",
+                    file_path="plugin.py",
+                )
 
     def _extract_components_from_plugin(self, plugin_file: Path, plugin_name: str) -> list[dict]:
         """从 plugin.py 中提取组件信息
