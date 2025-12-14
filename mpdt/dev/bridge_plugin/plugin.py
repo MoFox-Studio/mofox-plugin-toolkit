@@ -4,17 +4,15 @@ DevBridge 插件 - 为 mpdt dev 提供 WebSocket 桥接
 """
 
 import asyncio
-from typing import ClassVar, Set
+from typing import ClassVar
 
 from fastapi import WebSocket, WebSocketDisconnect
 from src.common.logger import get_logger
-from src.common.security import VerifiedDep
 from src.common.server import get_global_server
 from src.plugin_system import (
     BasePlugin,
     register_plugin,
 )
-from src.plugin_system.apis.plugin_info_api import list_plugins
 from src.plugin_system.base.base_http_component import BaseRouterComponent
 from src.plugin_system.base.component_types import ComponentInfo
 
@@ -30,7 +28,7 @@ class DevBridgeRouter(BaseRouterComponent):
 
     def __init__(self, plugin_config: dict | None = None):
         """初始化路由组件"""
-        self.active_connections: Set[WebSocket] = set()
+        self.active_connections: set[WebSocket] = set()
         super().__init__(plugin_config)
 
     def register_endpoints(self) -> None:
@@ -240,7 +238,7 @@ class DevBridgePlugin(BasePlugin):
         # 启动发现服务器
         self._discovery_task = asyncio.create_task(start_discovery_server(main_host, main_port))
 
-        logger.info(f"DevBridge 插件已加载，发现服务器: http://127.0.0.1:12318")
+        logger.info("DevBridge 插件已加载，发现服务器: http://127.0.0.1:12318")
         logger.info(f"WebSocket 端点: ws://{main_host}:{main_port}/plugin-api/dev_bridge/dev_bridge_router/ws")
 
     async def on_plugin_unload(self):

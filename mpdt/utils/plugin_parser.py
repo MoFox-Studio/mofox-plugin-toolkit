@@ -5,7 +5,6 @@
 
 import ast
 from pathlib import Path
-from typing import Optional
 
 
 def extract_plugin_name(plugin_path: Path) -> str | None:
@@ -27,7 +26,7 @@ def extract_plugin_name(plugin_path: Path) -> str | None:
         return None
 
     try:
-        with open(plugin_file, "r", encoding="utf-8") as f:
+        with open(plugin_file, encoding="utf-8") as f:
             source = f.read()
 
         tree = ast.parse(source)
@@ -100,7 +99,7 @@ def get_plugin_info(plugin_path: Path) -> dict:
     info["has_plugin_file"] = True
 
     try:
-        with open(plugin_file, "r", encoding="utf-8") as f:
+        with open(plugin_file, encoding="utf-8") as f:
             source = f.read()
 
         tree = ast.parse(source)
