@@ -1,0 +1,116 @@
+# ========================================
+# PyPI 自动发布工作流
+# ========================================
+# 功能说明：
+#   1. 每两天自动运行一次（凌晨0点）
+#   2. 也可以手动触发运行
+#   3. 自动构建 Python 包
+#   4. 自动发布到 PyPI
+# ========================================
+
+name: 发布到 PyPI  # 工作流的名称
+
+# 触发条件
+on:
+  # 定时触发：每两天运行一次（在每月的奇数日和偶数日的 00:00 UTC 运行）
+  schedule:
+    - cron: '0 0 */2 * *'  # cron 格式：分 时 日 月 星期，*/2 表示每两天
+  
+  # 手动触发：可以在 GitHub Actions 页面手动运行
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '是否为测试运行（不实际发布）'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+# 工作流任务
+jobs:
+  # 构建和发布任务
+  build-and-publish:
+    name: 构建并发布 Python 包到 PyPI
+    runs-on: ubuntu-latest  # 使用 Ubuntu 最新版本作为运行环境
+    
+    # 执行步骤
+    steps:
+      # 步骤 1: 检出代码
+      # 从 GitHub 仓库中拉取代码到运行环境
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整的 Git 历史记录
+      
+      # 步骤 2: 设置 Python 环境
+      # 安装 Python 3.11 版本
+      - name: 🐍 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'  # 使用 Python 3.11
+          cache: 'pip'  # 缓存 pip 依赖，加快后续运行速度
+      
+      # 步骤 3: 安装构建工具
+      # 安装打包所需的工具：build（构建工具）和 twine（上传工具）
+      - name: 📦 安装构建工具
+        run: |
+          python -m pip install --upgrade pip  # 升级 pip 到最新版本
+          pip install build twine  # 安装 build 和 twine
+      
+      # 步骤 4: 构建 Python 包
+      # 使用 build 工具构建源代码包和二进制包
+      - name: 🔨 构建 Python 包
+        run: |
+          python -m build  # 构建包，生成 dist/ 目录
+      
+      # 步骤 5: 检查构建的包
+      # 使用 twine 检查包是否符合 PyPI 规范
+      - name: 🔍 检查构建的包
+        run: |
+          twine check dist/*  # 检查 dist/ 目录下的所有包文件
+      
+      # 步骤 6: 发布到 PyPI
+      # 使用 twine 将包上传到 PyPI
+      # 注意：需要在 GitHub 仓库设置中添加 PYPI_API_TOKEN 密钥
+      - name: 🚀 发布到 PyPI
+        # 只有在非测试运行时才执行发布
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          TWINE_USERNAME: __token__  # PyPI 使用 token 认证时的用户名固定为 __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}  # 从 GitHub Secrets 中获取 PyPI API Token
+        run: |
+          twine upload dist/*  # 上传所有构建好的包到 PyPI
+      
+      # 步骤 7: 测试运行提示
+      # 如果是测试运行，显示提示信息
+      - name: ℹ️ 测试运行提示
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "🧪 这是一次测试运行，包已构建但未发布到 PyPI"
+          echo "📦 构建的包文件："
+          ls -lh dist/
+
+# ========================================
+# 使用说明：
+# ========================================
+# 1. 在 GitHub 仓库设置中添加 Secret：
+#    - 名称：PYPI_API_TOKEN
+#    - 值：你的 PyPI API Token（从 https://pypi.org/manage/account/token/ 获取）
+#
+# 2. 自动运行：
+#    - 工作流会每两天自动运行一次
+#    - 运行时间为 UTC 时间 00:00（北京时间 08:00）
+#
+# 3. 手动运行：
+#    - 进入 GitHub 仓库的 Actions 页面
+#    - 选择 "发布到 PyPI" 工作流
+#    - 点击 "Run workflow" 按钮
+#    - 可选择是否为测试运行
+#
+# 4. 注意事项：
+#    - 确保 pyproject.toml 中的版本号已更新
+#    - PyPI 不允许重复上传相同版本号的包
+#    - 建议先使用测试运行验证构建过程
+# ========================================
