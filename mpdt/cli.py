@@ -209,7 +209,7 @@ def config_show() -> None:
         table.add_column("值", style="green")
 
         table.add_row("配置文件", str(config.config_path))
-        table.add_row("mmc 路径", str(config.mmc_path) if config.mmc_path else "[red]未配置[/red]")
+        table.add_row("MoFox-Bot 路径", str(config.mmc_path) if config.mmc_path else "[red]未配置[/red]")
         table.add_row("虚拟环境类型", config.venv_type)
         table.add_row("虚拟环境路径", str(config.venv_path) if config.venv_path else "[dim]无[/dim]")
         table.add_row("自动重载", "是" if config.auto_reload else "否")
