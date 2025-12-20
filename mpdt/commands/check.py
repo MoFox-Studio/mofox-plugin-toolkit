@@ -300,6 +300,8 @@ def _save_report(results: list[ValidationResult], output_path: str, report_forma
     """
     if report_format == "markdown":
         _save_markdown_report(results, output_path, auto_fixer)
+    elif report_format == "json":
+        _save_json_report(results, output_path, auto_fixer)
     else:
         print_warning(f"不支持的报告格式: {report_format}")
 
@@ -389,6 +391,79 @@ def _save_markdown_report(results: list[ValidationResult], output_path: str, aut
     try:
         with open(output_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
+        print_success(f"报告已保存到: {output_path}")
+    except Exception as e:
+        print_error(f"保存报告失败: {e}")
+
+
+def _save_json_report(results: list[ValidationResult], output_path: str, auto_fixer: AutoFixValidator | None = None) -> None:
+    """保存 JSON 格式的报告
+
+    Args:
+        results: 验证结果列表
+        output_path: 输出路径
+        auto_fixer: 自动修复器对象（如果启用了自动修复）
+    """
+    import json
+    from datetime import datetime
+    
+    # 统计总数
+    total_errors = sum(r.error_count for r in results)
+    total_warnings = sum(r.warning_count for r in results)
+    total_info = sum(r.info_count for r in results)
+    
+    # 构建报告数据结构
+    report = {
+        "timestamp": datetime.now().isoformat(),
+        "summary": {
+            "total_errors": total_errors,
+            "total_warnings": total_warnings,
+            "total_info": total_info,
+            "success": total_errors == 0
+        },
+        "validators": [],
+        "issues": []
+    }
+    
+    # 添加自动修复统计
+    if auto_fixer:
+        report["auto_fix"] = {
+            "enabled": True,
+            "fixes_applied": len(auto_fixer.fixes_applied),
+            "fixes_failed": len(auto_fixer.fixes_failed),
+            "applied_fixes": auto_fixer.fixes_applied,
+            "failed_fixes": auto_fixer.fixes_failed
+        }
+    else:
+        report["auto_fix"] = {"enabled": False}
+    
+    # 添加每个验证器的结果
+    for result in results:
+        validator_data = {
+            "name": result.validator_name,
+            "success": result.success,
+            "error_count": result.error_count,
+            "warning_count": result.warning_count,
+            "info_count": result.info_count
+        }
+        report["validators"].append(validator_data)
+        
+        # 添加问题详情
+        for issue in result.issues:
+            issue_data = {
+                "validator": result.validator_name,
+                "level": issue.level.value,
+                "message": issue.message,
+                "file_path": issue.file_path,
+                "line_number": issue.line_number,
+                "suggestion": issue.suggestion
+            }
+            report["issues"].append(issue_data)
+    
+    # 写入文件
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
         print_success(f"报告已保存到: {output_path}")
     except Exception as e:
         print_error(f"保存报告失败: {e}")

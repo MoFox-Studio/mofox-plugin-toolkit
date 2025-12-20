@@ -444,7 +444,7 @@ class ComponentValidator(BaseValidator):
 
         if not required_fields:
             # 未知的组件类型
-            self.result.add_info(
+            self.result.add_error(
                 f"组件 {class_name} 的基类 {base_class} 不在已知类型列表中",
                 file_path=str(component_file.relative_to(self.plugin_path)),
             )
@@ -758,7 +758,7 @@ class ComponentValidator(BaseValidator):
                     suggestion=f"建议修改返回类型注解为: -> {expected_return}",
                 )
         elif expected_return and not method_node.returns:
-            self.result.add_info(
+            self.result.add_warning(
                 f"组件 {class_name} 的方法 {method_name} 缺少返回类型注解，建议添加: -> {expected_return}",
                 file_path=str(component_file.relative_to(self.plugin_path)),
             )
