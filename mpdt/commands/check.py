@@ -148,7 +148,7 @@ def check_plugin(
 
     # 保存报告（如果需要）
     if output_path:
-        _save_report(all_results, output_path, report_format)
+        _save_report(all_results, output_path, report_format, auto_fixer)
 
 
 def _print_validation_summary(result: ValidationResult, verbose: bool = False) -> None:
@@ -259,13 +259,28 @@ def _print_overall_report(results: list[ValidationResult], level: str, auto_fixe
 
     # 总结
     console.print()
-    if auto_fixer and auto_fixer.fixes_applied:
-        console.print("[bold cyan]修复统计:[/bold cyan]")
-        console.print(f"  [green]✓[/green] 成功修复: {len(auto_fixer.fixes_applied)} 个")
-        if auto_fixer.fixes_failed:
-            console.print(f"  [yellow]✗[/yellow] 修复失败: {len(auto_fixer.fixes_failed)} 个")
+    if auto_fixer:
+        console.print("[bold cyan]═══ 修复统计 ═══[/bold cyan]")
         console.print()
+        
+        if auto_fixer.fixes_applied:
+            console.print(f"[green]✓ 成功修复: {len(auto_fixer.fixes_applied)} 个[/green]")
+            for fix in auto_fixer.fixes_applied:
+                console.print(f"  [green]•[/green] {fix}")
+            console.print()
+        
+        if auto_fixer.fixes_failed:
+            console.print(f"[yellow]✗ 修复失败: {len(auto_fixer.fixes_failed)} 个[/yellow]")
+            for fail in auto_fixer.fixes_failed:
+                console.print(f"  [yellow]•[/yellow] {fail}")
+            console.print()
+        
+        if not auto_fixer.fixes_applied and not auto_fixer.fixes_failed:
+            console.print("[blue]ℹ 未发现可自动修复的问题[/blue]")
+            console.print()
     
+    console.print("[bold cyan]═══ 最终结果 ═══[/bold cyan]")
+    console.print()
     if total_errors > 0:
         print_error(f"剩余 {total_errors} 个错误，{total_warnings} 个警告")
     elif total_warnings > 0:
@@ -274,36 +289,55 @@ def _print_overall_report(results: list[ValidationResult], level: str, auto_fixe
         print_success("所有检查通过！")
 
 
-def _save_report(results: list[ValidationResult], output_path: str, report_format: str) -> None:
+def _save_report(results: list[ValidationResult], output_path: str, report_format: str, auto_fixer: AutoFixValidator | None = None) -> None:
     """保存检查报告
 
     Args:
         results: 验证结果列表
         output_path: 输出路径
         report_format: 报告格式
+        auto_fixer: 自动修复器对象（如果启用了自动修复）
     """
     if report_format == "markdown":
-        _save_markdown_report(results, output_path)
+        _save_markdown_report(results, output_path, auto_fixer)
     else:
         print_warning(f"不支持的报告格式: {report_format}")
 
 
-def _save_markdown_report(results: list[ValidationResult], output_path: str) -> None:
+def _save_markdown_report(results: list[ValidationResult], output_path: str, auto_fixer: AutoFixValidator | None = None) -> None:
     """保存 Markdown 格式的报告
 
     Args:
         results: 验证结果列表
         output_path: 输出路径
+        auto_fixer: 自动修复器对象（如果启用了自动修复）
     """
-    lines = ["# 插件检查报告\n"]
+    lines = ["# 插件检查报告\n\n"]
 
     # 统计
     total_errors = sum(r.error_count for r in results)
     total_warnings = sum(r.warning_count for r in results)
+    total_info = sum(r.info_count for r in results)
 
-    lines.append("## 摘要\n")
+    lines.append("## 摘要\n\n")
     lines.append(f"- 错误: {total_errors}\n")
     lines.append(f"- 警告: {total_warnings}\n")
+    lines.append(f"- 信息: {total_info}\n")
+    
+    # 修复统计
+    if auto_fixer:
+        lines.append("\n### 自动修复统计\n\n")
+        if auto_fixer.fixes_applied:
+            lines.append(f"- ✅ 成功修复: {len(auto_fixer.fixes_applied)} 个\n")
+            for fix in auto_fixer.fixes_applied:
+                lines.append(f"  - {fix}\n")
+        if auto_fixer.fixes_failed:
+            lines.append(f"- ❌ 修复失败: {len(auto_fixer.fixes_failed)} 个\n")
+            for fail in auto_fixer.fixes_failed:
+                lines.append(f"  - {fail}\n")
+        if not auto_fixer.fixes_applied and not auto_fixer.fixes_failed:
+            lines.append("- ℹ️ 未发现可自动修复的问题\n")
+    
     lines.append("\n")
 
     # 详细结果
@@ -336,6 +370,20 @@ def _save_markdown_report(results: list[ValidationResult], output_path: str) -> 
                     lines.append(f"  - 建议: {issue.suggestion}\n")
 
             lines.append("\n")
+
+    # 总结
+    lines.append("## 总结\n\n")
+    if auto_fixer and auto_fixer.fixes_applied:
+        lines.append(f"✅ 成功修复 {len(auto_fixer.fixes_applied)} 个问题\n\n")
+        if auto_fixer.fixes_failed:
+            lines.append(f"⚠️ {len(auto_fixer.fixes_failed)} 个问题修复失败\n\n")
+    
+    if total_errors > 0:
+        lines.append(f"❌ 剩余 {total_errors} 个错误，{total_warnings} 个警告\n")
+    elif total_warnings > 0:
+        lines.append(f"⚠️ 剩余 {total_warnings} 个警告\n")
+    else:
+        lines.append("✅ 所有检查通过！\n")
 
     # 写入文件
     try:

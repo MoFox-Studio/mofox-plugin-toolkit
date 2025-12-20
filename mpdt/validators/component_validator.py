@@ -272,26 +272,54 @@ class ComponentValidator(BaseValidator):
         """
         components = []
 
-        # 遍历函数体，查找 components.append(...) 或直接 return [...]
-        for stmt in func_node.body:
-            # 情况1: components.append((ComponentInfo, ComponentClass))
-            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-                call = stmt.value
-                # 检查是否是 .append() 调用
-                if isinstance(call.func, ast.Attribute) and call.func.attr == "append":
-                    # 获取 append 的参数（应该是一个元组）
-                    if call.args:
-                        component = self._extract_component_from_tuple(call.args[0], imports)
-                        if component:
-                            components.append(component)
+        # 递归遍历所有语句节点，包括 if/for 等块内的语句
+        def walk_statements(statements):
+            for stmt in statements:
+                # 情况1: components.append((ComponentInfo, ComponentClass))
+                if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                    call = stmt.value
+                    # 检查是否是 .append() 调用
+                    if isinstance(call.func, ast.Attribute) and call.func.attr == "append":
+                        # 获取 append 的参数（应该是一个元组）
+                        if call.args:
+                            component = self._extract_component_from_tuple(call.args[0], imports)
+                            if component:
+                                components.append(component)
 
-            # 情况2: return [(...), (...), ...]
-            elif isinstance(stmt, ast.Return) and stmt.value:
-                if isinstance(stmt.value, ast.List):
-                    for element in stmt.value.elts:
-                        component = self._extract_component_from_tuple(element, imports)
-                        if component:
-                            components.append(component)
+                # 情况2: return [(...), (...), ...]
+                elif isinstance(stmt, ast.Return) and stmt.value:
+                    if isinstance(stmt.value, ast.List):
+                        for element in stmt.value.elts:
+                            component = self._extract_component_from_tuple(element, imports)
+                            if component:
+                                components.append(component)
+
+                # 情况3: if 语句块内
+                elif isinstance(stmt, ast.If):
+                    # 递归检查 if 块
+                    walk_statements(stmt.body)
+                    # 递归检查 else/elif 块
+                    walk_statements(stmt.orelse)
+
+                # 情况4: for/while 循环块内
+                elif isinstance(stmt, (ast.For, ast.While)):
+                    walk_statements(stmt.body)
+                    walk_statements(stmt.orelse)
+
+                # 情况5: with 语句块内
+                elif isinstance(stmt, ast.With):
+                    walk_statements(stmt.body)
+
+                # 情况6: try-except 块内
+                elif isinstance(stmt, ast.Try):
+                    walk_statements(stmt.body)
+                    for handler in stmt.handlers:
+                        walk_statements(handler.body)
+                    walk_statements(stmt.orelse)
+                    walk_statements(stmt.finalbody)
+
+        # 从函数体开始遍历
+        walk_statements(func_node.body)
 
         return components
 
@@ -793,6 +821,20 @@ class ComponentValidator(BaseValidator):
             if actual == expected:
                 return True
 
-        # 宽松匹配：只要主要类型一致就认为通过
-        # 例如 tuple[bool,str] 和 tuple[bool, str] 都接受
+        # 宽松匹配：泛型基类型匹配
+        # 例如 tuple 可以匹配 tuple[bool, str]，dict 可以匹配 dict[str, Any]
+        actual_base = actual.split("[")[0]
+        expected_base = expected.split("[")[0]
+        
+        if actual_base == expected_base:
+            return True
+
+        # 处理 Union 和 | 的不同写法
+        if "Union" in actual or "Union" in expected or "|" in actual or "|" in expected:
+            # 简化比较：提取基础类型
+            actual_types = set(re.findall(r'\w+', actual))
+            expected_types = set(re.findall(r'\w+', actual))
+            if actual_types == expected_types:
+                return True
+
         return False

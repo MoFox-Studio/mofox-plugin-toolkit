@@ -177,6 +177,47 @@ class CodeParser:
         self.module.visit(visitor)
         return visitor.found_values
 
+    def find_call_arguments(self, variable_name: str, function_name: str | None = None) -> dict[str, Any] | None:
+        """查找变量赋值中的函数调用参数
+
+        Args:
+            variable_name: 变量名（如 __plugin_meta__）
+            function_name: 函数名（如 PluginMetadata），如果为 None 则匹配任何调用
+
+        Returns:
+            参数字典 {参数名: 参数值}，如果未找到返回 None
+        """
+        visitor = CallArgumentsFinderVisitor(variable_name, function_name)
+        self.module.visit(visitor)
+        if visitor.found_arguments:
+            # 提取参数值
+            result = {}
+            for arg_name, arg_value in visitor.found_arguments.items():
+                result[arg_name] = self._extract_value(arg_value)
+            return result
+        return None
+
+    def get_missing_call_arguments(self, variable_name: str, required_args: list[str], function_name: str | None = None) -> list[str]:
+        """获取函数调用中缺失的必需参数
+
+        Args:
+            variable_name: 变量名
+            required_args: 必需参数列表
+            function_name: 函数名
+
+        Returns:
+            缺失的参数名列表
+        """
+        current_args = self.find_call_arguments(variable_name, function_name)
+        if current_args is None:
+            return required_args
+        
+        missing = []
+        for arg in required_args:
+            if arg not in current_args or current_args[arg] is None or current_args[arg] == "":
+                missing.append(arg)
+        return missing
+
     def _extract_value(self, node: cst.BaseExpression) -> Any:
         """从 CST 节点中提取 Python 值
 
@@ -312,3 +353,50 @@ class AssignmentFinderVisitor(cst.CSTVisitor):
                 if isinstance(statement.target, cst.Name) and statement.target.value == self.variable_name:
                     if statement.value:
                         self.found_values.append(statement.value)
+
+
+class CallArgumentsFinderVisitor(cst.CSTVisitor):
+    """查找函数调用参数的访问器"""
+
+    def __init__(self, variable_name: str, function_name: str | None = None):
+        self.variable_name = variable_name
+        self.function_name = function_name
+        self.found_arguments: dict[str, cst.BaseExpression] = {}
+
+    def visit_SimpleStatementLine(self, node: cst.SimpleStatementLine) -> None:
+        """访问简单语句"""
+        for statement in node.body:
+            # 处理普通赋值: var = FunctionCall(...)
+            if isinstance(statement, cst.Assign):
+                for target in statement.targets:
+                    if isinstance(target.target, cst.Name) and target.target.value == self.variable_name:
+                        self._extract_call_arguments(statement.value)
+
+            # 处理带类型注解的赋值: var: Type = FunctionCall(...)
+            elif isinstance(statement, cst.AnnAssign):
+                if isinstance(statement.target, cst.Name) and statement.target.value == self.variable_name:
+                    if statement.value:
+                        self._extract_call_arguments(statement.value)
+
+    def _extract_call_arguments(self, node: cst.BaseExpression) -> None:
+        """从表达式中提取函数调用参数"""
+        if not isinstance(node, cst.Call):
+            return
+
+        # 检查函数名是否匹配
+        if self.function_name is not None:
+            func_name = None
+            if isinstance(node.func, cst.Name):
+                func_name = node.func.value
+            elif isinstance(node.func, cst.Attribute):
+                func_name = node.func.attr.value
+
+            if func_name != self.function_name:
+                return
+
+        # 提取参数
+        for arg in node.args:
+            if arg.keyword:
+                # 关键字参数: name=value
+                arg_name = arg.keyword.value
+                self.found_arguments[arg_name] = arg.value

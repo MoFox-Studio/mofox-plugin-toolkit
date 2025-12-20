@@ -106,12 +106,14 @@ def init_plugin(
     print_tree(
         plugin_name,
         {
-            ".gitignore":None,
+            ".gitignore": None,
             "__init__.py": None,
-            "plugin.py": None,
-            "config": ["config.toml"],
-            "components": ["actions", "commands", "tools", "events"],
-            "utils": ["__init__.py"],
+            plugin_name: {
+                "__init__.py": None,
+                "plugin.py": None,
+                "components": ["actions", "plus_command", "tools", "events"],
+                "utils": ["__init__.py"],
+            },
             "docs": ["README.md"] if with_docs else [],
             "pyproject.toml": None,
             "requirements.txt": None,
@@ -198,17 +200,22 @@ def _create_plugin_structure(
     # 创建主目录
     ensure_dir(plugin_dir)
 
-    # 创建 __init__.py
-    init_content = _generate_init_file(plugin_name, author, license_type)
-    safe_write_file(plugin_dir / "__init__.py", init_content)
+    # 创建根目录下的 __init__.py (给 MoFox-Plugin-Repo读取)
+    root_init_content = _generate_init_file(plugin_name, author, license_type)
+    safe_write_file(plugin_dir / "__init__.py", root_init_content)
+
+    # 创建插件代码子目录
+    plugin_code_dir = ensure_dir(plugin_dir / plugin_name)
+
+    # 创建插件代码目录下的 __init__.py (给插件系统读取，内容与根目录的相同)
+    safe_write_file(plugin_code_dir / "__init__.py", root_init_content)
 
     # 创建 plugin.py
     plugin_content = _generate_plugin_file(plugin_name, template)
-    safe_write_file(plugin_dir / "plugin.py", plugin_content)
-
+    safe_write_file(plugin_code_dir / "plugin.py", plugin_content)
 
     # 创建 components 目录
-    components_dir = ensure_dir(plugin_dir / "components")
+    components_dir = ensure_dir(plugin_code_dir / "components")
     safe_write_file(components_dir / "__init__.py", '"""\n组件模块\n"""\n')
 
     for comp_type in ["actions", "plus_command", "tools", "events"]:
@@ -216,7 +223,7 @@ def _create_plugin_structure(
         safe_write_file(comp_dir / "__init__.py", f'"""\n{comp_type.title()} 组件\n"""\n')
 
     # 创建 utils 目录
-    utils_dir = ensure_dir(plugin_dir / "utils")
+    utils_dir = ensure_dir(plugin_code_dir / "utils")
     safe_write_file(utils_dir / "__init__.py", '"""\n工具函数\n"""\n')
 
     # 创建文档目录
@@ -357,7 +364,7 @@ MoFox-Bot 插件
 
 ## 安装
 
-将插件目录放入 `plugins/` 目录中。
+将{plugin_name}文件夹放入 `plugins/` 目录中。
 
 ## 配置
 

@@ -42,7 +42,6 @@ class AutoFixValidator(BaseValidator):
             return result
 
         # 修复导入顺序
-        self._fix_import_order(result)
 
         # 汇总修复结果
         if self.fixes_applied:
@@ -83,19 +82,52 @@ class AutoFixValidator(BaseValidator):
             return result
 
         # 按问题类型分类并修复
+        self._fix_missing_plugin_meta(all_issues, result)
         self._fix_missing_metadata_issues(all_issues, result)
         self._fix_missing_component_fields(all_issues, result)
         self._fix_missing_methods(all_issues, result)
         self._fix_method_signatures(all_issues, result)
-        self._fix_import_order(result)
 
         return result
+
+    def _fix_missing_plugin_meta(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
+        """修复缺失的 __plugin_meta__ 变量"""
+        for issue in issues:
+            if "未找到 __plugin_meta__ 变量" in issue.message or "未找到 __plugin_meta__" in issue.message:
+                try:
+                    # 查找 __init__.py 文件
+                    init_file = self.plugin_path / "__init__.py"
+                    if not init_file.exists():
+                        self.fixes_failed.append("未找到 __init__.py 文件")
+                        continue
+                    
+                    before_count = len(self.fixes_applied)
+                    self._add_plugin_meta_variable(init_file, issue)
+                    if len(self.fixes_applied) > before_count:
+                        self.fixed_issues.append(issue)
+                except Exception as e:
+                    self.fixes_failed.append(f"修复 __plugin_meta__ 变量失败: {e}")
 
     def _fix_missing_metadata_issues(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
         """修复缺失的元数据问题"""
         for issue in issues:
+            # 修复 PluginMetadata 缺失参数
+            if "PluginMetadata 缺少必需字段" in issue.message:
+                try:
+                    # 从消息中提取字段名
+                    match = re.search(r'缺少必需字段[：:]\s*(\w+)', issue.message)
+                    if match:
+                        field_name = match.group(1)
+                        init_file = self.plugin_path / "__init__.py"
+                        if init_file.exists():
+                            before_count = len(self.fixes_applied)
+                            self._add_plugin_meta_argument(init_file, field_name, issue)
+                            if len(self.fixes_applied) > before_count:
+                                self.fixed_issues.append(issue)
+                except Exception as e:
+                    self.fixes_failed.append(f"修复 PluginMetadata 参数失败: {issue.message} - {e}")
             # 匹配 "缺少必需的类属性" 相关错误
-            if "缺少必需的类属性" in issue.message or "缺少必需元数据字段" in issue.message:
+            elif "缺少必需的类属性" in issue.message or "缺少必需元数据字段" in issue.message:
                 try:
                     # 从消息中提取字段名
                     match = re.search(r'[：:]\s*(\w+)', issue.message)
@@ -383,6 +415,145 @@ class AutoFixValidator(BaseValidator):
         except Exception as e:
             self.fixes_failed.append(f"修复方法参数失败: {e}")
 
+    def _add_plugin_meta_variable(self, file_path: Path, issue: ValidationIssue) -> None:
+        """在 __init__.py 中添加 __plugin_meta__ 变量
+        
+        Args:
+            file_path: __init__.py 文件路径
+            issue: 验证问题
+        """
+        try:
+            source = file_path.read_text(encoding="utf-8")
+            
+            # 检查是否已存在
+            if "__plugin_meta__" in source:
+                return
+            
+            # 获取插件名称
+            plugin_name = self.plugin_path.name
+            
+            # 构建 __plugin_meta__ 定义
+            meta_code = f'''from src.plugin_system.base.plugin_metadata import PluginMetadata
+
+__plugin_meta__ = PluginMetadata(
+    usage = "unknown",
+    name="hello_world_plugin - 副本",
+    version="0.1.0",
+    author="",
+    description="",
+)
+'''
+            
+            # 检查是否已有 PluginMetadata 导入
+            has_import = "from src.plugin_system.base.plugin_metadata import PluginMetadata" in source or "import src.plugin_system.base.plugin_metadata" in source
+            
+            if has_import:
+                # 如果已有导入，只添加变量定义
+                meta_code = f'''\n__plugin_meta__ = PluginMetadata(
+    name="{plugin_name}",
+    version="0.1.0",
+    author="",
+    description="",
+)
+'''
+            
+            # 在文件开头添加（在 docstring 之后）
+            lines = source.split("\n")
+            insert_pos = 0
+            
+            # 跳过开头的 docstring
+            in_docstring = False
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if i == 0 and (stripped.startswith('"""') or stripped.startswith("'''")):
+                    in_docstring = True
+                    if stripped.count('"""') >= 2 or stripped.count("'''") >= 2:
+                        insert_pos = i + 1
+                        break
+                elif in_docstring and ('"""' in line or "'''" in line):
+                    insert_pos = i + 1
+                    break
+                elif not in_docstring:
+                    insert_pos = i
+                    break
+            
+            # 插入代码
+            lines.insert(insert_pos, meta_code)
+            new_source = "\n".join(lines)
+            
+            file_path.write_text(new_source, encoding="utf-8")
+            self.fixes_applied.append(f"在 {file_path.name} 中添加 __plugin_meta__ 变量")
+            
+        except Exception as e:
+            self.fixes_failed.append(f"添加 __plugin_meta__ 变量失败: {e}")
+
+    def _add_plugin_meta_argument(self, file_path: Path, arg_name: str, issue: ValidationIssue) -> None:
+        """在 PluginMetadata 调用中添加缺失的参数
+        
+        Args:
+            file_path: __init__.py 文件路径
+            arg_name: 参数名
+            issue: 验证问题
+        """
+        try:
+            source = file_path.read_text(encoding="utf-8")
+            module = cst.parse_module(source)
+            
+            # 获取参数的默认值
+            arg_value = self._get_default_value_for_metadata_field(arg_name)
+            
+            transformer = AddCallArgumentTransformer(
+                variable_name="__plugin_meta__",
+                function_name="PluginMetadata",
+                arg_name=arg_name,
+                arg_value=arg_value
+            )
+            modified = module.visit(transformer)
+            
+            if transformer.modified:
+                file_path.write_text(modified.code, encoding="utf-8")
+                self.fixes_applied.append(f"在 PluginMetadata 中添加参数 {arg_name}={arg_value}")
+            else:
+                self.fixes_failed.append(f"未能在 PluginMetadata 中添加参数 {arg_name}")
+                
+        except Exception as e:
+            self.fixes_failed.append(f"添加 PluginMetadata 参数 {arg_name} 失败: {e}")
+
+    def _fix_method_return_type(
+        self,
+        file_path: Path,
+        class_name: str,
+        method_name: str,
+        expected_type: str,
+        issue: ValidationIssue
+    ) -> None:
+        """修复方法的返回类型注解
+        
+        Args:
+            file_path: 文件路径
+            class_name: 类名
+            method_name: 方法名
+            expected_type: 预期的返回类型
+            issue: 验证问题
+        """
+        try:
+            source = file_path.read_text(encoding="utf-8")
+            module = cst.parse_module(source)
+            
+            transformer = FixReturnTypeTransformer(class_name, method_name, expected_type)
+            modified = module.visit(transformer)
+            
+            if transformer.modified:
+                file_path.write_text(modified.code, encoding="utf-8")
+                self.fixes_applied.append(
+                    f"修复 {file_path.name} 中 {class_name}.{method_name} 的返回类型注解为 {expected_type}"
+                )
+            else:
+                self.fixes_failed.append(f"未能修复方法 {class_name}.{method_name} 的返回类型")
+                
+        except Exception as e:
+            self.fixes_failed.append(f"修复返回类型注解失败: {e}")
+
     def _resolve_file_path(self, relative_path: str | None) -> Path | None:
         """解析相对文件路径为绝对路径
         
@@ -429,6 +600,34 @@ class AutoFixValidator(BaseValidator):
         else:
             return '""'
 
+    def _get_default_value_for_metadata_field(self, field_name: str) -> str:
+        """获取 PluginMetadata 字段的默认值
+        
+        Args:
+            field_name: 字段名
+            
+        Returns:
+            默认值字符串
+        """
+        # 获取插件名称
+        plugin_name = self.plugin_path.name
+        
+        # 根据字段名返回默认值
+        if field_name == "name":
+            return f'"{plugin_name}"'
+        elif field_name == "description":
+            return f'"{plugin_name} 插件"'
+        elif field_name == "usage":
+            return '"待完善"'
+        elif field_name == "version":
+            return '"0.1.0"'
+        elif field_name == "author":
+            return '""'
+        elif field_name == "license":
+            return '"MIT"'
+        else:
+            return '""'
+
     def _generate_method_template(self, method_name: str, suggestion: str | None) -> str:
         """生成方法模板
         
@@ -464,31 +663,82 @@ class AutoFixValidator(BaseValidator):
         else:
             return f'{async_prefix}def {method_name}(self):\n        """TODO: 添加方法说明"""\n        raise NotImplementedError'
 
-    def _fix_import_order(self, result: ValidationResult) -> None:
-        """修复导入顺序（使用 ruff --fix）"""
-        try:
-            import subprocess
-
-            # 查找所有 Python 文件
-            python_files = list(self.plugin_path.rglob("*.py"))
-
-            for py_file in python_files:
-                # 使用 ruff 的 isort 规则修复导入顺序
-                proc = subprocess.run(
-                    ["ruff", "check", "--select", "I", "--fix", str(py_file)],
-                    capture_output=True,
-                    check=False  # 不因错误退出而失败
-                )
-                
-            if python_files:
-                self.fixes_applied.append("修复导入顺序")
-
-        except Exception:
-            # 如果 ruff 未安装，静默失败
-            pass
-
 
 # ============== libcst Transformers ==============
+
+class AddCallArgumentTransformer(cst.CSTTransformer):
+    """在函数调用中添加参数的转换器"""
+    
+    def __init__(self, variable_name: str, function_name: str, arg_name: str, arg_value: str):
+        self.variable_name = variable_name
+        self.function_name = function_name
+        self.arg_name = arg_name
+        self.arg_value = arg_value
+        self.modified = False
+    
+    def leave_SimpleStatementLine(self, original_node: cst.SimpleStatementLine, updated_node: cst.SimpleStatementLine) -> cst.SimpleStatementLine:
+        """修改赋值语句中的函数调用"""
+        new_body = []
+        
+        for statement in updated_node.body:
+            # 处理普通赋值
+            if isinstance(statement, cst.Assign):
+                for target in statement.targets:
+                    if isinstance(target.target, cst.Name) and target.target.value == self.variable_name:
+                        # 找到目标变量，修改其值
+                        new_value = self._add_argument_to_call(statement.value)
+                        if new_value is not None:
+                            statement = statement.with_changes(value=new_value)
+                            self.modified = True
+            
+            # 处理带类型注解的赋值
+            elif isinstance(statement, cst.AnnAssign):
+                if isinstance(statement.target, cst.Name) and statement.target.value == self.variable_name:
+                    if statement.value:
+                        new_value = self._add_argument_to_call(statement.value)
+                        if new_value is not None:
+                            statement = statement.with_changes(value=new_value)
+                            self.modified = True
+            
+            new_body.append(statement)
+        
+        return updated_node.with_changes(body=new_body)
+    
+    def _add_argument_to_call(self, node: cst.BaseExpression) -> cst.BaseExpression | None:
+        """在函数调用中添加参数"""
+        if not isinstance(node, cst.Call):
+            return None
+        
+        # 检查函数名
+        func_name = None
+        if isinstance(node.func, cst.Name):
+            func_name = node.func.value
+        elif isinstance(node.func, cst.Attribute):
+            func_name = node.func.attr.value
+        
+        if func_name != self.function_name:
+            return None
+        
+        # 检查参数是否已存在
+        for arg in node.args:
+            if arg.keyword and arg.keyword.value == self.arg_name:
+                return None  # 参数已存在
+        
+        # 创建新参数
+        new_arg = cst.Arg(
+            keyword=cst.Name(self.arg_name),
+            value=cst.parse_expression(self.arg_value),
+            equal=cst.AssignEqual(
+                whitespace_before=cst.SimpleWhitespace(""),
+                whitespace_after=cst.SimpleWhitespace("")
+            )
+        )
+        
+        # 添加参数到列表
+        new_args = list(node.args) + [new_arg]
+        
+        return node.with_changes(args=new_args)
+
 
 class AddClassAttributeTransformer(cst.CSTTransformer):
     """添加类属性的转换器"""
@@ -567,7 +817,10 @@ class AddMethodTransformer(cst.CSTTransformer):
             full_code = f"class Temp:\n    {self.method_template}"
             temp_module = cst.parse_module(full_code)
             temp_class = temp_module.body[0]
-            new_method = temp_class.body.body[0]
+            if isinstance(temp_class, cst.ClassDef):
+                new_method = temp_class.body.body[0]
+            else:
+                return updated_node
             
             # 添加到类体末尾
             body_list = list(updated_node.body.body)
@@ -625,6 +878,42 @@ class FixMethodAsyncTransformer(cst.CSTTransformer):
                 return updated_node.with_changes(asynchronous=None)
         
         return updated_node
+
+
+class FixReturnTypeTransformer(cst.CSTTransformer):
+    """修复方法返回类型的转换器"""
+    
+    def __init__(self, class_name: str, method_name: str, return_type: str):
+        self.class_name = class_name
+        self.method_name = method_name
+        self.return_type = return_type
+        self.modified = False
+        self.in_target_class = False
+    
+    def visit_ClassDef(self, node: cst.ClassDef) -> None:
+        if node.name.value == self.class_name:
+            self.in_target_class = True
+    
+    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+        if original_node.name.value == self.class_name:
+            self.in_target_class = False
+        return updated_node
+    
+    def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+        """修改函数返回类型"""
+        if not self.in_target_class or updated_node.name.value != self.method_name:
+            return updated_node
+        
+        try:
+            # 创建新的返回类型注解
+            new_annotation = cst.Annotation(
+                annotation=cst.parse_expression(self.return_type)
+            )
+            
+            self.modified = True
+            return updated_node.with_changes(returns=new_annotation)
+        except Exception:
+            return updated_node
 
 
 class FixMethodParametersTransformer(cst.CSTTransformer):

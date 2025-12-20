@@ -64,10 +64,47 @@ class MetadataValidator(BaseValidator):
             )
             return self.result
 
-        # 元数据应该是一个字典（通过 PluginMetadata 构造）
-        # 由于我们的 CodeParser 不能轻易提取函数调用的参数
-        # 我们只能做基础检查，标记为已找到
+        # 使用增强的 CodeParser 解析 PluginMetadata 的参数
+        metadata_args = parser.find_call_arguments("__plugin_meta__", "PluginMetadata")
+        
+        if metadata_args is None:
+            self.result.add_error(
+                "未找到 __plugin_meta__ 的 PluginMetadata 调用",
+                file_path="__init__.py",
+                suggestion="请使用 PluginMetadata(...) 构造 __plugin_meta__",
+            )
+            return self.result
+
         self.result.add_info("找到 __plugin_meta__ 定义")
-        self.result.add_info("注意: 详细的元数据字段验证需要运行时检查")
+
+        # 检查必需字段
+        missing_required = parser.get_missing_call_arguments(
+            "__plugin_meta__", 
+            self.REQUIRED_FIELDS,
+            "PluginMetadata"
+        )
+        
+        if missing_required:
+            for field in missing_required:
+                self.result.add_error(
+                    f"PluginMetadata 缺少必需字段: {field}",
+                    file_path="__init__.py",
+                    suggestion=f"请在 PluginMetadata 中添加 {field}=\"...\" 参数",
+                )
+        else:
+            self.result.add_info("所有必需的元数据字段都已提供")
+
+        # 检查推荐字段
+        missing_recommended = []
+        for field in self.RECOMMENDED_FIELDS:
+            if field not in metadata_args or not metadata_args[field]:
+                missing_recommended.append(field)
+        
+        if missing_recommended:
+            self.result.add_warning(
+                f"建议添加以下元数据字段: {', '.join(missing_recommended)}",
+                file_path="__init__.py",
+                suggestion=f"在 PluginMetadata 中添加: {', '.join(f'{f}=\"...\"' for f in missing_recommended)}",
+            )
 
         return self.result

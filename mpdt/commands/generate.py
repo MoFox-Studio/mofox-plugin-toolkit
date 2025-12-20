@@ -5,9 +5,11 @@
 from pathlib import Path
 from typing import Any
 
+import libcst as cst
 import questionary
 
 from mpdt.templates import prepare_component_context
+from mpdt.utils.plugin_parser import extract_plugin_name
 from mpdt.utils.color_printer import (
     console,
     print_error,
@@ -264,7 +266,7 @@ def _update_plugin_registration(
     verbose: bool,
 ) -> bool:
     """
-    更新插件注册代码
+    更新插件注册代码 (使用 AST 解析)
 
     Args:
         work_dir: 工作目录
@@ -281,45 +283,30 @@ def _update_plugin_registration(
         return False
 
     try:
-        content = plugin_file.read_text(encoding="utf-8")
+        # 使用 plugin_parser 验证插件名称
+        parsed_plugin_name = extract_plugin_name(work_dir)
+        if not parsed_plugin_name:
+            if verbose:
+                console.print("[dim]⚠  无法解析插件名称[/dim]")
+            return False
 
-        # 添加 import 语句
-        import_line = f"from {context['plugin_name']}.components.{component_type}s.{component_name} import {context['class_name']}\n"
+        # 读取源代码
+        source_code = plugin_file.read_text(encoding="utf-8")
+        source_tree = cst.parse_module(source_code)
 
-        # 检查是否已导入
-        if import_line.strip() not in content:
-            # 找到合适的位置插入 import (在最后一个 import 之后,class 定义之前)
-            lines = content.split("\n")
-            import_insert_index = -1
-            last_import_index = -1
+        # 创建转换器
+        transformer = PluginRegistrationTransformer(
+            plugin_name=parsed_plugin_name,
+            component_type=component_type,
+            component_name=component_name,
+            class_name=context["class_name"],
+        )
 
-            for i, line in enumerate(lines):
-                if line.startswith("from") or line.startswith("import"):
-                    last_import_index = i
-                elif line.startswith("class") or line.startswith("@"):
-                    # 在 class 或装饰器之前插入
-                    import_insert_index = last_import_index + 1 if last_import_index >= 0 else i
-                    break
+        # 应用转换
+        modified_tree = source_tree.visit(transformer)
 
-            if import_insert_index > 0:
-                # 确保插入位置后有空行
-                if import_insert_index < len(lines) and lines[import_insert_index].strip():
-                    lines.insert(import_insert_index, "")
-                lines.insert(import_insert_index, import_line.rstrip())
-                content = "\n".join(lines)
-
-        # 在 get_plugin_components 中添加组件注册
-        # 根据组件类型生成正确的注册代码
-        registration_code = _generate_registration_code(component_type, context)
-
-        if "get_plugin_components" in content and registration_code not in content:
-            # 找到 return components 前插入注册代码
-            content = content.replace(
-                "return components",
-                f"{registration_code}\n        return components"
-            )
-
-        plugin_file.write_text(content, encoding="utf-8")
+        # 写回文件
+        plugin_file.write_text(modified_tree.code, encoding="utf-8")
 
         if verbose:
             console.print(f"[dim]✓ 更新插件注册: {plugin_file}[/dim]")
@@ -332,35 +319,111 @@ def _update_plugin_registration(
         return False
 
 
-def _generate_registration_code(component_type: str, context: dict) -> str:
-    """
-    根据组件类型生成正确的注册代码
+class PluginRegistrationTransformer(cst.CSTTransformer):
+    """用于添加组件导入和注册的 CST 转换器"""
 
-    Args:
-        component_type: 组件类型
-        context: 模板上下文
+    def __init__(
+        self,
+        plugin_name: str,
+        component_type: str,
+        component_name: str,
+        class_name: str,
+    ):
+        self.plugin_name = plugin_name
+        self.component_type = component_type
+        self.component_name = component_name
+        self.class_name = class_name
+        self.import_added = False
+        self.registration_added = False
 
-    Returns:
-        注册代码字符串
-    """
-    class_name = context['class_name']
+    def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
+        """在模块级别添加导入语句"""
+        if self.import_added:
+            return updated_node
 
-    # 根据组件类型生成对应的 get_xxx_info() 方法调用
-    info_method_map = {
-        "action": "get_action_info",
-        "tool": "get_tool_info",
-        "event": "get_event_handler_info",
-        "adapter": "get_adapter_info",
-        "prompt": "get_prompt_info",
-        "plus_command": "get_command_info",
-        "chatter": "get_chatter_info",
-        "router": "get_router_info",
-    }
+        # 构建导入语句
+        import_statement = cst.parse_statement(
+            f"from {self.plugin_name}.components.{self.component_type}s.{self.component_name} import {self.class_name}"
+        )
 
-    info_method = info_method_map.get(component_type, "get_component_info")
+        # 检查是否已存在相同的导入
+        for stmt in updated_node.body:
+            if isinstance(stmt, cst.SimpleStatementLine):
+                for s in stmt.body:
+                    if isinstance(s, cst.ImportFrom) and s.module:
+                        module_str = cst.Module([]).code_for_node(s.module)
+                        target_module = f"{self.plugin_name}.components.{self.component_type}s.{self.component_name}"
+                        if module_str == target_module:
+                            self.import_added = True
+                            return updated_node
 
-    registration = f"""
-        # 注册 {class_name}
-        components.append(({class_name}.{info_method}(), {class_name}))"""
+        # 找到最后一个导入语句的位置
+        last_import_idx = -1
+        for idx, stmt in enumerate(updated_node.body):
+            if isinstance(stmt, cst.SimpleStatementLine):
+                for s in stmt.body:
+                    if isinstance(s, (cst.Import, cst.ImportFrom)):
+                        last_import_idx = idx
 
-    return registration
+        # 在最后一个导入后添加新导入
+        if last_import_idx >= 0:
+            new_body = list(updated_node.body)
+            new_body.insert(last_import_idx + 1, import_statement)
+            self.import_added = True
+            return updated_node.with_changes(body=new_body)
+
+        return updated_node
+
+    def leave_FunctionDef(
+        self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
+    ) -> cst.FunctionDef:
+        """在 get_plugin_components 函数中添加注册代码"""
+        if updated_node.name.value != "get_plugin_components":
+            return updated_node
+
+        if self.registration_added:
+            return updated_node
+
+        # 根据组件类型生成对应的 get_xxx_info() 方法调用
+        info_method_map = {
+            "action": "get_action_info",
+            "tool": "get_tool_info",
+            "event": "get_event_handler_info",
+            "adapter": "get_adapter_info",
+            "prompt": "get_prompt_info",
+            "plus_command": "get_command_info",
+            "chatter": "get_chatter_info",
+            "router": "get_router_info",
+        }
+        info_method = info_method_map.get(self.component_type, "get_component_info")
+
+        # 构建注册代码
+        registration_code = f"""# 注册 {self.class_name}
+        components.append(({self.class_name}.{info_method}(), {self.class_name}))"""
+
+        # 检查是否已存在注册代码
+        function_code = cst.Module([]).code_for_node(updated_node)
+        if self.class_name in function_code and info_method in function_code:
+            self.registration_added = True
+            return updated_node
+
+        # 找到 return 语句并在其前面插入注册代码
+        new_body = []
+        for stmt in updated_node.body.body:
+            # 如果是 return 语句，在前面插入注册代码
+            if isinstance(stmt, cst.SimpleStatementLine):
+                for s in stmt.body:
+                    if isinstance(s, cst.Return):
+                        # 插入注册代码
+                        for line in registration_code.split("\n"):
+                            if line.strip():
+                                new_body.append(cst.parse_statement(line))
+                        self.registration_added = True
+
+            new_body.append(stmt)
+
+        if self.registration_added:
+            new_function_body = updated_node.body.with_changes(body=new_body)
+            return updated_node.with_changes(body=new_function_body)
+
+        return updated_node
