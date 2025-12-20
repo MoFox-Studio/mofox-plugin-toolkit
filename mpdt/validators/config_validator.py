@@ -36,7 +36,11 @@ class ConfigValidator(BaseValidator):
 
         if config_schema is None:
             # 没有定义 config_schema，这是正常的
-            self.result.add_info("插件未定义配置 schema")
+            self.result.add_warning(
+                "插件未定义配置 schema",
+                file_path="plugin.py",
+                suggestion="最好定义config_schema启用插件配置系统",                        
+            )
             return self.result
 
         # 验证 config_schema 的结构
@@ -44,7 +48,7 @@ class ConfigValidator(BaseValidator):
             self.result.add_warning(
                 "config_schema 已定义但为空",
                 file_path="plugin.py",
-                suggestion="如果不需要配置，可以删除 config_schema 定义",
+                suggestion="最好往里面加入一些配置项",
             )
             return self.result
 

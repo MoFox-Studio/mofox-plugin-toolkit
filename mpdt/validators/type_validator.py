@@ -61,8 +61,6 @@ class TypeValidator(BaseValidator):
                         line_number=issue.get("line"),
                         suggestion=issue.get("suggestion")
                     )
-        else:
-            result.add_info("类型检查通过，未发现类型问题")
 
         return result
 
