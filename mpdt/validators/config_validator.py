@@ -2,8 +2,7 @@
 配置文件验证器
 """
 
-import ast
-
+from ..utils.code_parser import CodeParser
 from .base import BaseValidator, ValidationResult
 
 
@@ -86,31 +85,13 @@ class ConfigValidator(BaseValidator):
             是否定义了 config_file_name
         """
         try:
-            with open(plugin_file, encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=str(plugin_file))
+            parser = CodeParser.from_file(plugin_file)
+            return parser.has_class_attribute(
+                attribute_name="config_file_name",
+                base_class="BasePlugin"
+            )
         except Exception:
             return False
-
-        # 查找插件类和 config_file_name 定义
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                # 检查是否继承自 BasePlugin
-                if any(
-                    (isinstance(base, ast.Name) and base.id == "BasePlugin")
-                    or (isinstance(base, ast.Attribute) and base.attr == "BasePlugin")
-                    for base in node.bases
-                ):
-                    # 在类中查找 config_file_name
-                    for item in node.body:
-                        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                            if item.target.id == "config_file_name":
-                                return True
-                        elif isinstance(item, ast.Assign):
-                            for target in item.targets:
-                                if isinstance(target, ast.Name) and target.id == "config_file_name":
-                                    return True
-
-        return False
 
     def _extract_config_schema(self, plugin_file, plugin_name: str) -> dict | None:
         """从 plugin.py 中提取 config_schema 定义
@@ -123,51 +104,12 @@ class ConfigValidator(BaseValidator):
             config_schema 字典，如果未定义返回 None
         """
         try:
-            with open(plugin_file, encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=str(plugin_file))
+            parser = CodeParser.from_file(plugin_file)
+            config_schema = parser.find_class_attribute(
+                base_class="BasePlugin",
+                attribute_name="config_schema"
+            )
+            return config_schema
         except Exception as e:
             self.result.add_error(f"解析 plugin.py 失败: {e}")
             return None
-
-        # 查找插件类和 config_schema 定义
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                # 检查是否继承自 BasePlugin
-                if any(
-                    (isinstance(base, ast.Name) and base.id == "BasePlugin")
-                    or (isinstance(base, ast.Attribute) and base.attr == "BasePlugin")
-                    for base in node.bases
-                ):
-                    # 在类中查找 config_schema
-                    for item in node.body:
-                        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                            if item.target.id == "config_schema" and item.value:
-                                return self._extract_schema_structure(item.value)
-                        elif isinstance(item, ast.Assign):
-                            for target in item.targets:
-                                if isinstance(target, ast.Name) and target.id == "config_schema":
-                                    return self._extract_schema_structure(item.value)
-
-        return None
-
-    def _extract_schema_structure(self, node: ast.AST) -> dict:
-        """提取 config_schema 的结构（只提取节名）
-
-        Args:
-            node: config_schema 的赋值节点
-
-        Returns:
-            包含节名的字典
-        """
-        if isinstance(node, ast.Dict):
-            schema = {}
-            for key in node.keys:
-                if isinstance(key, ast.Constant):
-                    section_name = str(key.value)
-                    schema[section_name] = {}
-                elif isinstance(key, ast.Str):  # Python 3.7 兼容
-                    section_name = str(key.s)
-                    schema[section_name] = {}
-            return schema
-
-        return {}

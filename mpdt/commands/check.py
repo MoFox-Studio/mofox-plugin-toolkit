@@ -114,15 +114,37 @@ def check_plugin(
         _print_validation_summary(result, verbose)
 
     # 自动修复（如果启用）
+    auto_fixer = None
     if auto_fix:
         print_info("正在应用自动修复...")
         auto_fixer = AutoFixValidator(path)
-        fix_result = auto_fixer.validate()
-        all_results.append(fix_result)
-        _print_validation_summary(fix_result, verbose)
+        fix_result = auto_fixer.fix_issues(all_results)
+        
+        # 从原始结果中移除已修复的问题（使用对象 id 比较）
+        fixed_issue_ids = {id(issue) for issue in auto_fixer.fixed_issues}
+        for result in all_results:
+            result.issues = [issue for issue in result.issues if id(issue) not in fixed_issue_ids]
+            # 更新计数
+            result._update_counts()
+        
+        # 显示修复摘要
+        if auto_fixer.fixes_applied:
+            print_success(f"  ✓ 成功修复 {len(auto_fixer.fixes_applied)} 个问题")
+            if verbose:
+                for fix in auto_fixer.fixes_applied:
+                    console.print(f"    [green]✓[/green] {fix}")
+        
+        if auto_fixer.fixes_failed:
+            print_warning(f"  ⚠ {len(auto_fixer.fixes_failed)} 个问题修复失败")
+            if verbose:
+                for fail in auto_fixer.fixes_failed:
+                    console.print(f"    [yellow]✗[/yellow] {fail}")
+        
+        if not auto_fixer.fixes_applied and not auto_fixer.fixes_failed:
+            print_info("  ℹ 未发现可自动修复的问题")
 
     # 生成总体报告
-    _print_overall_report(all_results, level)
+    _print_overall_report(all_results, level, auto_fixer)
 
     # 保存报告（如果需要）
     if output_path:
@@ -181,12 +203,13 @@ def _print_issue(issue) -> None:
         console.print(f"      [dim]💡 {issue.suggestion}[/dim]")
 
 
-def _print_overall_report(results: list[ValidationResult], level: str) -> None:
+def _print_overall_report(results: list[ValidationResult], level: str, auto_fixer: AutoFixValidator | None = None) -> None:
     """打印总体报告
 
     Args:
         results: 所有验证结果
         level: 显示级别
+        auto_fixer: 自动修复器对象（如果启用了自动修复）
     """
     console.print()
     console.print("=" * 60)
@@ -236,10 +259,17 @@ def _print_overall_report(results: list[ValidationResult], level: str) -> None:
 
     # 总结
     console.print()
+    if auto_fixer and auto_fixer.fixes_applied:
+        console.print("[bold cyan]修复统计:[/bold cyan]")
+        console.print(f"  [green]✓[/green] 成功修复: {len(auto_fixer.fixes_applied)} 个")
+        if auto_fixer.fixes_failed:
+            console.print(f"  [yellow]✗[/yellow] 修复失败: {len(auto_fixer.fixes_failed)} 个")
+        console.print()
+    
     if total_errors > 0:
-        print_error(f"发现 {total_errors} 个错误，{total_warnings} 个警告")
+        print_error(f"剩余 {total_errors} 个错误，{total_warnings} 个警告")
     elif total_warnings > 0:
-        print_warning(f"发现 {total_warnings} 个警告")
+        print_warning(f"剩余 {total_warnings} 个警告")
     else:
         print_success("所有检查通过！")
 

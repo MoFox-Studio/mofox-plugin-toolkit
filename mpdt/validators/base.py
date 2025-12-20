@@ -86,6 +86,14 @@ class ValidationResult:
         """信息数量"""
         return sum(1 for issue in self.issues if issue.level == ValidationLevel.INFO)
 
+    def _update_counts(self) -> None:
+        """更新成功状态（根据错误数量）"""
+        if self.error_count > 0:
+            self.success = False
+        elif self.error_count == 0 and not self.success:
+            # 如果没有错误了，且之前是失败状态，更新为成功
+            self.success = True
+
 
 class BaseValidator(ABC):
     """验证器基类"""
