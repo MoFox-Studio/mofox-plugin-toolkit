@@ -101,10 +101,11 @@ class MetadataValidator(BaseValidator):
                 missing_recommended.append(field)
         
         if missing_recommended:
+            fields_str = ', '.join(f'{f}="..."' for f in missing_recommended)
             self.result.add_warning(
                 f"建议添加以下元数据字段: {', '.join(missing_recommended)}",
                 file_path="__init__.py",
-                suggestion=f"在 PluginMetadata 中添加: {', '.join(f'{f}=\"...\"' for f in missing_recommended)}",
+                suggestion=f"在 PluginMetadata 中添加: {fields_str}",
             )
 
         return self.result
