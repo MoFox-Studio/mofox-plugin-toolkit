@@ -103,7 +103,7 @@ def generate(ctx: click.Context, component_type: str | None, component_name: str
               help="显示的最低级别")
 @click.option("--fix", is_flag=True, help="自动修复可修复的问题")
 @click.option("--report", type=click.Choice(["console","markdown","json"]), default="console",
-              help="报告格式")
+              help="输出报告的格式")
 @click.option("--output", "-o", type=click.Path(), help="报告输出路径")
 @click.option("--no-structure", is_flag=True, help="跳过结构检查")
 @click.option("--no-metadata", is_flag=True, help="跳过元数据检查")
