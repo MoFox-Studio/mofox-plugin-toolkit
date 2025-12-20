@@ -4,8 +4,8 @@
 # 功能说明：
 #   1. 每两天自动运行一次（凌晨0点）
 #   2. 也可以手动触发运行
-#   3. 自动构建 Python 包
-#   4. 自动发布到 PyPI
+#   3. 自动检测是否有新提交（最近3天内）
+#   4. 有新提交才自动构建并发布到 PyPI
 # ========================================
 
 name: 发布到 PyPI  # 工作流的名称
@@ -44,49 +44,77 @@ jobs:
         with:
           fetch-depth: 0  # 获取完整的 Git 历史记录
       
-      # 步骤 2: 设置 Python 环境
+      # 步骤 2: 检测是否有新提交
+      # 检查最近3天内是否有新的提交，如果没有则跳过后续步骤
+      - name: 🔍 检测新提交
+        id: check_commits
+        run: |
+          # 获取最近一次提交的时间戳（秒）
+          LAST_COMMIT_TIME=$(git log -1 --format=%ct)
+          # 获取当前时间戳（秒）
+          CURRENT_TIME=$(date +%s)
+          # 计算时间差（秒）
+          TIME_DIFF=$((CURRENT_TIME - LAST_COMMIT_TIME))
+          # 3天 = 3 * 24 * 60 * 60 = 259200 秒
+          THREE_DAYS=259200
+          
+          echo "最后一次提交时间: $(date -d @$LAST_COMMIT_TIME +'%Y-%m-%d %H:%M:%S')"
+          echo "距离现在: $((TIME_DIFF / 86400)) 天 $(((TIME_DIFF % 86400) / 3600)) 小时"
+          
+          if [ $TIME_DIFF -le $THREE_DAYS ]; then
+            echo "✅ 检测到最近3天内有新提交，继续发布流程"
+            echo "has_new_commits=true" >> $GITHUB_OUTPUT
+          else
+            echo "⏭️ 最近3天内没有新提交，跳过发布"
+            echo "has_new_commits=false" >> $GITHUB_OUTPUT
+          fi
+      
+      # 步骤 3: 设置 Python 环境
       # 安装 Python 3.11 版本
       - name: 🐍 设置 Python 环境
+        # 只有检测到新提交或手动运行时才执行
+        if: steps.check_commits.outputs.has_new_commits == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'  # 使用 Python 3.11
           cache: 'pip'  # 缓存 pip 依赖，加快后续运行速度
       
-      # 步骤 3: 安装构建工具
+      # 步骤 4: 安装构建工具
       # 安装打包所需的工具：build（构建工具）和 twine（上传工具）
-      - name: 📦 安装构建工具
-        run: |
+      - name: 📦 安装构建工具        if: steps.check_commits.outputs.has_new_commits == 'true' || github.event_name == 'workflow_dispatch'        run: |
           python -m pip install --upgrade pip  # 升级 pip 到最新版本
           pip install build twine  # 安装 build 和 twine
       
-      # 步骤 4: 构建 Python 包
+      # 步骤 5: 构建 Python 包
       # 使用 build 工具构建源代码包和二进制包
       - name: 🔨 构建 Python 包
+        if: steps.check_commits.outputs.has_new_commits == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           python -m build  # 构建包，生成 dist/ 目录
       
-      # 步骤 5: 检查构建的包
+      # 步骤 6: 检查构建的包
       # 使用 twine 检查包是否符合 PyPI 规范
       - name: 🔍 检查构建的包
+        if: steps.check_commits.outputs.has_new_commits == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           twine check dist/*  # 检查 dist/ 目录下的所有包文件
       
-      # 步骤 6: 发布到 PyPI
+      # 步骤 7: 发布到 PyPI
       # 使用 twine 将包上传到 PyPI
       # 注意：需要在 GitHub 仓库设置中添加 PYPI_API_TOKEN 密钥
       - name: 🚀 发布到 PyPI
-        # 只有在非测试运行时才执行发布
-        if: ${{ github.event.inputs.dry_run != 'true' }}
+        # 只有在非测试运行、有新提交或手动运行时才执行发布
+        if: ${{ (steps.check_commits.outputs.has_new_commits == 'true' || github.event_name == 'workflow_dispatch') && github.event.inputs.dry_run != 'true' }}
         env:
           TWINE_USERNAME: __token__  # PyPI 使用 token 认证时的用户名固定为 __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}  # 从 GitHub Secrets 中获取 PyPI API Token
         run: |
           twine upload dist/*  # 上传所有构建好的包到 PyPI
       
-      # 步骤 7: 测试运行提示
+      # 步骤 8: 测试运行提示
       # 如果是测试运行，显示提示信息
       - name: ℹ️ 测试运行提示
-        if: ${{ github.event.inputs.dry_run == 'true' }}
+        if: ${{ (steps.check_commits.outputs.has_new_commits == 'true' || github.event_name == 'workflow_dispatch') && github.event.inputs.dry_run == 'true' }}
         run: |
           echo "🧪 这是一次测试运行，包已构建但未发布到 PyPI"
           echo "📦 构建的包文件："
@@ -109,7 +137,12 @@ jobs:
 #    - 点击 "Run workflow" 按钮
 #    - 可选择是否为测试运行
 #
-# 4. 注意事项：
+# 4. 自动检测机制：
+#    - 工作流会自动检测最近3天内是否有新提交
+#    - 没有新提交时会自动跳过发布，节省资源
+#    - 手动触发时会忽略检测，始终执行发布
+#
+# 5. 注意事项：
 #    - 确保 pyproject.toml 中的版本号已更新
 #    - PyPI 不允许重复上传相同版本号的包
 #    - 建议先使用测试运行验证构建过程
