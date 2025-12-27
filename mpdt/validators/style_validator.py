@@ -56,7 +56,7 @@ class StyleValidator(BaseValidator):
     def _is_ruff_installed(self) -> bool:
         """检查 ruff 是否安装"""
         try:
-            subprocess.run(["ruff", "--version"], capture_output=True, check=True)
+            subprocess.run(["ruff", "--version"], capture_output=True, check=True, encoding='utf-8', errors='ignore')
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
@@ -78,7 +78,8 @@ class StyleValidator(BaseValidator):
                 cmd,
                 capture_output=True,
                 text=True,
-                encoding='utf-8'
+                encoding='utf-8',
+                errors='ignore'
             )
 
             # 解析输出

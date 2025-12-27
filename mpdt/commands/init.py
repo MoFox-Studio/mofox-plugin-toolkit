@@ -416,6 +416,8 @@ def _init_git_repository(plugin_dir: Path, verbose: bool) -> None:
             check=True,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='ignore'
         )
 
         # 创建 .gitignore 文件
@@ -474,6 +476,8 @@ config/local_*.toml
             cwd=plugin_dir,
             check=True,
             capture_output=True,
+            encoding='utf-8',
+            errors='ignore'
         )
 
         subprocess.run(
@@ -481,6 +485,8 @@ config/local_*.toml
             cwd=plugin_dir,
             check=True,
             capture_output=True,
+            encoding='utf-8',
+            errors='ignore'
         )
 
         if verbose:

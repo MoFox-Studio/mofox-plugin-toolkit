@@ -155,7 +155,9 @@ class DevServer:
                         subprocess.run(
                             ["taskkill", "/F", "/T", "/PID", str(self.process.pid)],
                             capture_output=True,
-                            timeout=5
+                            timeout=5,
+                            encoding='utf-8',
+                            errors='ignore'
                         )
                         console.print("[green]✓ 主程序及所有子进程已关闭[/green]")
                     except Exception as e:
@@ -295,7 +297,7 @@ class DevServer:
                     cmd = ["cmd", "/k", f"chcp 65001 && cd /d {self.mmc_path} && python bot.py"]
                     console.print("[dim]命令: 使用系统 Python 启动[/dim]")
 
-                self.process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                self.process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE, encoding='utf-8', errors='ignore')
             else:
                 # Linux/Mac 打开新终端窗口
                 if venv_type in ["venv", "uv"] and venv_path:
@@ -341,7 +343,7 @@ class DevServer:
                     cmd = None
                     for term_name, term_cmd in terminals:
                         # 检查终端是否可用
-                        if subprocess.run(["which", term_name], capture_output=True).returncode == 0:
+                        if subprocess.run(["which", term_name], capture_output=True, encoding='utf-8', errors='ignore').returncode == 0:
                             cmd = term_cmd
                             break
 
@@ -353,12 +355,14 @@ class DevServer:
                             cmd,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,
-                            text=True
+                            text=True,
+                            encoding='utf-8',
+                            errors='ignore'
                         )
                         console.print("[green]✓ 主程序已启动（后台）[/green]")
                         return
 
-                self.process = subprocess.Popen(cmd)
+                self.process = subprocess.Popen(cmd, encoding='utf-8', errors='ignore')
             console.print("[green]✓ 主程序已启动（新窗口）[/green]")
         except Exception as e:
             raise RuntimeError(f"启动主程序失败: {e}")

@@ -143,6 +143,8 @@ def get_git_user_info() -> dict[str, str]:
             capture_output=True,
             text=True,
             check=False,
+            encoding='utf-8',
+            errors='ignore'
         )
         if name.returncode == 0:
             result["name"] = name.stdout.strip()
@@ -152,6 +154,8 @@ def get_git_user_info() -> dict[str, str]:
             capture_output=True,
             text=True,
             check=False,
+            encoding='utf-8',
+            errors='ignore'
         )
         if email.returncode == 0:
             result["email"] = email.stdout.strip()

@@ -72,7 +72,9 @@ class TypeValidator(BaseValidator):
             subprocess.run(
                 ["mypy", "--version"],
                 capture_output=True,
-                check=True
+                check=True,
+                encoding='utf-8',
+                errors='ignore'
             )
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
@@ -107,7 +109,9 @@ class TypeValidator(BaseValidator):
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True
+                text=True,
+                encoding='utf-8',
+                errors='ignore'
             )
 
             # 解析输出
