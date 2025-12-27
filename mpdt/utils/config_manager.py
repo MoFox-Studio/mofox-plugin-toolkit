@@ -1,6 +1,6 @@
 """
 MPDT 配置管理器
-管理 mmc 路径、虚拟环境等配置信息
+管理 mofox 路径、虚拟环境等配置信息
 """
 
 import os
@@ -65,45 +65,45 @@ class MPDTConfig:
             tomli_w.dump(self._config, f)
 
     @property
-    def mmc_path(self) -> Path | None:
-        """获取 mmc 主程序路径"""
-        path_str = self._config.get("mmc", {}).get("path")
+    def mofox_path(self) -> Path | None:
+        """获取 mofox 主程序路径"""
+        path_str = self._config.get("mofox", {}).get("path")
         return Path(path_str) if path_str else None
 
-    @mmc_path.setter
-    def mmc_path(self, path: Path | str) -> None:
-        """设置 mmc 主程序路径"""
-        if "mmc" not in self._config:
-            self._config["mmc"] = {}
-        self._config["mmc"]["path"] = str(Path(path).absolute())
+    @mofox_path.setter
+    def mofox_path(self, path: Path | str) -> None:
+        """设置 mofox 主程序路径"""
+        if "mofox" not in self._config:
+            self._config["mofox"] = {}
+        self._config["mofox"]["path"] = str(Path(path).absolute())
 
     @property
     def venv_path(self) -> Path | None:
         """获取虚拟环境路径"""
-        path_str = self._config.get("mmc", {}).get("venv_path")
+        path_str = self._config.get("mofox", {}).get("venv_path")
         return Path(path_str) if path_str else None
 
     @venv_path.setter
     def venv_path(self, path: Path | str | None) -> None:
         """设置虚拟环境路径"""
-        if "mmc" not in self._config:
-            self._config["mmc"] = {}
+        if "mofox" not in self._config:
+            self._config["mofox"] = {}
         if path is None:
-            self._config["mmc"]["venv_path"] = None
+            self._config["mofox"]["venv_path"] = None
         else:
-            self._config["mmc"]["venv_path"] = str(Path(path).absolute())
+            self._config["mofox"]["venv_path"] = str(Path(path).absolute())
 
     @property
     def venv_type(self) -> VenvType:
         """获取虚拟环境类型"""
-        return self._config.get("mmc", {}).get("venv_type", "venv")
+        return self._config.get("mofox", {}).get("venv_type", "venv")
 
     @venv_type.setter
     def venv_type(self, venv_type: VenvType) -> None:
         """设置虚拟环境类型"""
-        if "mmc" not in self._config:
-            self._config["mmc"] = {}
-        self._config["mmc"]["venv_type"] = venv_type
+        if "mofox" not in self._config:
+            self._config["mofox"] = {}
+        self._config["mofox"]["venv_type"] = venv_type
 
     @property
     def auto_reload(self) -> bool:
@@ -161,7 +161,7 @@ class MPDTConfig:
             return ["conda", "run", "-p", str(venv_path), "python"]
 
         elif venv_type == "poetry":
-            # poetry 需要在 mmc 目录中执行
+            # poetry 需要在 mofox 目录中执行
             return ["poetry", "run", "python"]
 
         else:
@@ -175,14 +175,14 @@ class MPDTConfig:
         """
         errors = []
 
-        # 检查 mmc 路径
-        if not self.mmc_path:
-            errors.append("未配置 mmc 主程序路径")
-        elif not self.mmc_path.exists():
-            errors.append(f"mmc 路径不存在: {self.mmc_path}")
+        # 检查 mofox 路径
+        if not self.mofox_path:
+            errors.append("未配置 mofox 主程序路径")
+        elif not self.mofox_path.exists():
+            errors.append(f"mofox 路径不存在: {self.mofox_path}")
         else:
             # 检查是否有 bot.py
-            bot_file = self.mmc_path / "bot.py"
+            bot_file = self.mofox_path / "bot.py"
             if not bot_file.exists():
                 errors.append(f"未找到 bot.py: {bot_file}")
 
@@ -202,7 +202,7 @@ class MPDTConfig:
 
     def is_configured(self) -> bool:
         """检查是否已配置"""
-        return self.mmc_path is not None
+        return self.mofox_path is not None
 
 
 def get_default_config() -> MPDTConfig:
@@ -228,28 +228,28 @@ def interactive_config() -> MPDTConfig:
         "让我们配置 MoFox 主程序的路径和虚拟环境"
     ))
 
-    # 配置 mmc 路径
+    # 配置 mofox 路径
     while True:
-        mmc_path_str = Prompt.ask(
-            "\n[bold]请输入 mmc 主程序路径[/bold]",
-            default=str(Path.cwd().parent / "mmc") if Path.cwd().parent.name != "mmc" else str(Path.cwd())
+        mofox_path_str = Prompt.ask(
+            "\n[bold]请输入 mofox 主程序路径[/bold]",
+            default=str(Path.cwd().parent / "mofox") if Path.cwd().parent.name != "mofox" else str(Path.cwd())
         )
-        mmc_path = Path(mmc_path_str).expanduser().absolute()
+        mofox_path = Path(mofox_path_str).expanduser().absolute()
 
-        if not mmc_path.exists():
-            console.print(f"[red]路径不存在: {mmc_path}[/red]")
+        if not mofox_path.exists():
+            console.print(f"[red]路径不存在: {mofox_path}[/red]")
             if not Confirm.ask("重新输入?", default=True):
                 break
             continue
 
-        bot_file = mmc_path / "bot.py"
+        bot_file = mofox_path / "bot.py"
         if not bot_file.exists():
             console.print("[yellow]警告: 未找到 bot.py[/yellow]")
             if not Confirm.ask("仍然使用此路径?", default=False):
                 continue
 
-        config.mmc_path = mmc_path
-        console.print(f"[green]✓ mmc 路径已设置: {mmc_path}[/green]")
+        config.mofox_path = mofox_path
+        console.print(f"[green]✓ mofox 路径已设置: {mofox_path}[/green]")
         break
 
     # 配置虚拟环境
@@ -263,14 +263,14 @@ def interactive_config() -> MPDTConfig:
 
     if venv_type_choice != "none":
         if venv_type_choice == "poetry":
-            console.print("[cyan]使用 poetry，将在 mmc 目录中执行命令[/cyan]")
-            config.venv_path = config.mmc_path
+            console.print("[cyan]使用 poetry，将在 mofox 目录中执行命令[/cyan]")
+            config.venv_path = config.mofox_path
         else:
-            default_venv_path = str(config.mmc_path.parent / "venv")
+            default_venv_path = str(config.mofox_path.parent / "venv")
             if venv_type_choice == "uv":
-                default_venv_path = str(config.mmc_path.parent / ".venv")
+                default_venv_path = str(config.mofox_path.parent / ".venv")
             elif venv_type_choice == "conda":
-                default_venv_path = str(config.mmc_path.parent / "conda_env")
+                default_venv_path = str(config.mofox_path.parent / "conda_env")
 
             venv_path_str = Prompt.ask(
                 f"请输入 {venv_type_choice} 虚拟环境路径",

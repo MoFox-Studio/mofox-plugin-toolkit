@@ -17,9 +17,8 @@ class StyleValidator(BaseValidator):
     使用 ruff 检查代码风格和代码质量问题
     """
 
-    def __init__(self, plugin_path: Path, auto_fix: bool = False):
+    def __init__(self, plugin_path: Path):
         super().__init__(plugin_path)
-        self.auto_fix = auto_fix
 
     def validate(self) -> ValidationResult:
         """执行代码风格检查"""
@@ -72,10 +71,7 @@ class StyleValidator(BaseValidator):
 
         try:
             # 构建命令
-            cmd = ["ruff", "check"]
-            if self.auto_fix:
-                cmd.append("--fix")
-            cmd.extend(["--output-format", "json", str(self.plugin_path)])
+            cmd = ["ruff", "check", "--output-format", "json", str(self.plugin_path)]
 
             # 运行 ruff
             result = subprocess.run(

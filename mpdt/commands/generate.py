@@ -9,7 +9,6 @@ import libcst as cst
 import questionary
 
 from mpdt.templates import prepare_component_context
-from mpdt.utils.plugin_parser import extract_plugin_name
 from mpdt.utils.color_printer import (
     console,
     print_error,
@@ -24,6 +23,7 @@ from mpdt.utils.file_ops import (
     to_snake_case,
     validate_component_name,
 )
+from mpdt.utils.plugin_parser import extract_plugin_name
 
 
 def generate_component(

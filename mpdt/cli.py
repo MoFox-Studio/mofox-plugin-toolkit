@@ -209,7 +209,7 @@ def config_show() -> None:
         table.add_column("值", style="green")
 
         table.add_row("配置文件", str(config.config_path))
-        table.add_row("MoFox-Bot 路径", str(config.mmc_path) if config.mmc_path else "[red]未配置[/red]")
+        table.add_row("MoFox-Bot 路径", str(config.mofox_path) if config.mofox_path else "[red]未配置[/red]")
         table.add_row("虚拟环境类型", config.venv_type)
         table.add_row("虚拟环境路径", str(config.venv_path) if config.venv_path else "[dim]无[/dim]")
         table.add_row("自动重载", "是" if config.auto_reload else "否")
@@ -245,7 +245,7 @@ def config_test() -> None:
 
         if valid:
             console.print("[bold green]✓ 配置有效！[/bold green]")
-            console.print(f"\nmmc 路径: {config.mmc_path}")
+            console.print(f"\nmmc 路径: {config.mofox_path}")
             console.print(f"Python 命令: {' '.join(config.get_python_command())}")
         else:
             console.print("[bold red]✗ 配置验证失败：[/bold red]")
@@ -268,7 +268,7 @@ def config_set_mmc(path: str) -> None:
 
     try:
         config = MPDTConfig()
-        config.mmc_path = Path(path)
+        config.mofox_path = Path(path)
         config.save()
 
         console.print(f"[green]✓ mmc 路径已设置: {path}[/green]")

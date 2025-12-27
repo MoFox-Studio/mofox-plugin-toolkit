@@ -15,7 +15,7 @@ class StructureValidator(BaseValidator):
     REQUIRED_FILES = ["__init__.py", "plugin.py"]
 
     # 推荐的文件
-    RECOMMENDED_FILES = ["README.md", "pyproject.toml", "requirements.txt"]
+    RECOMMENDED_FILES = ["README.md"]
 
     # 推荐的目录
     RECOMMENDED_DIRS = ["tests", "docs"]
@@ -50,7 +50,8 @@ class StructureValidator(BaseValidator):
         # 检查推荐的文件
         for file_name in self.RECOMMENDED_FILES:
             file_path = self.plugin_path / file_name
-            if not file_path.exists():
+            parent_file_path = self.plugin_path.parent / file_name
+            if not file_path.exists() and not parent_file_path.exists():
                 self.result.add_warning(
                     f"缺少推荐文件: {file_name}",
                     file_path=file_name,
@@ -60,7 +61,8 @@ class StructureValidator(BaseValidator):
         # 检查推荐的目录
         for dir_name in self.RECOMMENDED_DIRS:
             dir_path = self.plugin_path / dir_name
-            if not dir_path.exists():
+            parent_dir_path = self.plugin_path.parent / dir_name
+            if not dir_path.exists() and not parent_dir_path.exists():
                 self.result.add_warning(
                     f"缺少推荐目录: {dir_name}/",
                     file_path=dir_name,

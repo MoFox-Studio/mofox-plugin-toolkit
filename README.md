@@ -465,7 +465,7 @@ dependencies = [
 ## 💡 常见问题
 
 ### Q: 如何配置开发模式？
-A: 首次运行 `mpdt dev` 时会提示输入 MMC 主程序路径，配置会保存到 `~/.mpdt/config.toml`。
+A: 首次运行 `mpdt dev` 时会提示输入 MoFox 主程序路径，配置会保存到 `~/.mpdt/config.toml`。
 
 ### Q: 检查器报错怎么办？
 A: 首先尝试使用 `mpdt check --fix` 自动修复。如果仍有问题，查看具体错误信息和建议。

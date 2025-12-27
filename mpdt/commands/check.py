@@ -108,7 +108,7 @@ def check_plugin(
     # 代码风格检查
     if not skip_style:
         print_info("正在检查代码风格...")
-        validator = StyleValidator(path, auto_fix=auto_fix)
+        validator = StyleValidator(path)
         result = validator.validate()
         all_results.append(result)
         _print_validation_summary(result, verbose)
@@ -119,27 +119,45 @@ def check_plugin(
         print_info("正在应用自动修复...")
         auto_fixer = AutoFixValidator(path)
         fix_result = auto_fixer.fix_issues(all_results)
-        
+
         # 从原始结果中移除已修复的问题（使用对象 id 比较）
         fixed_issue_ids = {id(issue) for issue in auto_fixer.fixed_issues}
         for result in all_results:
             result.issues = [issue for issue in result.issues if id(issue) not in fixed_issue_ids]
             # 更新计数
             result._update_counts()
-        
+
+        # 如果应用了 ruff 修复，移除所有可以被 ruff 修复的问题
+        if any("ruff" in fix for fix in auto_fixer.fixes_applied):
+            import re
+            ruff_fixed_count = 0
+            for result in all_results:
+                original_count = len(result.issues)
+                # 移除所有 ruff 错误格式的问题（如果建议包含"可自动修复"或问题本身就是 ruff 格式）
+                result.issues = [
+                    issue for issue in result.issues
+                    if not (
+                        re.match(r'^[A-Z]\d+:', issue.message) and
+                        (issue.suggestion is None or "可自动修复" in issue.suggestion or "--fix" in issue.suggestion)
+                    )
+                ]
+                ruff_fixed_count += original_count - len(result.issues)
+                # 更新计数
+                result._update_counts()
+
         # 显示修复摘要
         if auto_fixer.fixes_applied:
             print_success(f"  ✓ 成功修复 {len(auto_fixer.fixes_applied)} 个问题")
             if verbose:
                 for fix in auto_fixer.fixes_applied:
                     console.print(f"    [green]✓[/green] {fix}")
-        
+
         if auto_fixer.fixes_failed:
             print_warning(f"  ⚠ {len(auto_fixer.fixes_failed)} 个问题修复失败")
             if verbose:
                 for fail in auto_fixer.fixes_failed:
                     console.print(f"    [yellow]✗[/yellow] {fail}")
-        
+
         if not auto_fixer.fixes_applied and not auto_fixer.fixes_failed:
             print_info("  ℹ 未发现可自动修复的问题")
 
@@ -203,7 +221,9 @@ def _print_issue(issue) -> None:
         console.print(f"      [dim]💡 {issue.suggestion}[/dim]")
 
 
-def _print_overall_report(results: list[ValidationResult], level: str, auto_fixer: AutoFixValidator | None = None) -> None:
+def _print_overall_report(
+    results: list[ValidationResult], level: str, auto_fixer: AutoFixValidator | None = None
+) -> None:
     """打印总体报告
 
     Args:
@@ -248,7 +268,10 @@ def _print_overall_report(results: list[ValidationResult], level: str, auto_fixe
             issue
             for issue in result.issues
             if (issue.level == ValidationLevel.ERROR)
-            or (issue.level == ValidationLevel.WARNING and level_filter in [ValidationLevel.WARNING, ValidationLevel.INFO])
+            or (
+                issue.level == ValidationLevel.WARNING
+                and level_filter in [ValidationLevel.WARNING, ValidationLevel.INFO]
+            )
             or (issue.level == ValidationLevel.INFO and level_filter == ValidationLevel.INFO)
         ]
 
@@ -262,23 +285,23 @@ def _print_overall_report(results: list[ValidationResult], level: str, auto_fixe
     if auto_fixer:
         console.print("[bold cyan]═══ 修复统计 ═══[/bold cyan]")
         console.print()
-        
+
         if auto_fixer.fixes_applied:
             console.print(f"[green]✓ 成功修复: {len(auto_fixer.fixes_applied)} 个[/green]")
             for fix in auto_fixer.fixes_applied:
                 console.print(f"  [green]•[/green] {fix}")
             console.print()
-        
+
         if auto_fixer.fixes_failed:
             console.print(f"[yellow]✗ 修复失败: {len(auto_fixer.fixes_failed)} 个[/yellow]")
             for fail in auto_fixer.fixes_failed:
                 console.print(f"  [yellow]•[/yellow] {fail}")
             console.print()
-        
+
         if not auto_fixer.fixes_applied and not auto_fixer.fixes_failed:
             console.print("[blue]ℹ 未发现可自动修复的问题[/blue]")
             console.print()
-    
+
     console.print("[bold cyan]═══ 最终结果 ═══[/bold cyan]")
     console.print()
     if total_errors > 0:
@@ -289,7 +312,9 @@ def _print_overall_report(results: list[ValidationResult], level: str, auto_fixe
         print_success("所有检查通过！")
 
 
-def _save_report(results: list[ValidationResult], output_path: str, report_format: str, auto_fixer: AutoFixValidator | None = None) -> None:
+def _save_report(
+    results: list[ValidationResult], output_path: str, report_format: str, auto_fixer: AutoFixValidator | None = None
+) -> None:
     """保存检查报告
 
     Args:
@@ -306,7 +331,9 @@ def _save_report(results: list[ValidationResult], output_path: str, report_forma
         print_warning(f"不支持的报告格式: {report_format}")
 
 
-def _save_markdown_report(results: list[ValidationResult], output_path: str, auto_fixer: AutoFixValidator | None = None) -> None:
+def _save_markdown_report(
+    results: list[ValidationResult], output_path: str, auto_fixer: AutoFixValidator | None = None
+) -> None:
     """保存 Markdown 格式的报告
 
     Args:
@@ -325,7 +352,7 @@ def _save_markdown_report(results: list[ValidationResult], output_path: str, aut
     lines.append(f"- 错误: {total_errors}\n")
     lines.append(f"- 警告: {total_warnings}\n")
     lines.append(f"- 信息: {total_info}\n")
-    
+
     # 修复统计
     if auto_fixer:
         lines.append("\n### 自动修复统计\n\n")
@@ -339,7 +366,7 @@ def _save_markdown_report(results: list[ValidationResult], output_path: str, aut
                 lines.append(f"  - {fail}\n")
         if not auto_fixer.fixes_applied and not auto_fixer.fixes_failed:
             lines.append("- ℹ️ 未发现可自动修复的问题\n")
-    
+
     lines.append("\n")
 
     # 详细结果
@@ -379,7 +406,7 @@ def _save_markdown_report(results: list[ValidationResult], output_path: str, aut
         lines.append(f"✅ 成功修复 {len(auto_fixer.fixes_applied)} 个问题\n\n")
         if auto_fixer.fixes_failed:
             lines.append(f"⚠️ {len(auto_fixer.fixes_failed)} 个问题修复失败\n\n")
-    
+
     if total_errors > 0:
         lines.append(f"❌ 剩余 {total_errors} 个错误，{total_warnings} 个警告\n")
     elif total_warnings > 0:
@@ -396,7 +423,9 @@ def _save_markdown_report(results: list[ValidationResult], output_path: str, aut
         print_error(f"保存报告失败: {e}")
 
 
-def _save_json_report(results: list[ValidationResult], output_path: str, auto_fixer: AutoFixValidator | None = None) -> None:
+def _save_json_report(
+    results: list[ValidationResult], output_path: str, auto_fixer: AutoFixValidator | None = None
+) -> None:
     """保存 JSON 格式的报告
 
     Args:
@@ -406,12 +435,12 @@ def _save_json_report(results: list[ValidationResult], output_path: str, auto_fi
     """
     import json
     from datetime import datetime
-    
+
     # 统计总数
     total_errors = sum(r.error_count for r in results)
     total_warnings = sum(r.warning_count for r in results)
     total_info = sum(r.info_count for r in results)
-    
+
     # 构建报告数据结构
     report = {
         "timestamp": datetime.now().isoformat(),
@@ -419,12 +448,12 @@ def _save_json_report(results: list[ValidationResult], output_path: str, auto_fi
             "total_errors": total_errors,
             "total_warnings": total_warnings,
             "total_info": total_info,
-            "success": total_errors == 0
+            "success": total_errors == 0,
         },
         "validators": [],
-        "issues": []
+        "issues": [],
     }
-    
+
     # 添加自动修复统计
     if auto_fixer:
         report["auto_fix"] = {
@@ -432,11 +461,11 @@ def _save_json_report(results: list[ValidationResult], output_path: str, auto_fi
             "fixes_applied": len(auto_fixer.fixes_applied),
             "fixes_failed": len(auto_fixer.fixes_failed),
             "applied_fixes": auto_fixer.fixes_applied,
-            "failed_fixes": auto_fixer.fixes_failed
+            "failed_fixes": auto_fixer.fixes_failed,
         }
     else:
         report["auto_fix"] = {"enabled": False}
-    
+
     # 添加每个验证器的结果
     for result in results:
         validator_data = {
@@ -444,10 +473,10 @@ def _save_json_report(results: list[ValidationResult], output_path: str, auto_fi
             "success": result.success,
             "error_count": result.error_count,
             "warning_count": result.warning_count,
-            "info_count": result.info_count
+            "info_count": result.info_count,
         }
         report["validators"].append(validator_data)
-        
+
         # 添加问题详情
         for issue in result.issues:
             issue_data = {
@@ -456,10 +485,10 @@ def _save_json_report(results: list[ValidationResult], output_path: str, auto_fi
                 "message": issue.message,
                 "file_path": issue.file_path,
                 "line_number": issue.line_number,
-                "suggestion": issue.suggestion
+                "suggestion": issue.suggestion,
             }
             report["issues"].append(issue_data)
-    
+
     # 写入文件
     try:
         with open(output_path, "w", encoding="utf-8") as f:

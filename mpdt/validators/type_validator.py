@@ -7,6 +7,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from mpdt.utils.config_manager import MPDTConfig
+
 from .base import BaseValidator, ValidationResult
 
 
@@ -19,7 +21,7 @@ class TypeValidator(BaseValidator):
     def __init__(self, plugin_path: Path):
         super().__init__(plugin_path)
         # 尝试找到 MoFox 主项目路径
-        self.MoFox_root = self._find_mofox_root()
+        self.MoFox_root = MPDTConfig().mofox_path
 
     def validate(self) -> ValidationResult:
         """执行类型检查"""
@@ -76,27 +78,6 @@ class TypeValidator(BaseValidator):
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
 
-    def _find_mofox_root(self) -> Path | None:
-        """尝试找到 MoFox 主项目根目录
-
-        从插件路径向上查找，直到找到包含 src/ 目录的父目录
-        """
-        current = self.plugin_path.parent
-
-        # 最多向上查找 5 层
-        for _ in range(5):
-            if not current or current == current.parent:
-                break
-
-            # 检查是否存在 src/ 目录且包含 plugin_system 等模块
-            src_dir = current / "src"
-            if src_dir.exists() and src_dir.is_dir():
-                # 验证是否是 MMC 项目
-                if (src_dir / "plugin_system").exists() or (src_dir / "common").exists():
-                    return current
-
-            current = current.parent
-
         return None
 
     def _run_mypy_check(self) -> list[dict]:
@@ -118,7 +99,7 @@ class TypeValidator(BaseValidator):
                 "--no-namespace-packages",  # 避免包命名空间问题
             ]
 
-            # 如果找到了 MMC 主项目，添加到 Python 路径
+            # 如果找到了 MoFox-Bot 主项目，添加到 Python 路径
             if self.MoFox_root:
                 cmd.extend(["--python-path", str(self.MoFox_root)])
 

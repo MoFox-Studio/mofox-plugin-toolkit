@@ -39,7 +39,7 @@ class ConfigValidator(BaseValidator):
             self.result.add_warning(
                 "插件未定义配置 schema",
                 file_path="plugin.py",
-                suggestion="最好定义config_schema启用插件配置系统",                        
+                suggestion="最好定义config_schema启用插件配置系统",
             )
             return self.result
 

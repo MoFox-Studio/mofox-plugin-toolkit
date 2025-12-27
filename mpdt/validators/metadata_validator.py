@@ -46,7 +46,7 @@ class MetadataValidator(BaseValidator):
             self.result.add_error(
                 f"__init__.py 存在语法错误: {e.msg}",
                 file_path="__init__.py",
-                line_number=e.lineno if hasattr(e, 'lineno') else None,
+                line_number=e.lineno if hasattr(e, "lineno") else None,
             )
             return self.result
         except Exception as e:
@@ -55,41 +55,37 @@ class MetadataValidator(BaseValidator):
 
         # 查找 __plugin_meta__ 赋值
         metadata_values = parser.find_assignments("__plugin_meta__")
-        
+
         if not metadata_values:
             self.result.add_error(
                 "未找到 __plugin_meta__ 变量或 PluginMetadata 实例",
                 file_path="__init__.py",
-                suggestion="请在 __init__.py 中定义: __plugin_meta__ = PluginMetadata(...)",
+                suggestion="请在 __init__.py 中定义: __plugin_meta__ = PluginMetadata(...) | 可运行 'mpdt check --fix' 自动修复",
             )
             return self.result
 
         # 使用增强的 CodeParser 解析 PluginMetadata 的参数
         metadata_args = parser.find_call_arguments("__plugin_meta__", "PluginMetadata")
-        
+
         if metadata_args is None:
             self.result.add_error(
                 "未找到 __plugin_meta__ 的 PluginMetadata 调用",
                 file_path="__init__.py",
-                suggestion="请使用 PluginMetadata(...) 构造 __plugin_meta__",
+                suggestion="请使用 PluginMetadata(...) 构造 __plugin_meta__ | 可运行 'mpdt check --fix' 自动修复",
             )
             return self.result
 
         self.result.add_info("找到 __plugin_meta__ 定义")
 
         # 检查必需字段
-        missing_required = parser.get_missing_call_arguments(
-            "__plugin_meta__", 
-            self.REQUIRED_FIELDS,
-            "PluginMetadata"
-        )
-        
+        missing_required = parser.get_missing_call_arguments("__plugin_meta__", self.REQUIRED_FIELDS, "PluginMetadata")
+
         if missing_required:
             for field in missing_required:
                 self.result.add_error(
                     f"PluginMetadata 缺少必需字段: {field}",
                     file_path="__init__.py",
-                    suggestion=f"请在 PluginMetadata 中添加 {field}=\"...\" 参数",
+                    suggestion=f'请在 PluginMetadata 中添加 {field}="..." 参数 | 可运行 \'mpdt check --fix\' 自动修复',
                 )
         else:
             self.result.add_info("所有必需的元数据字段都已提供")
@@ -99,9 +95,9 @@ class MetadataValidator(BaseValidator):
         for field in self.RECOMMENDED_FIELDS:
             if field not in metadata_args or not metadata_args[field]:
                 missing_recommended.append(field)
-        
+
         if missing_recommended:
-            fields_str = ', '.join(f'{f}="..."' for f in missing_recommended)
+            fields_str = ", ".join(f'{f}="..."' for f in missing_recommended)
             self.result.add_warning(
                 f"建议添加以下元数据字段: {', '.join(missing_recommended)}",
                 file_path="__init__.py",

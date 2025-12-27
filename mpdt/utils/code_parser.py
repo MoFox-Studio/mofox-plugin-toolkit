@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any
 
 import libcst as cst
-from libcst.metadata import MetadataWrapper
 
 
 class CodeParser:
@@ -211,7 +210,7 @@ class CodeParser:
         current_args = self.find_call_arguments(variable_name, function_name)
         if current_args is None:
             return required_args
-        
+
         missing = []
         for arg in required_args:
             if arg not in current_args or current_args[arg] is None or current_args[arg] == "":

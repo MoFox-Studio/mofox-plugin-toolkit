@@ -6,8 +6,9 @@ import ast
 import re
 from pathlib import Path
 
-from .base import BaseValidator, ValidationResult
 from ..utils.code_parser import CodeParser
+from .base import BaseValidator, ValidationResult
+
 
 class ComponentValidator(BaseValidator):
     """组件验证器
@@ -201,7 +202,7 @@ class ComponentValidator(BaseValidator):
             self.result.add_error(
                 f"插件类 {class_name} 缺少必需的类属性: plugin_name",
                 file_path="plugin.py",
-                suggestion="在类中添加: plugin_name = '...'",
+                suggestion="在类中添加: plugin_name = '...' | 可运行 'mpdt check --fix' 自动修复",
             )
         elif not class_attributes["plugin_name"]:
             self.result.add_error(
@@ -214,7 +215,7 @@ class ComponentValidator(BaseValidator):
             self.result.add_error(
                 f"插件类 {class_name} 未定义 config_file_name",
                 file_path="plugin.py",
-                suggestion="在类中添加: config_file_name = 'config.toml'",
+                suggestion="在类中添加: config_file_name = 'config.toml' | 可运行 'mpdt check --fix' 自动修复",
             )
 
         # 检查 enable_plugin 属性（有默认值，但可以检查是否自定义）
@@ -457,7 +458,7 @@ class ComponentValidator(BaseValidator):
                     self.result.add_error(
                         f"组件 {class_name} 缺少必需的类属性: {field}",
                         file_path=str(component_file.relative_to(self.plugin_path)),
-                        suggestion=f"在类中添加: {field} = '...'",
+                        suggestion=f"在类中添加: {field} = '...' | 可运行 'mpdt check --fix' 自动修复",
                     )
                 elif not class_attributes[field]:
                     self.result.add_warning(
@@ -618,14 +619,14 @@ class ComponentValidator(BaseValidator):
                 self.result.add_error(
                     f"组件 {class_name} 缺少必需的方法: {method_name}",
                     file_path=str(component_file.relative_to(self.plugin_path)),
-                    suggestion=f"在类中实现方法:\n    async def {method_name}(self, ...):\n        ...",
+                    suggestion=f"在类中实现方法:\n    async def {method_name}(self, ...):\n        ... | 可运行 'mpdt check --fix' 自动修复",
                 )
             else:
                 method_node = defined_methods[method_name]
-                
+
                 # 检查方法是否为空实现
                 self._check_method_implementation(class_node, method_name, class_name, component_file)
-                
+
                 # 检查方法签名（如果有签名要求）
                 if method_name in method_signatures:
                     signature_spec = method_signatures[method_name]
@@ -715,13 +716,13 @@ class ComponentValidator(BaseValidator):
             self.result.add_error(
                 f"组件 {class_name} 的方法 {method_name} 应该是异步方法（使用 async def）",
                 file_path=str(component_file.relative_to(self.plugin_path)),
-                suggestion=f"将 'def {method_name}' 改为 'async def {method_name}'",
+                suggestion=f"将 'def {method_name}' 改为 'async def {method_name}' | 可运行 'mpdt check --fix' 自动修复",
             )
         elif not is_async_required and is_async_actual:
             self.result.add_warning(
                 f"组件 {class_name} 的方法 {method_name} 不应该是异步方法",
                 file_path=str(component_file.relative_to(self.plugin_path)),
-                suggestion=f"将 'async def {method_name}' 改为 'def {method_name}'",
+                suggestion=f"将 'async def {method_name}' 改为 'def {method_name}' | 可运行 'mpdt check --fix' 自动修复",
             )
 
         # 检查参数（排除 self）
@@ -737,7 +738,7 @@ class ComponentValidator(BaseValidator):
             self.result.add_error(
                 f"组件 {class_name} 的方法 {method_name} 缺少必需参数，应包含: {', '.join(param_names)}",
                 file_path=str(component_file.relative_to(self.plugin_path)),
-                suggestion=f"方法签名应为: {'async ' if is_async_required else ''}def {method_name}(self, {', '.join(param_names)})",
+                suggestion=f"方法签名应为: {'async ' if is_async_required else ''}def {method_name}(self, {', '.join(param_names)}) | 可运行 'mpdt check --fix' 自动修复",
             )
         elif len(actual_args) > max_params and not method_node.args.vararg and not method_node.args.kwarg:
             # 如果参数过多且没有 *args 或 **kwargs
@@ -745,6 +746,7 @@ class ComponentValidator(BaseValidator):
             self.result.add_warning(
                 f"组件 {class_name} 的方法 {method_name} 参数过多，预期: {', '.join(expected_params) if expected_params else '无参数'}",
                 file_path=str(component_file.relative_to(self.plugin_path)),
+                suggestion="可运行 'mpdt check --fix' 尝试自动修复",
             )
 
         # 检查返回类型注解
@@ -825,7 +827,7 @@ class ComponentValidator(BaseValidator):
         # 例如 tuple 可以匹配 tuple[bool, str]，dict 可以匹配 dict[str, Any]
         actual_base = actual.split("[")[0]
         expected_base = expected.split("[")[0]
-        
+
         if actual_base == expected_base:
             return True
 
