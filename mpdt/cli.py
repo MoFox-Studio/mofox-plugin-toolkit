@@ -153,16 +153,15 @@ def build(ctx: click.Context, output: str, with_docs: bool, format: str, bump: s
 @click.pass_context
 def dev(ctx: click.Context, mmc_path: str | None, plugin_path: str | None) -> None:
     """启动开发模式，支持热重载"""
-    import asyncio
     from pathlib import Path
 
     from mpdt.commands.dev import dev_command
 
     try:
-        asyncio.run(dev_command(
+        dev_command(
             plugin_path=Path(plugin_path) if plugin_path else None,
-            mmc_path=Path(mmc_path) if mmc_path else None
-        ))
+            mofox_path=Path(mmc_path) if mmc_path else None
+        )
     except Exception as e:
         console.print(f"[bold red]❌ 启动失败: {e}[/bold red]")
         if ctx.obj.get("verbose"):

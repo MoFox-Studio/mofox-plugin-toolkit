@@ -1,209 +1,39 @@
 """
-DevBridge 插件 - 为 mpdt dev 提供 WebSocket 桥接
-临时注入到主程序，提供插件重载接口
+DevBridge 插件 - 完整的开发模式插件
+负责文件监控、插件重载等所有开发操作
+配置通过 dev_config.py 中的常量传递（mpdt dev 注入时动态修改）
 """
 
 import asyncio
+from pathlib import Path
 from typing import ClassVar
 
-from fastapi import WebSocket, WebSocketDisconnect
 from src.common.logger import get_logger
-from src.common.server import get_global_server
 from src.plugin_system import (
     BasePlugin,
     register_plugin,
 )
-from src.plugin_system.base.base_http_component import BaseRouterComponent
-from src.plugin_system.base.component_types import ComponentInfo
+
+# 导入配置（由 mpdt dev 注入时修改）
+from .dev_config import (
+    TARGET_PLUGIN_PATH,
+    TARGET_PLUGIN_NAME,
+    ENABLE_FILE_WATCHER,
+    DEBOUNCE_DELAY,
+)
 
 logger = get_logger("dev_bridge")
-
-
-class DevBridgeRouter(BaseRouterComponent):
-    """开发模式 WebSocket 路由组件"""
-
-    component_name = "dev_bridge_router"
-    component_description = "开发模式 WebSocket 桥接，提供插件重载接口"
-    component_version = "1.0.0"
-
-    def __init__(self, plugin_config: dict | None = None):
-        """初始化路由组件"""
-        self.active_connections: set[WebSocket] = set()
-        super().__init__(plugin_config)
-
-    def register_endpoints(self) -> None:
-        """注册 HTTP 端点"""
-
-        @self.router.websocket("/ws")
-        async def websocket_endpoint(websocket: WebSocket):
-            """WebSocket 端点 - 与 mpdt dev 通信
-
-            完整路径: ws://{host}:{port}/plugin-api/dev_bridge/dev_bridge_router/ws
-
-            消息格式:
-                客户端 → 服务器:
-                    {"command": "reload", "plugin_name": "xxx"}
-                    {"command": "status"}
-                    {"command": "ping"}
-                    {"command": "get_loaded_plugins"}
-
-                服务器 → 客户端:
-                    {"type": "reload_result", "success": true, "message": "..."}
-                    {"type": "status", "loaded_plugins": [...], "failed_plugins": [...]}
-                    {"type": "pong"}
-                    {"type": "plugins_loaded", "loaded": [...], "failed": [...]}
-            """
-            await websocket.accept()
-            self.active_connections.add(websocket)
-            logger.info("开发模式客户端已连接")
-
-            # 立即发送插件加载状态
-            try:
-                status = self._get_plugin_status()
-                await websocket.send_json({
-                    "type": "plugins_loaded",
-                    "loaded": status["loaded_plugins"],
-                    "failed": status["failed_plugins"]
-                })
-                logger.info(f"已发送插件状态: {len(status['loaded_plugins'])} 个已加载")
-            except Exception as e:
-                logger.error(f"发送插件状态失败: {e}")
-
-            try:
-                while True:
-                    data = await websocket.receive_json()
-                    command = data.get("command")
-
-                    if command == "reload":
-                        plugin_name = data.get("plugin_name")
-                        if not plugin_name:
-                            await websocket.send_json({"type": "error", "message": "缺少 plugin_name 参数"})
-                            continue
-
-                        # 执行插件重载
-                        success, message = await self._reload_plugin(plugin_name)
-                        await websocket.send_json(
-                            {
-                                "type": "reload_result",
-                                "success": success,
-                                "plugin_name": plugin_name,
-                                "message": message,
-                            }
-                        )
-
-                    elif command == "status":
-                        # 返回插件状态
-                        logger.info("返回插件状态")
-                        status = self._get_plugin_status()
-                        await websocket.send_json({"type": "status", **status})
-
-                    elif command == "ping":
-                        await websocket.send_json({"type": "pong"})
-
-                    elif command == "get_loaded_plugins":
-                        status = self._get_plugin_status()
-                        await websocket.send_json(
-                            {
-                                "type": "loaded_plugins",
-                                "loaded": status["loaded_plugins"],
-                                "failed": status["failed_plugins"],
-                            }
-                        )
-
-                    else:
-                        await websocket.send_json({"type": "error", "message": f"未知命令: {command}"})
-
-            except WebSocketDisconnect:
-                logger.info("开发模式客户端已断开")
-            except Exception as e:
-                logger.error(f"WebSocket 通信错误: {e}")
-            finally:
-                self.active_connections.discard(websocket)
-
-        @self.router.get("/status")
-        async def get_status():
-            """HTTP 状态查询端点
-
-            完整路径: http://{host}:{port}/plugin-api/dev_bridge/dev_bridge_router/status
-            """
-            return self._get_plugin_status()
-
-        @self.router.post("/reload/{plugin_name}")
-        async def reload_plugin(plugin_name: str):
-            """HTTP 重载端点
-
-            完整路径: http://{host}:{port}/plugin-api/dev_bridge/dev_bridge_router/reload/{plugin_name}
-            """
-            success, message = await self._reload_plugin(plugin_name)
-            return {"success": success, "plugin_name": plugin_name, "message": message}
-
-    async def _reload_plugin(self, plugin_name: str) -> tuple[bool, str]:
-        """重载插件
-
-        Args:
-            plugin_name: 插件名称（不是目录名）
-
-        Returns:
-            (成功, 消息)
-        """
-        from src.plugin_system.apis import (
-            plugin_manage_api,
-        )
-
-        try:
-            logger.info(f"开始重载插件: {plugin_name}")
-            success = await plugin_manage_api.reload_plugin(plugin_name)
-
-            # 广播重载成功消息
-            await self._broadcast({"type": "plugin_reloaded", "plugin_name": plugin_name, "success": success})
-
-            return True, f"插件 {plugin_name} 重载成功"
-        except Exception as e:
-            error_msg = f"插件重载失败: {e}"
-            logger.error(error_msg)
-
-            # 广播重载失败消息
-            await self._broadcast(
-                {"type": "plugin_reloaded", "plugin_name": plugin_name, "success": False, "error": str(e)}
-            )
-
-            return False, error_msg
-
-    def _get_plugin_status(self) -> dict:
-        """获取插件状态"""
-        # 使用 plugin_info_api 获取插件列表
-        from src.plugin_system.apis import (
-            plugin_info_api,
-        )
-
-        loaded_plugins = plugin_info_api.list_plugins("loaded")
-        failed_plugins = plugin_info_api.list_plugins("failed")
-
-        return {"loaded_plugins": loaded_plugins, "failed_plugins": failed_plugins}
-
-    async def _broadcast(self, message: dict) -> None:
-        """向所有连接的客户端广播消息"""
-        if not self.active_connections:
-            return
-
-        disconnected = set()
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception as e:
-                logger.warning(f"广播消息失败: {e}")
-                disconnected.add(connection)
-
-        # 清理断开的连接
-        self.active_connections -= disconnected
 
 
 @register_plugin
 class DevBridgePlugin(BasePlugin):
     """开发模式桥接插件
 
-    这是一个特殊的插件，在开发模式下临时注入到主程序。
-    通过 WebSocket 与 mpdt dev 通信，提供插件重载等功能。
+    这是一个完整的开发模式插件，负责：
+    1. 监控目标插件的文件变化
+    2. 自动重载目标插件
+    
+    配置通过 dev_config.py 传递，mpdt dev 在注入时会修改这些常量。
     """
 
     plugin_name = "dev_bridge"
@@ -214,43 +44,76 @@ class DevBridgePlugin(BasePlugin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._router_component: DevBridgeRouter | None = None
-        self._discovery_task: asyncio.Task | None = None
+        self._file_watcher = None
+        self._target_plugin_name = TARGET_PLUGIN_NAME
+        self._target_plugin_path = TARGET_PLUGIN_PATH
 
-    def get_plugin_components(self) -> list[tuple[ComponentInfo, type]]:
-        """注册路由组件"""
-        return [(DevBridgeRouter.get_router_info(), DevBridgeRouter)]
+    def get_plugin_components(self) -> list:
+        """无需注册组件"""
+        return []
 
     async def on_plugin_loaded(self):
-        """插件加载完成后启动发现服务器"""
-        from .discovery_server import start_discovery_server
+        """插件加载完成后启动文件监控"""
+        from .file_watcher import FileWatcher
 
-        # 获取主程序的 host 和 port
-        # 从 app_state 或配置中获取
+        logger.info("=" * 60)
+        logger.info("🚀 DevBridge 开发模式插件已加载")
+        logger.info(f"📦 目标插件: {self._target_plugin_name}")
+        logger.info(f"📂 目标路径: {self._target_plugin_path}")
+        logger.info("=" * 60)
+
+        # 启动文件监控
+        if ENABLE_FILE_WATCHER and self._target_plugin_path:
+            plugin_path = Path(self._target_plugin_path)
+            if plugin_path.exists():
+                self._file_watcher = FileWatcher(
+                    plugin_path,
+                    self._on_file_changed,
+                    DEBOUNCE_DELAY
+                )
+                # 获取当前事件循环并启动监控
+                try:
+                    loop = asyncio.get_running_loop()
+                    self._file_watcher.start(loop)
+                    logger.info("👀 文件监控已启动")
+                    logger.info("📝 修改 Python 文件将自动重载插件")
+                except Exception as e:
+                    logger.error(f"启动文件监控失败: {e}")
+            else:
+                logger.warning(f"目标插件路径不存在: {plugin_path}")
+        else:
+            logger.info("文件监控已禁用或未配置目标路径")
+
+    async def _on_file_changed(self, rel_path: str):
+        """文件变化回调 - 自动重载目标插件"""
+        if not self._target_plugin_name:
+            logger.warning("未配置目标插件名称，跳过重载")
+            return
+
+        logger.info(f"📝 检测到文件变化: {rel_path}")
+        logger.info(f"🔄 正在重载插件: {self._target_plugin_name}...")
+
         try:
-            server = get_global_server()
-            main_host = server.host
-            main_port = server.port
-        except Exception:
-            main_host = "127.0.0.1"
-            main_port = 8000
+            from src.plugin_system.apis import plugin_manage_api
+            
+            success = await plugin_manage_api.reload_plugin(self._target_plugin_name)
+            
+            if success:
+                logger.info(f"✅ 插件 {self._target_plugin_name} 重载成功")
+            else:
+                logger.error(f"❌ 插件 {self._target_plugin_name} 重载失败")
 
-        # 启动发现服务器
-        self._discovery_task = asyncio.create_task(start_discovery_server(main_host, main_port))
-
-        logger.info("DevBridge 插件已加载，发现服务器: http://127.0.0.1:12318")
-        logger.info(f"WebSocket 端点: ws://{main_host}:{main_port}/plugin-api/dev_bridge/dev_bridge_router/ws")
+        except Exception as e:
+            logger.error(f"❌ 重载插件时出错: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def on_plugin_unload(self):
-        """插件卸载时停止发现服务器"""
-        from .discovery_server import stop_discovery_server
+        """插件卸载时停止文件监控"""
+        # 停止文件监控
+        if self._file_watcher:
+            self._file_watcher.stop()
+            self._file_watcher = None
+            logger.info("文件监控已停止")
 
-        if self._discovery_task:
-            self._discovery_task.cancel()
-            try:
-                await self._discovery_task
-            except asyncio.CancelledError:
-                pass
-
-        await stop_discovery_server()
         logger.info("DevBridge 插件已卸载")
