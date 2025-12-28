@@ -2,7 +2,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.1-orange.svg)](https://github.com/MoFox-Studio/mofox-plugin-toolkit)
+[![Version](https://img.shields.io/badge/version-0.3.1-orange.svg)](https://github.com/MoFox-Studio/mofox-plugin-toolkit)
 
 一个类似于 Vite 的 Python 开发工具，专门为 MoFox-Bot 插件系统设计，提供快速创建、开发、检查和热重载的完整工具链。
 
