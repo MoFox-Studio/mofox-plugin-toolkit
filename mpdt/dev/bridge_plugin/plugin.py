@@ -16,10 +16,10 @@ from src.plugin_system import (
 
 # 导入配置（由 mpdt dev 注入时修改）
 from .dev_config import (
-    TARGET_PLUGIN_PATH,
-    TARGET_PLUGIN_NAME,
-    ENABLE_FILE_WATCHER,
     DEBOUNCE_DELAY,
+    ENABLE_FILE_WATCHER,
+    TARGET_PLUGIN_NAME,
+    TARGET_PLUGIN_PATH,
 )
 
 logger = get_logger("dev_bridge")
@@ -95,9 +95,9 @@ class DevBridgePlugin(BasePlugin):
 
         try:
             from src.plugin_system.apis import plugin_manage_api
-            
+
             success = await plugin_manage_api.reload_plugin(self._target_plugin_name)
-            
+
             if success:
                 logger.info(f"✅ 插件 {self._target_plugin_name} 重载成功")
             else:
