@@ -5,9 +5,9 @@ mpdt dev 命令实现
 
 import atexit
 import os
+import shutil
 import signal
 import subprocess
-import shutil
 from pathlib import Path
 
 from rich.console import Console

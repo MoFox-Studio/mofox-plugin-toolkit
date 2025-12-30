@@ -5,14 +5,15 @@
 
 import asyncio
 import time
+from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 if TYPE_CHECKING:
-    from watchdog.observers import Observer as ObserverType
+    pass
 
 try:
     from src.common.logger import get_logger
