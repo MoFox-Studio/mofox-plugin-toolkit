@@ -3,7 +3,6 @@ mpdt dev 命令实现
 启动开发模式：注入开发插件到主程序，由开发插件负责文件监控和热重载
 """
 
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -23,14 +22,14 @@ class DevServer:
     def __init__(self, plugin_path: Path, config: MPDTConfig, mofox_path: Path | None = None):
         self.plugin_path = plugin_path.absolute()
         self.config = config
-        self.mofox_path = mofox_path or config.mofox_path
 
-        if not self.mofox_path:
+        resolved_path = mofox_path or config.mofox_path
+        if not resolved_path:
             raise ValueError("未配置 mofox 主程序路径")
-        assert self.mofox_path is not None
+        self.mofox_path: Path = resolved_path
 
         self.plugin_name: str | None = None
-        self.process: subprocess.Popen | None = None
+        self.process: subprocess.Popen[str] | None = None
 
     def start(self):
         """启动开发模式（同步方法）"""
@@ -87,6 +86,7 @@ class DevServer:
 
     def _inject_target_plugin(self):
         """将目标插件复制到 mofox 的 plugins 目录"""
+        assert self.plugin_name is not None, "plugin_name 未初始化"
         plugins_dir = self.mofox_path / "plugins"
         target_dir = plugins_dir / self.plugin_name
 

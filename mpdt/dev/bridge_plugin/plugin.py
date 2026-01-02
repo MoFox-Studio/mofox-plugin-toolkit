@@ -32,7 +32,7 @@ class DevBridgePlugin(BasePlugin):
     这是一个完整的开发模式插件，负责：
     1. 监控目标插件的文件变化
     2. 自动重载目标插件
-    
+
     配置通过 dev_config.py 传递，mpdt dev 在注入时会修改这些常量。
     """
 
@@ -51,6 +51,7 @@ class DevBridgePlugin(BasePlugin):
     def get_plugin_components(self) -> list:
         """注册清理事件处理器"""
         from .cleanup_handler import CleanupHandler
+
         return [(CleanupHandler.get_handler_info(), CleanupHandler)]
 
     async def on_plugin_loaded(self):
@@ -70,11 +71,7 @@ class DevBridgePlugin(BasePlugin):
         if ENABLE_FILE_WATCHER and self._target_plugin_path:
             plugin_path = Path(self._target_plugin_path)
             if plugin_path.exists():
-                self._file_watcher = FileWatcher(
-                    plugin_path,
-                    self._on_file_changed,
-                    DEBOUNCE_DELAY
-                )
+                self._file_watcher = FileWatcher(plugin_path, self._on_file_changed, DEBOUNCE_DELAY)
                 # 获取当前事件循环并启动监控
                 try:
                     loop = asyncio.get_running_loop()
@@ -129,7 +126,7 @@ class DevBridgePlugin(BasePlugin):
             return
 
         logger.info(f"📝 检测到文件变化: {rel_path}")
-        
+
         # 先同步文件到 plugins 目录
         try:
             self._sync_plugin_files()
@@ -150,7 +147,7 @@ class DevBridgePlugin(BasePlugin):
                 if not is_enabled:
                     logger.info(f"🔓 插件 {plugin_name} 已禁用，正在启用...")
                     await plugin_manage_api.enable_plugin(plugin_name)
-                
+
                 # 重载插件
                 logger.info(f"🔄 正在重载插件: {plugin_name}...")
                 success = await plugin_manage_api.reload_plugin(plugin_name)
@@ -174,6 +171,7 @@ class DevBridgePlugin(BasePlugin):
             logger.info("🔍 正在扫描插件目录...")
             try:
                 from src.plugin_system.apis import plugin_manage_api
+
                 plugin_manage_api.rescan_and_register_plugins(load_after_register=True)
                 if plugin_manage_api.is_plugin_loaded(self._target_plugin_name):
                     logger.info(f"✅ 插件 {self._target_plugin_name} 扫描并加载成功")
@@ -184,6 +182,7 @@ class DevBridgePlugin(BasePlugin):
         except Exception as e:
             logger.error(f"❌ 操作插件时出错: {e}")
             import traceback
+
             traceback.print_exc()
 
     def _sync_plugin_files(self):

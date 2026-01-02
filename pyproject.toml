@@ -7,7 +7,7 @@ name = "mofox-plugin-dev-toolkit"
 version = "0.3.3"
 description = "开发工具集，用于快速创建、开发和测试 MoFox-Bot 插件"
 authors = [
-    {name = "MoFox-Studio", email = "mofox.studio@example.com"}
+    {name = "MoFox-Studio", email = "wwwww95915@qq.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.11"

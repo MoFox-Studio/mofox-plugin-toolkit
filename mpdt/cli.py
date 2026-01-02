@@ -282,12 +282,13 @@ def config_set_mmc(path: str) -> None:
 def config_set_venv(path: str | None, venv_type: str) -> None:
     """设置虚拟环境"""
     from pathlib import Path
+    from typing import cast
 
-    from mpdt.utils.config_manager import MPDTConfig
+    from mpdt.utils.config_manager import MPDTConfig, VenvType
 
     try:
         config = MPDTConfig()
-        config.venv_type = venv_type
+        config.venv_type = cast(VenvType, venv_type)
 
         if venv_type == "none":
             config.venv_path = None

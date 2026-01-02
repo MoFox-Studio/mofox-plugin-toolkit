@@ -237,11 +237,11 @@ class AutoFixValidator(BaseValidator):
         try:
             # 运行 ruff check --fix
             cmd = ["ruff", "check", "--fix", str(self.plugin_path)]
-            subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors='ignore')
+            subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
 
             # 运行 ruff format
             cmd_format = ["ruff", "format", str(self.plugin_path)]
-            subprocess.run(cmd_format, capture_output=True, text=True, encoding="utf-8", errors='ignore')
+            subprocess.run(cmd_format, capture_output=True, text=True, encoding="utf-8", errors="ignore")
 
             self.fixes_applied.append("使用 ruff 自动修复了代码风格问题")
 
@@ -251,7 +251,7 @@ class AutoFixValidator(BaseValidator):
     def _is_ruff_installed(self) -> bool:
         """检查 ruff 是否安装"""
         try:
-            subprocess.run(["ruff", "--version"], capture_output=True, check=True, encoding='utf-8', errors='ignore')
+            subprocess.run(["ruff", "--version"], capture_output=True, check=True, encoding="utf-8", errors="ignore")
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
@@ -668,7 +668,7 @@ class AddCallArgumentTransformer(cst.CSTTransformer):
         self.arg_value = arg_value
         self.modified = False
 
-    def leave_SimpleStatementLine(
+    def leave_SimpleStatementLine(  # noqa: N802
         self, original_node: cst.SimpleStatementLine, updated_node: cst.SimpleStatementLine
     ) -> cst.SimpleStatementLine:
         """修改赋值语句中的函数调用"""
@@ -742,7 +742,9 @@ class AddClassAttributeTransformer(cst.CSTTransformer):
         self.attr_value = attr_value
         self.modified = False
 
-    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+    def leave_ClassDef(  # noqa: N802
+        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
+    ) -> cst.ClassDef:
         """在类定义中添加属性"""
         if updated_node.name.value != self.class_name:
             return updated_node
@@ -751,7 +753,7 @@ class AddClassAttributeTransformer(cst.CSTTransformer):
         for stmt in updated_node.body.body:
             if isinstance(stmt, cst.SimpleStatementLine):
                 for s in stmt.body:
-                    if isinstance(s, (cst.Assign, cst.AnnAssign)):
+                    if isinstance(s, cst.Assign | cst.AnnAssign):
                         target = s.targets[0].target if isinstance(s, cst.Assign) else s.target
                         if isinstance(target, cst.Name) and target.value == self.attr_name:
                             return updated_node  # 属性已存在
@@ -774,7 +776,7 @@ class AddClassAttributeTransformer(cst.CSTTransformer):
         if body_list and isinstance(body_list[0], cst.SimpleStatementLine):
             first_stmt = body_list[0].body[0]
             if isinstance(first_stmt, cst.Expr) and isinstance(
-                first_stmt.value, (cst.SimpleString, cst.ConcatenatedString)
+                first_stmt.value, cst.SimpleString | cst.ConcatenatedString
             ):
                 insert_pos = 1
 
@@ -793,14 +795,16 @@ class AddMethodTransformer(cst.CSTTransformer):
         self.method_template = method_template
         self.modified = False
 
-    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+    def leave_ClassDef(  # noqa: N802
+        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
+    ) -> cst.ClassDef:
         """在类中添加方法"""
         if updated_node.name.value != self.class_name:
             return updated_node
 
         # 检查方法是否已存在
         for stmt in updated_node.body.body:
-            if isinstance(stmt, (cst.FunctionDef,)):
+            if isinstance(stmt, cst.FunctionDef):
                 if stmt.name.value == self.method_name:
                     return updated_node  # 方法已存在
 
@@ -835,16 +839,20 @@ class FixMethodAsyncTransformer(cst.CSTTransformer):
         self.modified = False
         self.in_target_class = False
 
-    def visit_ClassDef(self, node: cst.ClassDef) -> None:
+    def visit_ClassDef(self, node: cst.ClassDef) -> None:  # noqa: N802
         if node.name.value == self.class_name:
             self.in_target_class = True
 
-    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+    def leave_ClassDef(  # noqa: N802
+        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
+    ) -> cst.ClassDef:
         if original_node.name.value == self.class_name:
             self.in_target_class = False
         return updated_node
 
-    def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+    def leave_FunctionDef(  # noqa: N802
+        self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
+    ) -> cst.FunctionDef:
         """修改函数定义"""
         if not self.in_target_class or updated_node.name.value != self.method_name:
             return updated_node
@@ -879,16 +887,20 @@ class FixReturnTypeTransformer(cst.CSTTransformer):
         self.modified = False
         self.in_target_class = False
 
-    def visit_ClassDef(self, node: cst.ClassDef) -> None:
+    def visit_ClassDef(self, node: cst.ClassDef) -> None:  # noqa: N802
         if node.name.value == self.class_name:
             self.in_target_class = True
 
-    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+    def leave_ClassDef(  # noqa: N802
+        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
+    ) -> cst.ClassDef:
         if original_node.name.value == self.class_name:
             self.in_target_class = False
         return updated_node
 
-    def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+    def leave_FunctionDef(  # noqa: N802
+        self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
+    ) -> cst.FunctionDef:
         """修改函数返回类型"""
         if not self.in_target_class or updated_node.name.value != self.method_name:
             return updated_node
@@ -913,16 +925,20 @@ class FixMethodParametersTransformer(cst.CSTTransformer):
         self.modified = False
         self.in_target_class = False
 
-    def visit_ClassDef(self, node: cst.ClassDef) -> None:
+    def visit_ClassDef(self, node: cst.ClassDef) -> None:  # noqa: N802
         if node.name.value == self.class_name:
             self.in_target_class = True
 
-    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+    def leave_ClassDef(  # noqa: N802
+        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
+    ) -> cst.ClassDef:
         if original_node.name.value == self.class_name:
             self.in_target_class = False
         return updated_node
 
-    def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+    def leave_FunctionDef(  # noqa: N802
+        self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
+    ) -> cst.FunctionDef:
         """修改函数参数"""
         if not self.in_target_class or updated_node.name.value != self.method_name:
             return updated_node

@@ -32,9 +32,9 @@ class CleanupHandler(BaseEventHandler):
     async def execute(self, kwargs: dict | None) -> tuple[bool, bool, str | None]:
         """程序停止时执行清理（同步删除）"""
         logger.info("🛑 收到停止事件，准备清理 DevBridge...")
-        
+
         self._delete_plugins()
-        
+
         return True, True, None
 
     def _delete_plugins(self):
@@ -55,7 +55,7 @@ class CleanupHandler(BaseEventHandler):
                 logger.info(f"🧹 目标插件已清理: {target_plugin_dir}")
             except Exception as e:
                 logger.warning(f"⚠️ 清理目标插件失败: {e}")
-        
+
         # 删除 DevBridge 自己
         try:
             if plugin_dir.exists():

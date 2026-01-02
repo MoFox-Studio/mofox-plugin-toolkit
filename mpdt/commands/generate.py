@@ -352,7 +352,9 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
         self.import_added = False
         self.registration_added = False
 
-    def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
+    def leave_Module(  # noqa: N802
+        self, original_node: cst.Module, updated_node: cst.Module
+    ) -> cst.Module:
         """在模块级别添加导入语句"""
         if self.import_added:
             return updated_node
@@ -382,7 +384,7 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
         for idx, stmt in enumerate(updated_node.body):
             if isinstance(stmt, cst.SimpleStatementLine):
                 for s in stmt.body:
-                    if isinstance(s, (cst.Import, cst.ImportFrom)):
+                    if isinstance(s, cst.Import | cst.ImportFrom):
                         last_import_idx = idx
 
         # 在最后一个导入后添加新导入
@@ -394,7 +396,7 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
 
         return updated_node
 
-    def leave_FunctionDef(
+    def leave_FunctionDef(  # noqa: N802
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
     ) -> cst.FunctionDef:
         """在 get_plugin_components 函数中添加注册代码"""

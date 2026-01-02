@@ -109,7 +109,7 @@ class FileWatcher:
         self.plugin_path = Path(plugin_path)
         self.on_change_callback = on_change_callback
         self.debounce_delay = debounce_delay
-        self._observer: Observer | None = None
+        self._observer: Any = None
         self._handler: PluginFileHandler | None = None
         self._running = False
 
