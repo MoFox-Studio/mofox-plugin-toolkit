@@ -38,11 +38,7 @@ class DevServer:
             # 1. 解析插件名称
             self._parse_plugin_info()
 
-            # 2. 检查插件是否启用
-            if not self._check_plugin_enabled():
-                return
-
-            # 3. 注入目标开发插件
+            # 2. 注入目标开发插件
             self._inject_target_plugin()
 
             # 4. 注入 DevBridge 插件（包含配置）
@@ -88,42 +84,6 @@ class DevServer:
             raise ValueError("无法解析插件名称")
 
         console.print(f"[green]✓ 插件名: {self.plugin_name}[/green]")
-
-    def _check_plugin_enabled(self) -> bool:
-        """检查插件是否启用
-
-        Returns:
-            bool: 如果插件已启用或未设置返回 True，如果明确禁用返回 False
-        """
-        from mpdt.utils.code_parser import CodeParser
-
-        plugin_file = self.plugin_path / "plugin.py"
-        if not plugin_file.exists():
-            return True  # 没有 plugin.py 就跳过检查
-
-        try:
-            parser = CodeParser.from_file(plugin_file)
-            enable_plugin = parser.find_class_attribute(
-                base_class="BasePlugin",
-                attribute_name="enable_plugin"
-            )
-
-            if enable_plugin is False:
-                console.print("\n[red]❌ 插件已禁用[/red]")
-                console.print(f"[yellow]检测到 {self.plugin_name} 的 enable_plugin = False[/yellow]")
-                console.print("\n[dim]请在 plugin.py 中将 enable_plugin 设置为 True：[/dim]")
-                console.print("```python")
-                console.print("class YourPlugin(BasePlugin):")
-                console.print("    enable_plugin = True  # 修改为 True")
-                console.print("```")
-                console.print("\n[dim]或者直接删除该行（默认为启用）[/dim]")
-                return False
-
-            return True
-
-        except Exception as e:
-            console.print(f"[yellow]⚠️ 检查插件状态时出错: {e}[/yellow]")
-            return True  # 出错时默认允许继续
 
     def _inject_target_plugin(self):
         """将目标插件复制到 mofox 的 plugins 目录"""

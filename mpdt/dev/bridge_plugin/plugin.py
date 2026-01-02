@@ -63,6 +63,9 @@ class DevBridgePlugin(BasePlugin):
         logger.info(f"📂 目标路径: {self._target_plugin_path}")
         logger.info("=" * 60)
 
+        # 检查目标插件是否成功加载
+        await self._check_target_plugin_loaded()
+
         # 启动文件监控
         if ENABLE_FILE_WATCHER and self._target_plugin_path:
             plugin_path = Path(self._target_plugin_path)
@@ -84,6 +87,40 @@ class DevBridgePlugin(BasePlugin):
                 logger.warning(f"目标插件路径不存在: {plugin_path}")
         else:
             logger.info("文件监控已禁用或未配置目标路径")
+
+    async def _check_target_plugin_loaded(self):
+        """检查目标插件是否成功加载，未加载则报错提示"""
+        if not self._target_plugin_name:
+            logger.error("❌ 未配置目标插件名称")
+            return
+
+        try:
+            from src.plugin_system.apis import plugin_manage_api
+
+            is_loaded = plugin_manage_api.is_plugin_loaded(self._target_plugin_name)
+            is_enabled = plugin_manage_api.is_plugin_enabled(self._target_plugin_name)
+
+            if not is_loaded:
+                logger.error("=" * 60)
+                logger.error(f"❌ 目标插件 {self._target_plugin_name} 未加载！")
+                logger.error("")
+                if not is_enabled:
+                    logger.error("📋 原因: 插件已被禁用")
+                    logger.error("")
+                    logger.error("🔧 解决方案:")
+                    logger.error("   1. 检查插件的 config.toml 中 [plugin] enabled = true")
+                    logger.error("   2. 或在 plugin.py 中设置 enable_plugin = True")
+                    logger.error("   3. 或直接删除 enable_plugin 行（默认启用）")
+                else:
+                    logger.error("📋 原因: 插件加载失败，请检查插件代码是否有错误")
+                logger.error("=" * 60)
+            else:
+                logger.info(f"✅ 目标插件 {self._target_plugin_name} 已成功加载")
+
+        except ValueError:
+            logger.error(f"❌ 目标插件 {self._target_plugin_name} 未注册")
+        except Exception as e:
+            logger.error(f"❌ 检查目标插件状态时出错: {e}")
 
     async def _on_file_changed(self, rel_path: str):
         """文件变化回调 - 同步文件并重载目标插件"""
