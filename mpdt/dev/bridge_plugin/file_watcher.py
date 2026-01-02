@@ -45,12 +45,18 @@ class PluginFileHandler(FileSystemEventHandler):
     def on_modified(self, event: FileSystemEvent):
         if event.is_directory:
             return
-        self._handle_change(event.src_path)
+        src_path = event.src_path
+        if isinstance(src_path, bytes):
+            src_path = src_path.decode()
+        self._handle_change(str(src_path))
 
     def on_created(self, event: FileSystemEvent):
         if event.is_directory:
             return
-        self._handle_change(event.src_path)
+        src_path = event.src_path
+        if isinstance(src_path, bytes):
+            src_path = src_path.decode()
+        self._handle_change(str(src_path))
 
     def _handle_change(self, src_path: str):
         """处理文件变化"""

@@ -49,8 +49,9 @@ class DevBridgePlugin(BasePlugin):
         self._target_plugin_path = TARGET_PLUGIN_PATH
 
     def get_plugin_components(self) -> list:
-        """无需注册组件"""
-        return []
+        """注册清理事件处理器"""
+        from .cleanup_handler import CleanupHandler
+        return [(CleanupHandler.get_handler_info(), CleanupHandler)]
 
     async def on_plugin_loaded(self):
         """插件加载完成后启动文件监控"""
@@ -85,28 +86,91 @@ class DevBridgePlugin(BasePlugin):
             logger.info("文件监控已禁用或未配置目标路径")
 
     async def _on_file_changed(self, rel_path: str):
-        """文件变化回调 - 自动重载目标插件"""
+        """文件变化回调 - 同步文件并重载目标插件"""
         if not self._target_plugin_name:
             logger.warning("未配置目标插件名称，跳过重载")
             return
 
         logger.info(f"📝 检测到文件变化: {rel_path}")
-        logger.info(f"🔄 正在重载插件: {self._target_plugin_name}...")
+        
+        # 先同步文件到 plugins 目录
+        try:
+            self._sync_plugin_files()
+            logger.info("📦 文件已同步到 plugins 目录")
+        except Exception as e:
+            logger.error(f"❌ 同步文件失败: {e}")
+            return
 
         try:
             from src.plugin_system.apis import plugin_manage_api
 
-            success = await plugin_manage_api.reload_plugin(self._target_plugin_name)
+            plugin_name = self._target_plugin_name
+            is_loaded = plugin_manage_api.is_plugin_loaded(plugin_name)
+            is_enabled = plugin_manage_api.is_plugin_enabled(plugin_name)
 
-            if success:
-                logger.info(f"✅ 插件 {self._target_plugin_name} 重载成功")
+            if is_loaded:
+                # 插件已加载，检查是否被禁用
+                if not is_enabled:
+                    logger.info(f"🔓 插件 {plugin_name} 已禁用，正在启用...")
+                    await plugin_manage_api.enable_plugin(plugin_name)
+                
+                # 重载插件
+                logger.info(f"🔄 正在重载插件: {plugin_name}...")
+                success = await plugin_manage_api.reload_plugin(plugin_name)
+                if success:
+                    logger.info(f"✅ 插件 {plugin_name} 重载成功")
+                else:
+                    logger.error(f"❌ 插件 {plugin_name} 重载失败")
             else:
-                logger.error(f"❌ 插件 {self._target_plugin_name} 重载失败")
+                # 插件未加载，使用 enable_plugin 来加载并启用
+                # enable_plugin 会同时处理加载和启用，即使插件之前被禁用
+                logger.info(f"📦 插件 {plugin_name} 未加载，正在启用并加载...")
+                success = await plugin_manage_api.enable_plugin(plugin_name)
+                if success:
+                    logger.info(f"✅ 插件 {plugin_name} 启用并加载成功")
+                else:
+                    logger.error(f"❌ 插件 {plugin_name} 启用/加载失败")
 
+        except ValueError as e:
+            # 插件未注册，尝试扫描并加载
+            logger.warning(f"⚠️ 插件未注册: {e}")
+            logger.info("🔍 正在扫描插件目录...")
+            try:
+                from src.plugin_system.apis import plugin_manage_api
+                plugin_manage_api.rescan_and_register_plugins(load_after_register=True)
+                if plugin_manage_api.is_plugin_loaded(self._target_plugin_name):
+                    logger.info(f"✅ 插件 {self._target_plugin_name} 扫描并加载成功")
+                else:
+                    logger.error(f"❌ 插件 {self._target_plugin_name} 扫描后仍未加载")
+            except Exception as scan_e:
+                logger.error(f"❌ 扫描插件目录失败: {scan_e}")
         except Exception as e:
-            logger.error(f"❌ 重载插件时出错: {e}")
+            logger.error(f"❌ 操作插件时出错: {e}")
             import traceback
             traceback.print_exc()
+
+    def _sync_plugin_files(self):
+        """将源插件目录同步到 plugins 目录"""
+        import shutil
+
+        source_path = Path(self._target_plugin_path)
+        # plugins 目录是 dev_bridge 所在目录的父目录
+        plugins_dir = Path(__file__).parent.parent
+        target_path = plugins_dir / self._target_plugin_name
+
+        # 如果源插件已经在 plugins 目录下，不需要同步
+        if source_path.parent.resolve() == plugins_dir.resolve():
+            return
+
+        if not source_path.exists():
+            raise FileNotFoundError(f"源插件目录不存在: {source_path}")
+
+        # 删除旧的目标目录
+        if target_path.exists():
+            shutil.rmtree(target_path)
+
+        # 复制新文件
+        shutil.copytree(source_path, target_path)
 
     async def on_plugin_unload(self):
         """插件卸载时停止文件监控"""

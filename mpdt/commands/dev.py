@@ -3,10 +3,8 @@ mpdt dev 命令实现
 启动开发模式：注入开发插件到主程序，由开发插件负责文件监控和热重载
 """
 
-import atexit
 import os
 import shutil
-import signal
 import subprocess
 from pathlib import Path
 
@@ -18,58 +16,6 @@ from mpdt.utils.plugin_parser import extract_plugin_name
 
 console = Console()
 
-# 全局引用，用于信号处理器访问
-_current_server: "DevServer | None" = None
-
-
-def _cleanup_on_exit():
-    """退出时的清理函数"""
-    global _current_server
-    if _current_server:
-        _current_server._user_exit = True  # 标记为用户主动退出
-        _current_server.stop()
-        _current_server = None
-
-
-def _signal_handler(signum, frame):
-    """信号处理器"""
-    console.print("\n[yellow]收到退出信号，正在清理...[/yellow]")
-    _cleanup_on_exit()
-    exit(0)
-
-
-def _setup_signal_handlers():
-    """设置信号处理器"""
-    # 注册 SIGINT (Ctrl+C) 和 SIGTERM
-    signal.signal(signal.SIGINT, _signal_handler)
-    signal.signal(signal.SIGTERM, _signal_handler)
-
-    # Windows 特殊处理：捕获控制台关闭事件
-    if os.name == "nt":
-        try:
-            import ctypes
-
-            kernel32 = ctypes.windll.kernel32
-
-            # 定义回调函数类型
-            HANDLER_ROUTINE = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_ulong)
-
-            def console_handler(ctrl_type):
-                """Windows 控制台事件处理器"""
-                # CTRL_C_EVENT = 0, CTRL_BREAK_EVENT = 1, CTRL_CLOSE_EVENT = 2
-                # CTRL_LOGOFF_EVENT = 5, CTRL_SHUTDOWN_EVENT = 6
-                if ctrl_type in (0, 1, 2, 5, 6):
-                    _cleanup_on_exit()
-                    return True
-                return False
-
-            # 保存引用防止被垃圾回收
-            global _win_handler
-            _win_handler = HANDLER_ROUTINE(console_handler)
-            kernel32.SetConsoleCtrlHandler(_win_handler, True)
-        except Exception:
-            pass  # 如果失败，仍然有 atexit 作为备份
-
 
 class DevServer:
     """开发服务器 - 注入开发插件并启动主程序"""
@@ -78,113 +24,46 @@ class DevServer:
         self.plugin_path = plugin_path.absolute()
         self.config = config
         self.mofox_path = mofox_path or config.mofox_path
-        assert self.mofox_path is not None
 
         if not self.mofox_path:
-            raise ValueError("未配置 mmc 主程序路径")
+            raise ValueError("未配置 mofox 主程序路径")
+        assert self.mofox_path is not None
 
         self.plugin_name: str | None = None
         self.process: subprocess.Popen | None = None
-        self._stopped = False  # 防止重复清理
-        self._user_exit = False  # 用户主动退出标志
 
     def start(self):
-        """启动开发服务器（同步方法）"""
-        global _current_server
-        _current_server = self
-
-        # 注册退出清理
-        atexit.register(_cleanup_on_exit)
-
-        # 设置信号处理器（包括 Windows 控制台事件）
-        _setup_signal_handlers()
-
+        """启动开发模式（同步方法）"""
         try:
             # 1. 解析插件名称
             self._parse_plugin_info()
 
-            # 2. 注入 DevBridge 插件（包含配置）
+            # 2. 检查插件是否启用
+            if not self._check_plugin_enabled():
+                return
+
+            # 3. 注入目标开发插件
+            self._inject_target_plugin()
+
+            # 4. 注入 DevBridge 插件（包含配置）
             self._inject_bridge_plugin()
 
-            # 3. 启动主程序
+            # 5. 启动主程序
             self._start_main_process()
 
             console.print("\n[bold green]✨ 开发模式已启动！[/bold green]")
             console.print("[dim]主程序窗口中会显示文件监控和重载信息[/dim]")
-            console.print("[dim]关闭主程序窗口或按 Ctrl+C 退出[/dim]\n")
+            console.print("[dim]DevBridge 插件会在主程序退出时自动清理[/dim]\n")
 
-            # 4. 等待主程序退出
-            self._wait_for_exit()
+            # 启动完成，直接退出，让插件自己管理生命周期
+            console.print("[green]✓ 开发服务器启动完成，此窗口将关闭[/green]")
 
-        except KeyboardInterrupt:
-            self._user_exit = True
-            console.print("\n[yellow]正在退出...[/yellow]")
         except Exception as e:
             console.print(f"[red]错误: {e}[/red]")
             import traceback
             traceback.print_exc()
-        finally:
-            self.stop()
 
-    def stop(self):
-        """停止开发服务器"""
-        # 防止重复清理
-        if self._stopped:
-            return
-        self._stopped = True
 
-        # 停止主程序 - 仅当进程还在运行时才尝试关闭
-        if self.process and self.process.poll() is None:
-            # poll() 返回 None 表示进程还在运行
-            console.print("[cyan]🛑 正在关闭主程序...[/cyan]")
-            try:
-                import os
-
-                # Windows: 使用 taskkill 杀死整个进程树
-                if os.name == "nt":
-                    try:
-                        subprocess.run(
-                            ["taskkill", "/F", "/T", "/PID", str(self.process.pid)],
-                            capture_output=True,
-                            timeout=5,
-                            encoding="utf-8",
-                            errors="ignore",
-                        )
-                        console.print("[green]✓ 主程序及所有子进程已关闭[/green]")
-                    except Exception as e:
-                        console.print(f"[yellow]taskkill 失败: {e}，尝试其他方法...[/yellow]")
-                        self.process.terminate()
-                        try:
-                            self.process.wait(timeout=3)
-                        except subprocess.TimeoutExpired:
-                            self.process.kill()
-                            self.process.wait()
-                else:
-                    # Linux/Mac: 尝试优雅终止
-                    self.process.terminate()
-                    try:
-                        self.process.wait(timeout=3)
-                        console.print("[green]✓ 主程序已优雅关闭[/green]")
-                    except subprocess.TimeoutExpired:
-                        console.print("[yellow]主程序未响应，强制关闭...[/yellow]")
-                        try:
-                            os.killpg(os.getpgid(self.process.pid), 9)
-                        except Exception:
-                            self.process.kill()
-                        self.process.wait()
-                        console.print("[green]✓ 主程序已强制关闭[/green]")
-            except Exception as e:
-                console.print(f"[yellow]警告: 关闭主程序时出错: {e}[/yellow]")
-                try:
-                    self.process.kill()
-                    self.process.wait()
-                except Exception:
-                    pass
-
-        # 清理 DevBridge 插件
-        self._cleanup_bridge_plugin()
-
-        console.print("[green]已停止[/green]")
 
     def _parse_plugin_info(self):
         """解析插件信息"""
@@ -209,6 +88,63 @@ class DevServer:
             raise ValueError("无法解析插件名称")
 
         console.print(f"[green]✓ 插件名: {self.plugin_name}[/green]")
+
+    def _check_plugin_enabled(self) -> bool:
+        """检查插件是否启用
+
+        Returns:
+            bool: 如果插件已启用或未设置返回 True，如果明确禁用返回 False
+        """
+        from mpdt.utils.code_parser import CodeParser
+
+        plugin_file = self.plugin_path / "plugin.py"
+        if not plugin_file.exists():
+            return True  # 没有 plugin.py 就跳过检查
+
+        try:
+            parser = CodeParser.from_file(plugin_file)
+            enable_plugin = parser.find_class_attribute(
+                base_class="BasePlugin",
+                attribute_name="enable_plugin"
+            )
+
+            if enable_plugin is False:
+                console.print("\n[red]❌ 插件已禁用[/red]")
+                console.print(f"[yellow]检测到 {self.plugin_name} 的 enable_plugin = False[/yellow]")
+                console.print("\n[dim]请在 plugin.py 中将 enable_plugin 设置为 True：[/dim]")
+                console.print("```python")
+                console.print("class YourPlugin(BasePlugin):")
+                console.print("    enable_plugin = True  # 修改为 True")
+                console.print("```")
+                console.print("\n[dim]或者直接删除该行（默认为启用）[/dim]")
+                return False
+
+            return True
+
+        except Exception as e:
+            console.print(f"[yellow]⚠️ 检查插件状态时出错: {e}[/yellow]")
+            return True  # 出错时默认允许继续
+
+    def _inject_target_plugin(self):
+        """将目标插件复制到 mofox 的 plugins 目录"""
+        plugins_dir = self.mofox_path / "plugins"
+        target_dir = plugins_dir / self.plugin_name
+
+        # 检查插件是否已经在 plugins 目录下
+        if self.plugin_path.parent.resolve() == plugins_dir.resolve():
+            console.print("[dim]📦 插件已在 plugins 目录下，跳过复制[/dim]")
+            return
+
+        console.print("[cyan]📦 注入目标插件...[/cyan]")
+
+        # 如果已存在，先删除
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+
+        # 复制插件
+        shutil.copytree(self.plugin_path, target_dir)
+
+        console.print(f"[green]✓ 目标插件已注入: {target_dir}[/green]")
 
     def _inject_bridge_plugin(self):
         """注入 DevBridge 插件到主程序，并修改配置常量"""
@@ -272,16 +208,7 @@ DISCOVERY_PORT: int = 12318
 
         console.print("[dim]  配置已写入 dev_config.py[/dim]")
 
-    def _cleanup_bridge_plugin(self):
-        """清理 DevBridge 插件"""
-        bridge_target = self.mofox_path / "plugins" / "dev_bridge"
 
-        if bridge_target.exists():
-            try:
-                shutil.rmtree(bridge_target)
-                console.print("[cyan]🧹 DevBridge 插件已清理[/cyan]")
-            except Exception as e:
-                console.print(f"[yellow]警告: 清理 DevBridge 插件失败: {e}[/yellow]")
 
     def _start_main_process(self):
         """启动主程序"""
@@ -388,27 +315,7 @@ DISCOVERY_PORT: int = 12318
         except Exception as e:
             raise RuntimeError(f"启动主程序失败: {e}")
 
-    def _wait_for_exit(self):
-        """等待主程序退出或用户中断"""
-        import time
 
-        if not self.process:
-            return
-
-        try:
-            # 使用轮询而不是阻塞等待，这样可以响应 Ctrl+C
-            while True:
-                exit_code = self.process.poll()
-                if exit_code is not None:
-                    # 进程已退出，仅在非用户主动退出时显示异常
-                    if exit_code != 0 and not self._user_exit:
-                        console.print(f"[yellow]⚠️  主程序异常退出 (退出码: {exit_code})[/yellow]")
-                    break
-                # 短暂睡眠，减少 CPU 占用
-                time.sleep(0.5)
-        except KeyboardInterrupt:
-            self._user_exit = True
-            console.print("\n[yellow]检测到 Ctrl+C，正在退出...[/yellow]")
 
 
 def dev_command(

@@ -9,6 +9,7 @@ import libcst as cst
 import questionary
 
 from mpdt.templates import prepare_component_context
+from mpdt.utils.code_parser import CodeParser
 from mpdt.utils.color_printer import (
     console,
     print_error,
@@ -45,12 +46,30 @@ def generate_component(
         force: 是否覆盖
         verbose: 详细输出
     """
+    # 确定工作目录
+    if output_dir:
+        work_dir = Path(output_dir)
+    else:
+        work_dir = Path.cwd()
+
+    # 先检查是否在插件目录中，避免用户填完信息后才报错
+    plugin_name = _detect_plugin_name(work_dir)
+    if not plugin_name:
+        print_error("未检测到插件目录！请在插件根目录下运行此命令")
+        print_warning("提示: 插件目录应包含 plugin.py 文件")
+        return
+
+    if verbose:
+        console.print(f"[dim]检测到插件: {plugin_name}[/dim]")
+
     # 交互式获取组件信息
+    use_components_folder = True  # 默认使用 components 文件夹
     if not component_type or not component_name:
         component_info = _interactive_generate()
         component_type = component_info["component_type"]
         component_name = component_info["component_name"]
         description = component_info.get("description") or description
+        use_components_folder = component_info.get("use_components_folder", True)
         force = component_info.get("force", force)
 
     # 此时 component_type 和 component_name 必定不为 None
@@ -63,22 +82,6 @@ def generate_component(
     if not validate_component_name(component_name):
         print_error("组件名称无效！必须使用小写字母、数字和下划线，以字母开头")
         return
-
-    # 确定工作目录
-    if output_dir:
-        work_dir = Path(output_dir)
-    else:
-        work_dir = Path.cwd()
-
-    # 检查是否在插件目录中
-    plugin_name = _detect_plugin_name(work_dir)
-    if not plugin_name:
-        print_error("未检测到插件目录！请在插件根目录下运行此命令")
-        print_warning("提示: 插件目录应包含 plugin.py 文件")
-        return
-
-    if verbose:
-        console.print(f"[dim]检测到插件: {plugin_name}[/dim]")
 
     # 确保组件名称为 snake_case
     component_name = to_snake_case(component_name)
@@ -105,6 +108,7 @@ def generate_component(
         context=context,
         force=force,
         verbose=verbose,
+        use_components_folder=use_components_folder,
     )
 
     if not component_file:
@@ -117,6 +121,7 @@ def generate_component(
         component_name=component_name,
         context=context,
         verbose=verbose,
+        use_components_folder=use_components_folder,
     ):
         print_warning("⚠️  自动更新插件注册失败，请手动添加到 plugin.py")
 
@@ -157,6 +162,13 @@ def _interactive_generate() -> dict[str, Any]:
             "组件描述 (可选):",
             default="",
         ),
+        use_components_folder=questionary.select(
+            "组件文件存放位置:",
+            choices=[
+                questionary.Choice("components/ 文件夹 (推荐)", value=True),
+                questionary.Choice("插件根目录", value=False),
+            ],
+        ),
         force=questionary.confirm(
             "如果文件存在，是否覆盖?",
             default=False,
@@ -196,6 +208,7 @@ def _generate_component_file(
     context: dict,
     force: bool,
     verbose: bool,
+    use_components_folder: bool = True,
 ) -> Path | None:
     """
     生成组件文件
@@ -207,18 +220,23 @@ def _generate_component_file(
         context: 模板上下文
         force: 是否覆盖
         verbose: 详细输出
+        use_components_folder: 是否使用 components 文件夹，False 则在根目录生成
 
     Returns:
         生成的文件路径,失败返回 None
     """
     # 确定组件目录
-    component_dir = work_dir / "components" / f"{component_type}s"
-    ensure_dir(component_dir)
+    if use_components_folder:
+        component_dir = work_dir / "components" / f"{component_type}s"
+        ensure_dir(component_dir)
 
-    # 确保 __init__.py 存在
-    init_file = component_dir / "__init__.py"
-    if not init_file.exists():
-        safe_write_file(init_file, f'"""\n{component_type.title()}s 组件\n"""\n')
+        # 确保 __init__.py 存在
+        init_file = component_dir / "__init__.py"
+        if not init_file.exists():
+            safe_write_file(init_file, f'"""\n{component_type.title()}s 组件\n"""\n')
+    else:
+        # 在插件根目录生成
+        component_dir = work_dir
 
     # 生成组件文件
     component_file = component_dir / f"{component_name}.py"
@@ -264,9 +282,10 @@ def _update_plugin_registration(
     component_name: str,
     context: dict,
     verbose: bool,
+    use_components_folder: bool = True,
 ) -> bool:
     """
-    更新插件注册代码 (使用 AST 解析)
+    更新插件注册代码 (使用 CodeParser)
 
     Args:
         work_dir: 工作目录
@@ -274,6 +293,7 @@ def _update_plugin_registration(
         component_name: 组件名称
         context: 模板上下文
         verbose: 详细输出
+        use_components_folder: 是否使用 components 文件夹
 
     Returns:
         是否更新成功
@@ -286,13 +306,11 @@ def _update_plugin_registration(
         # 使用 plugin_parser 验证插件名称
         parsed_plugin_name = extract_plugin_name(work_dir)
         if not parsed_plugin_name:
-            if verbose:
-                console.print("[dim]⚠  无法解析插件名称[/dim]")
-            return False
+            # 如果无法从类属性中解析，使用目录名作为后备方案
+            parsed_plugin_name = work_dir.name
 
-        # 读取源代码
-        source_code = plugin_file.read_text(encoding="utf-8")
-        source_tree = cst.parse_module(source_code)
+        # 使用 CodeParser 读取和解析源代码
+        parser = CodeParser.from_file(plugin_file)
 
         # 创建转换器
         transformer = PluginRegistrationTransformer(
@@ -300,22 +318,18 @@ def _update_plugin_registration(
             component_type=component_type,
             component_name=component_name,
             class_name=context["class_name"],
+            use_components_folder=use_components_folder,
         )
 
         # 应用转换
-        modified_tree = source_tree.visit(transformer)
+        modified_tree = parser.module.visit(transformer)
 
         # 写回文件
         plugin_file.write_text(modified_tree.code, encoding="utf-8")
 
-        if verbose:
-            console.print(f"[dim]✓ 更新插件注册: {plugin_file}[/dim]")
+        return transformer.import_added or transformer.registration_added
 
-        return True
-
-    except Exception as e:
-        if verbose:
-            console.print(f"[dim]⚠  自动更新插件注册失败: {e}[/dim]")
+    except Exception:
         return False
 
 
@@ -328,11 +342,13 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
         component_type: str,
         component_name: str,
         class_name: str,
+        use_components_folder: bool = True,
     ):
         self.plugin_name = plugin_name
         self.component_type = component_type
         self.component_name = component_name
         self.class_name = class_name
+        self.use_components_folder = use_components_folder
         self.import_added = False
         self.registration_added = False
 
@@ -341,9 +357,14 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
         if self.import_added:
             return updated_node
 
-        # 构建导入语句
+        # 根据存放位置构建导入语句
+        if self.use_components_folder:
+            import_path = f"{self.plugin_name}.components.{self.component_type}s.{self.component_name}"
+        else:
+            import_path = f"{self.plugin_name}.{self.component_name}"
+
         import_statement = cst.parse_statement(
-            f"from {self.plugin_name}.components.{self.component_type}s.{self.component_name} import {self.class_name}"
+            f"from {import_path} import {self.class_name}"
         )
 
         # 检查是否已存在相同的导入
@@ -352,8 +373,7 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
                 for s in stmt.body:
                     if isinstance(s, cst.ImportFrom) and s.module:
                         module_str = cst.Module([]).code_for_node(s.module)
-                        target_module = f"{self.plugin_name}.components.{self.component_type}s.{self.component_name}"
-                        if module_str == target_module:
+                        if module_str == import_path:
                             self.import_added = True
                             return updated_node
 
@@ -397,9 +417,8 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
         }
         info_method = info_method_map.get(self.component_type, "get_component_info")
 
-        # 构建注册代码
-        registration_code = f"""# 注册 {self.class_name}
-        components.append(({self.class_name}.{info_method}(), {self.class_name}))"""
+        # 构建注册代码（带注释的语句）
+        registration_stmt = f"components.append(({self.class_name}.{info_method}(), {self.class_name}))  # 注册 {self.class_name}"
 
         # 检查是否已存在注册代码
         function_code = cst.Module([]).code_for_node(updated_node)
@@ -415,9 +434,7 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
                 for s in stmt.body:
                     if isinstance(s, cst.Return):
                         # 插入注册代码
-                        for line in registration_code.split("\n"):
-                            if line.strip():
-                                new_body.append(cst.parse_statement(line))
+                        new_body.append(cst.parse_statement(registration_stmt))
                         self.registration_added = True
 
             new_body.append(stmt)

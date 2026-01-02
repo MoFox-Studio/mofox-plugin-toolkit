@@ -24,7 +24,6 @@ def init_plugin(
     template: str = "basic",
     author: str | None = None,
     license_type: str = "GPL-v3.0",
-    with_examples: bool = False,
     with_docs: bool = False,
     output_dir: str | None = None,
     init_git: bool | None = None,
@@ -38,7 +37,6 @@ def init_plugin(
         template: 模板类型
         author: 作者名称
         license_type: 开源协议
-        with_examples: 是否包含示例
         with_docs: 是否创建文档
         output_dir: 输出目录
         init_git: 是否初始化 Git 仓库 (None 表示交互式询问)
@@ -53,7 +51,6 @@ def init_plugin(
         template = plugin_info["template"]
         author = plugin_info.get("author")
         license_type = plugin_info["license"]
-        with_examples = plugin_info.get("with_examples", False)
         with_docs = plugin_info.get("with_docs", False)
         init_git = plugin_info.get("init_git", False)
 
@@ -85,7 +82,6 @@ def init_plugin(
         template=template,
         author=author,
         license_type=license_type,
-        with_examples=with_examples,
         with_docs=with_docs,
         verbose=verbose,
     )
@@ -103,6 +99,10 @@ def init_plugin(
 
     # 打印成功信息
     print_success("插件创建成功！")
+
+    # 根据模板类型构建目录树显示
+    components_tree = _build_components_tree(template)
+
     print_tree(
         plugin_name,
         {
@@ -111,7 +111,7 @@ def init_plugin(
             plugin_name: {
                 "__init__.py": None,
                 "plugin.py": None,
-                "components": ["actions", "plus_command", "tools", "events"],
+                "components": components_tree,
                 "utils": ["__init__.py"],
             },
             "docs": ["README.md"] if with_docs else [],
@@ -168,10 +168,6 @@ def _interactive_init() -> dict[str, Any]:
             "选择开源协议:",
             choices=["GPL-v3.0", "MIT", "Apache-2.0", "BSD-3-Clause"],
         ),
-        with_examples=questionary.confirm(
-            "包含示例代码?",
-            default=True,
-        ),
         with_docs=questionary.confirm(
             "创建文档文件?",
             default=True,
@@ -191,7 +187,6 @@ def _create_plugin_structure(
     template: str,
     author: str | None,
     license_type: str,
-    with_examples: bool,
     with_docs: bool,
     verbose: bool,
 ) -> None:
@@ -225,6 +220,15 @@ def _create_plugin_structure(
     # 创建 utils 目录
     utils_dir = ensure_dir(plugin_code_dir / "utils")
     safe_write_file(utils_dir / "__init__.py", '"""\n工具函数\n"""\n')
+
+    # 根据模板类型自动生成示例组件
+    _generate_example_components(
+        components_dir=components_dir,
+        plugin_name=plugin_name,
+        template=template,
+        author=author,
+        verbose=verbose,
+    )
 
     # 创建文档目录
     if with_docs:
@@ -285,13 +289,17 @@ __plugin_meta__ = PluginMetadata(
 
 def _generate_plugin_file(plugin_name: str, template: str) -> str:
     """生成 plugin.py 文件内容"""
+
+    # 根据模板类型生成导入语句和组件注册
+    imports, component_registrations = _get_component_imports_and_registrations(plugin_name, template)
+
     return f'''"""
 {plugin_name} 插件主类
 """
 
 from src.common.logger import get_logger
 from src.plugin_system import BasePlugin, ComponentInfo, register_plugin
-
+{imports}
 logger = get_logger("{plugin_name}")
 
 
@@ -316,10 +324,72 @@ class {_to_pascal_case(plugin_name)}Plugin(BasePlugin):
         """
         components = []
 
-        # TODO: 在这里添加你的组件
-
+{component_registrations}
         return components
 '''
+
+
+def _get_component_imports_and_registrations(plugin_name: str, template: str) -> tuple[str, str]:
+    """
+    根据模板类型获取组件导入语句和注册代码
+
+    Args:
+        plugin_name: 插件名称
+        template: 模板类型
+
+    Returns:
+        (导入语句, 组件注册代码)
+    """
+    # 模板类型与组件配置的映射
+    # (组件类型, 模块名, 类名, 目录名, 获取info的方法名)
+    template_components = {
+        "basic": [],
+        "action": [
+            ("action", "example_action", "ExampleActionAction", "actions", "get_action_info"),
+        ],
+        "tool": [
+            ("tool", "example_tool", "ExampleToolTool", "tools", "get_tool_info"),
+        ],
+        "plus_command": [
+            ("plus_command", "example_command", "ExampleCommandPlusCommand", "plus_command", "get_plus_command_info"),
+        ],
+        "adapter": [
+            ("adapter", "example_adapter", "ExampleAdapterAdapter", "adapters", "get_adapter_info"),
+        ],
+        "full": [
+            ("action", "example_action", "ExampleActionAction", "actions", "get_action_info"),
+            ("tool", "example_tool", "ExampleToolTool", "tools", "get_tool_info"),
+            ("plus_command", "example_command", "ExampleCommandPlusCommand", "plus_command", "get_plus_command_info"),
+            ("event", "example_event", "ExampleEventEventHandler", "events", "get_handler_info"),
+        ],
+    }
+
+    components = template_components.get(template, [])
+
+    if not components:
+        return "", "        # TODO: 在这里添加你的组件\n"
+
+    # 生成导入语句
+    import_lines = []
+    for comp_type, module_name, class_name, folder, _ in components:
+        import_lines.append(
+            f"from {plugin_name}.components.{folder}.{module_name} import {class_name}"
+        )
+
+    imports = "\n" + "\n".join(import_lines) + "\n"
+
+    # 生成组件注册代码
+    registration_lines = []
+    for comp_type, module_name, class_name, folder, info_method in components:
+        comp_type_display = comp_type.replace("_", " ").title()
+        registration_lines.append(
+            f"        # 注册 {comp_type_display} 组件\n"
+            f"        components.append(({class_name}.{info_method}(), {class_name}))\n"
+        )
+
+    registrations = "\n".join(registration_lines)
+
+    return imports, registrations
 
 
 def _generate_readme_file(plugin_name: str) -> str:
@@ -396,6 +466,42 @@ mpdt test
 def _to_pascal_case(snake_str: str) -> str:
     """将 snake_case 转换为 PascalCase"""
     return "".join(word.capitalize() for word in snake_str.split("_"))
+
+
+def _build_components_tree(template: str) -> dict[str, list[str]] | list[str]:
+    """
+    根据模板类型构建组件目录树
+
+    Args:
+        template: 模板类型
+
+    Returns:
+        组件目录树结构
+    """
+    # 基础目录结构
+    base_tree = {
+        "actions": ["__init__.py"],
+        "plus_command": ["__init__.py"],
+        "tools": ["__init__.py"],
+        "events": ["__init__.py"],
+    }
+
+    # 根据模板类型添加示例文件
+    if template == "action":
+        base_tree["actions"].append("example_action.py")
+    elif template == "tool":
+        base_tree["tools"].append("example_tool.py")
+    elif template == "plus_command":
+        base_tree["plus_command"].append("example_command.py")
+    elif template == "adapter":
+        base_tree["adapters"] = ["__init__.py", "example_adapter.py"]
+    elif template == "full":
+        base_tree["actions"].append("example_action.py")
+        base_tree["tools"].append("example_tool.py")
+        base_tree["plus_command"].append("example_command.py")
+        base_tree["events"].append("example_event.py")
+
+    return base_tree
 
 
 def _init_git_repository(plugin_dir: Path, verbose: bool) -> None:
@@ -498,3 +604,83 @@ config/local_*.toml
     except FileNotFoundError:
         print_error("未找到 Git 命令，请确保已安装 Git")
 
+
+def _generate_example_components(
+    components_dir: Path,
+    plugin_name: str,
+    template: str,
+    author: str | None,
+    verbose: bool,
+) -> None:
+    """
+    根据模板类型生成示例组件文件
+
+    Args:
+        components_dir: 组件目录
+        plugin_name: 插件名称
+        template: 模板类型 (basic, action, tool, plus_command, full, adapter)
+        author: 作者
+        verbose: 是否详细输出
+    """
+    from mpdt.templates import get_component_template, prepare_component_context
+
+    # 模板类型与组件类型的映射
+    template_component_map = {
+        "basic": [],  # 基础模板不生成示例
+        "action": [("action", "example_action", "示例 Action 组件")],
+        "tool": [("tool", "example_tool", "示例 Tool 组件")],
+        "plus_command": [("plus_command", "example_command", "示例 PlusCommand 组件")],
+        "adapter": [("adapter", "example_adapter", "示例 Adapter 组件")],
+        "full": [
+            ("action", "example_action", "示例 Action 组件"),
+            ("tool", "example_tool", "示例 Tool 组件"),
+            ("plus_command", "example_command", "示例 PlusCommand 组件"),
+            ("event", "example_event", "示例 Event 组件"),
+        ],
+    }
+
+    # 组件类型与目录名的映射
+    component_dir_map = {
+        "action": "actions",
+        "tool": "tools",
+        "plus_command": "plus_command",
+        "event": "events",
+        "adapter": "adapters",
+    }
+
+    components_to_create = template_component_map.get(template, [])
+
+    for comp_type, comp_name, comp_desc in components_to_create:
+        try:
+            # 获取模板
+            template_str = get_component_template(comp_type)
+
+            # 准备上下文
+            context = prepare_component_context(
+                component_type=comp_type,
+                component_name=comp_name,
+                plugin_name=plugin_name,
+                author=author or "",
+                description=comp_desc,
+                is_async=True,
+            )
+
+            # 渲染模板
+            content = template_str.format(**context)
+
+            # 确定目标目录
+            target_dir = components_dir / component_dir_map.get(comp_type, f"{comp_type}s")
+            if not target_dir.exists():
+                ensure_dir(target_dir)
+                safe_write_file(target_dir / "__init__.py", f'"""\n{comp_type.title()} 组件\n"""\n')
+
+            # 写入文件
+            file_path = target_dir / f"{comp_name}.py"
+            safe_write_file(file_path, content)
+
+            if verbose:
+                console.print(f"[dim]✓ 生成示例组件: {comp_name}.py[/dim]")
+
+        except Exception as e:
+            if verbose:
+                console.print(f"[dim yellow]⚠ 生成组件 {comp_name} 失败: {e}[/dim yellow]")

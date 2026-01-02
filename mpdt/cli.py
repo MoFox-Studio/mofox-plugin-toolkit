@@ -41,13 +41,12 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
 @click.option("--author", "-a", help="作者名称")
 @click.option("--license", "-l", type=click.Choice(["GPL-v3.0", "MIT", "Apache-2.0", "BSD-3-Clause"]),
               default="GPL-v3.0", help="开源协议")
-@click.option("--with-examples", is_flag=True, help="包含示例代码")
 @click.option("--with-docs", is_flag=True, help="创建文档文件")
 @click.option("--init-git/--no-init-git", default=None, help="是否初始化 Git 仓库")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.pass_context
 def init(ctx: click.Context, plugin_name: str | None, template: str, author: str | None,
-         license: str, with_examples: bool, with_docs: bool, init_git: bool | None, output: str | None) -> None:
+         license: str, with_docs: bool, init_git: bool | None, output: str | None) -> None:
     """初始化新插件项目"""
     from mpdt.commands.init import init_plugin
 
@@ -57,7 +56,6 @@ def init(ctx: click.Context, plugin_name: str | None, template: str, author: str
             template=template,
             author=author,
             license_type=license,
-            with_examples=with_examples,
             with_docs=with_docs,
             init_git=init_git,
             output_dir=output,
@@ -257,10 +255,10 @@ def config_test() -> None:
         raise click.Abort()
 
 
-@config.command("set-mmc")
+@config.command("set-mofox")
 @click.argument("path", type=click.Path(exists=True))
 def config_set_mmc(path: str) -> None:
-    """设置 mmc 主程序路径"""
+    """设置 MoFox 主程序路径"""
     from pathlib import Path
 
     from mpdt.utils.config_manager import MPDTConfig
@@ -270,7 +268,7 @@ def config_set_mmc(path: str) -> None:
         config.mofox_path = Path(path)
         config.save()
 
-        console.print(f"[green]✓ mmc 路径已设置: {path}[/green]")
+        console.print(f"[green]✓ MoFox 路径已设置: {path}[/green]")
 
     except Exception as e:
         console.print(f"[bold red]❌ 设置失败: {e}[/bold red]")
