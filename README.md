@@ -2,7 +2,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.1-orange.svg)](https://github.com/MoFox-Studio/mofox-plugin-toolkit)
+[![Version](https://img.shields.io/badge/version-0.3.3-orange.svg)](https://github.com/MoFox-Studio/mofox-plugin-toolkit)
 
 一个类似于 Vite 的 Python 开发工具，专门为 MoFox-Bot 插件系统设计，提供快速创建、开发、检查和热重载的完整工具链。
 
@@ -12,21 +12,23 @@
 
 - 🚀 **快速初始化** - 一键创建标准化的插件项目结构，支持 6 种模板（basic、action、tool、plus_command、full、adapter）
 - 🎨 **代码生成** - 快速生成 8 种组件类型（Action、Tool、Event、Adapter、Prompt、PlusCommand、Router、Chatter），始终生成异步方法
-- 🔍 **完整的静态检查系统** - 集成 6 层验证体系：
+- 🔍 **完整的静态检查系统** - 集成 7 层验证体系：
   - ✅ **结构检查** - 验证插件目录结构、必需文件和推荐文件
   - ✅ **元数据检查** - 检查 `__plugin_meta__` 配置的完整性和正确性
   - ✅ **组件检查** - 验证组件注册、命名规范和导入路径
   - ✅ **配置检查** - 检查 `config.toml` 的语法和必需配置
   - ✅ **类型检查** - 使用 mypy 进行严格的类型检查
   - ✅ **代码风格检查** - 使用 ruff 检查代码规范并自动修复
-- 🔥 **热重载开发模式** - 基于 WebSocket 的实时热重载系统：
+  - ✅ **自动修复** - 智能修复可自动处理的问题
+- 🔥 **热重载开发模式** - 基于 DevBridge 插件的实时热重载系统：
   - 🔄 文件变化自动检测和重载
-  - 📡 通过 WebSocket 与主程序通信
+  - 📦 自动注入开发桥接插件
   - 🚦 自动管理插件生命周期
   - 📊 实时显示重载状态和日志
 - 🎯 **Git 集成** - 支持自动初始化 Git 仓库和提取用户信息
 - 🎨 **美观的交互界面** - 基于 Rich 和 Questionary 的现代化命令行体验
 - 📜 **多种许可证** - 支持 GPL-v3.0、MIT、Apache-2.0、BSD-3-Clause
+- 🛠️ **配置管理** - 完整的配置管理命令，支持交互式配置和验证
 
 ## 📦 安装
 
@@ -108,13 +110,18 @@ mpdt generate chatter ChatHandler --description "对话处理器"
 # 启动开发模式（需要先配置 MoFox-Bot 主程序路径）
 mpdt dev
 
+# 指定主程序路径
+mpdt dev --mmc-path /path/to/mofox
+
+# 指定插件路径
+mpdt dev --plugin-path /path/to/plugin
+
 # 首次运行会提示配置
 # 之后会自动：
-# 1. 注入开发桥接插件到主程序
-# 2. 启动主程序
-# 3. 建立 WebSocket 连接
-# 4. 监控文件变化
-# 5. 自动热重载插件
+# 1. 注入目标插件到主程序 plugins 目录
+# 2. 注入 DevBridge 插件（包含文件监控和热重载逻辑）
+# 3. 启动主程序
+# 4. DevBridge 插件自动监控文件变化并热重载
 
 # 开发模式功能：
 # - 🔄 文件保存后自动重载插件
@@ -122,12 +129,13 @@ mpdt dev
 # - 🚦 自动管理插件生命周期
 # - 📝 实时查看主程序日志
 # - ⚡ 无需手动重启主程序
+# - 🧹 主程序退出时自动清理 DevBridge 插件
 ```
 
 ### 4. 检查插件
 
 ```bash
-# 运行所有检查（包含 6 个检查器）
+# 运行所有检查（包含 7 个检查器）
 mpdt check
 
 # 自动修复可修复的问题
@@ -136,16 +144,39 @@ mpdt check --fix
 # 只显示错误级别的问题
 mpdt check --level error
 
-# 生成 Markdown 格式的检查报告
+# 生成 Markdown 或 JSON 格式的检查报告
 mpdt check --report markdown --output check_report.md
+mpdt check --report json --output check_report.json
 
 # 跳过特定检查
 mpdt check --no-type        # 跳过类型检查
 mpdt check --no-style       # 跳过代码风格检查
 mpdt check --no-component   # 跳过组件检查
+mpdt check --no-structure   # 跳过结构检查
+mpdt check --no-metadata    # 跳过元数据检查
 
 # 组合使用
 mpdt check --fix --level warning --report markdown -o report.md
+```
+
+### 5. 配置管理
+
+```bash
+# 交互式配置向导
+mpdt config init
+
+# 显示当前配置
+mpdt config show
+
+# 测试配置是否有效
+mpdt config test
+
+# 设置 MoFox 主程序路径
+mpdt config set-mofox /path/to/mofox
+
+# 设置虚拟环境
+mpdt config set-venv /path/to/venv --type venv
+mpdt config set-venv --type none  # 使用系统 Python
 ```
 
 **检查项说明**：
@@ -155,8 +186,21 @@ mpdt check --fix --level warning --report markdown -o report.md
 - **配置检查** (config) - 检查 `config.toml` 的语法、必需配置项和数据类型
 - **类型检查** (type) - 使用 mypy 进行严格的类型检查，确保类型安全
 - **代码风格检查** (style) - 使用 ruff 检查代码规范，支持自动修复格式问题
+- **自动修复** (autofix) - 智能分析并自动修复可处理的问题
 
 ## 📖 命令参考
+
+### `mpdt` - 主命令
+
+```bash
+mpdt [OPTIONS] COMMAND [ARGS]...
+
+选项:
+  -v, --verbose    详细输出模式
+  --no-color       禁用彩色输出
+  --version        显示版本信息
+  --help           显示帮助信息
+```
 
 ### `mpdt init` - 初始化插件
 
@@ -217,28 +261,34 @@ mpdt generate [COMPONENT_TYPE] [COMPONENT_NAME] [OPTIONS]
 
 ```bash
 mpdt dev [OPTIONS]
-```
+
+选项:
+  --mmc-path PATH      MoFox 主程序路径
+  --plugin-path PATH   插件路径（默认当前目录）
 
 功能特性:
   - 🔄 自动检测文件变化并热重载
-  - 📡 基于 WebSocket 与主程序通信
+  - 📦 自动注入 DevBridge 开发桥接插件
   - 🚦 自动管理插件生命周期
   - 📊 实时显示重载状态和耗时
   - 📝 显示主程序运行日志
+  - 🧹 主程序退出时自动清理
 
 首次运行:
   首次运行会提示配置 MoFox 主程序路径
-  配置将保存到 ~/.mpdt/config.toml 或者 
+  配置将保存到 ~/.mpdt/config.toml
 
 工作流程:
-  1. 自动注入开发桥接插件到主程序
-  2. 启动主程序并建立连接
-  3. 监控插件目录的文件变化
-  4. 检测到变化时通过 WebSocket 通知主程序重载
-  5. 主程序自动卸载旧版本并加载新版本
+  1. 自动将目标插件复制到主程序 plugins 目录
+  2. 注入 DevBridge 插件（包含文件监控逻辑）
+  3. 启动主程序
+  4. DevBridge 插件监控文件变化
+  5. 检测到变化时自动卸载旧版本并加载新版本
 
 示例:
-  mpdt dev                # 在插件目录中运行
+  mpdt dev                              # 在插件目录中运行
+  mpdt dev --mmc-path /path/to/mofox    # 指定主程序路径
+```
 
 ### `mpdt check` - 检查插件
 
@@ -266,14 +316,46 @@ mpdt check [PATH] [OPTIONS]
   config      - 检查 config.toml 配置文件
   type        - 使用 mypy 进行类型检查
   style       - 使用 ruff 进行代码风格检查
+  autofix     - 自动修复可处理的问题
 
 示例:
   mpdt check                                    # 运行所有检查
   mpdt check --fix                             # 自动修复问题
   mpdt check --level error                     # 只显示错误
-  mpdt check --report markdown -o report.md    # 生成报告
+  mpdt check --report markdown -o report.md    # 生成 Markdown 报告
+  mpdt check --report json -o report.json      # 生成 JSON 报告
   mpdt check --no-type --no-style              # 跳过耗时检查
 ```
+
+### `mpdt config` - 配置管理
+
+管理 MPDT 的配置信息。
+
+```bash
+# 子命令
+mpdt config init        # 交互式配置向导
+mpdt config show        # 显示当前配置
+mpdt config test        # 测试配置是否有效
+mpdt config set-mofox   # 设置 MoFox 主程序路径
+mpdt config set-venv    # 设置虚拟环境
+
+# 设置 MoFox 路径
+mpdt config set-mofox /path/to/mofox
+
+# 设置虚拟环境
+mpdt config set-venv /path/to/venv --type venv
+mpdt config set-venv /path/to/venv --type uv
+mpdt config set-venv /path/to/venv --type conda
+mpdt config set-venv /path/to/venv --type poetry
+mpdt config set-venv --type none  # 使用系统 Python
+```
+
+配置项说明:
+  - **MoFox 路径** - MoFox-Bot 主程序的安装路径
+  - **虚拟环境类型** - venv、uv、conda、poetry 或 none
+  - **虚拟环境路径** - 虚拟环境目录路径
+  - **自动重载** - 是否启用自动重载功能
+  - **重载延迟** - 文件变化后的重载延迟时间
 
 ---
 
@@ -317,18 +399,19 @@ my_plugin/                   # 插件根目录
 
 ## 🎯 开发状态
 
-### ✅ 已完成功能（v0.2.1）
+### ✅ 已完成功能（v0.3.3）
 
 #### 1. ✅ 插件初始化 (`mpdt init`)
-- 支持 6 种模板类型
+- 支持 6 种模板类型（basic、action、tool、plus_command、full、adapter）
 - 交互式问答模式
 - Git 自动初始化和用户信息提取
-- 多种开源协议支持
+- 多种开源协议支持（GPL-v3.0、MIT、Apache-2.0、BSD-3-Clause）
 - 自动生成标准化项目结构
 
 #### 2. ✅ 组件生成 (`mpdt generate`)
-- 支持 8 种组件类型
+- 支持 8 种组件类型（action、tool、event、adapter、prompt、plus-command、router、chatter）
 - 所有方法自动生成为异步
+- 基于 libcst 的智能代码解析和注入
 - 自动更新插件主类注册代码
 - 交互式和命令行两种模式
 - 组件文件自动放置到正确目录
@@ -340,16 +423,25 @@ my_plugin/                   # 插件根目录
 - **配置验证器** - `config.toml` 验证
 - **类型检查器** - mypy 集成，严格类型检查
 - **代码风格检查器** - ruff 集成，自动修复
-- 支持生成 Markdown 格式报告
+- **自动修复验证器** - 智能问题修复
+- 支持生成 Markdown 和 JSON 格式报告
 - 灵活的级别过滤（error/warning/info）
 
 #### 4. ✅ 热重载开发模式 (`mpdt dev`)
-- 基于 WebSocket 的实时通信
-- 自动注入开发桥接插件
+- 基于 DevBridge 插件的热重载机制
+- 自动注入目标插件和开发桥接插件
 - 文件变化自动检测（使用 watchdog）
 - 插件生命周期自动管理
 - 实时状态显示和日志查看
-- 支持主程序自动启动和停止
+- 主程序退出时自动清理
+
+#### 5. ✅ 配置管理 (`mpdt config`)
+- 交互式配置向导 (`mpdt config init`)
+- 配置显示 (`mpdt config show`)
+- 配置验证 (`mpdt config test`)
+- MoFox 路径设置 (`mpdt config set-mofox`)
+- 虚拟环境设置 (`mpdt config set-venv`)
+- 支持多种虚拟环境类型（venv、uv、conda、poetry）
 
 ### 🚧 计划中功能
 
@@ -360,15 +452,15 @@ my_plugin/                   # 插件根目录
 - 测试报告输出
 
 #### 构建打包 (`mpdt build`)
-- 插件打包为发布格式
-- 版本号自动管理
+- 插件打包为发布格式（zip、tar.gz、wheel）
+- 版本号自动管理（major、minor、patch）
 - 依赖项打包
-- 多种打包格式支持
+- 文档包含选项
 
-#### 配置管理
-- 项目级配置文件 `.mpdtrc.toml`
-- 全局配置管理
-- 配置验证和迁移
+#### 插件市场集成
+- 插件上传和发布
+- 版本管理
+- 依赖解析
 
 ---
 
@@ -427,6 +519,7 @@ mypy mpdt
 ### 开发工具
 - **模板引擎**: [Jinja2](https://jinja.palletsprojects.com/) - 灵活的模板系统
 - **配置管理**: [TOML](https://toml.io/), [Pydantic](https://docs.pydantic.dev/) - 配置解析和验证
+- **代码解析**: [libcst](https://libcst.readthedocs.io/) - Python 具体语法树解析和修改
 - **代码检查**: 
   - [Mypy](https://mypy.readthedocs.io/) - 静态类型检查
   - [Ruff](https://docs.astral.sh/ruff/) - 快速的 Python 代码检查器和格式化工具
@@ -435,6 +528,55 @@ mypy mpdt
 - **文件监控**: [Watchdog](https://python-watchdog.readthedocs.io/) - 跨平台文件系统监控
 - **WebSocket**: [websockets](https://websockets.readthedocs.io/) - 异步 WebSocket 库
 - **HTTP 客户端**: [aiohttp](https://docs.aiohttp.org/) - 异步 HTTP 客户端/服务器
+
+## 🏗️ 项目结构
+
+```
+mofox-plugin-toolkit/
+├── mpdt/                          # 主包
+│   ├── __init__.py                # 版本信息
+│   ├── __main__.py                # 入口点
+│   ├── cli.py                     # CLI 主入口
+│   ├── commands/                  # 命令实现
+│   │   ├── init.py                # 插件初始化
+│   │   ├── generate.py            # 组件生成
+│   │   ├── check.py               # 静态检查
+│   │   └── dev.py                 # 开发模式
+│   ├── validators/                # 验证器
+│   │   ├── base.py                # 基础验证器
+│   │   ├── structure_validator.py # 结构验证
+│   │   ├── metadata_validator.py  # 元数据验证
+│   │   ├── component_validator.py # 组件验证
+│   │   ├── config_validator.py    # 配置验证
+│   │   ├── type_validator.py      # 类型检查
+│   │   ├── style_validator.py     # 代码风格
+│   │   └── auto_fix_validator.py  # 自动修复
+│   ├── templates/                 # 组件模板
+│   │   ├── action_template.py
+│   │   ├── tool_template.py
+│   │   ├── event_template.py
+│   │   ├── adapter_template.py
+│   │   ├── prompt_template.py
+│   │   ├── plus_command_template.py
+│   │   ├── router_template.py
+│   │   └── chatter_template.py
+│   ├── utils/                     # 工具函数
+│   │   ├── code_parser.py         # 代码解析
+│   │   ├── color_printer.py       # 彩色输出
+│   │   ├── config_loader.py       # 配置加载
+│   │   ├── config_manager.py      # 配置管理
+│   │   ├── file_ops.py            # 文件操作
+│   │   ├── license_generator.py   # 许可证生成
+│   │   ├── plugin_parser.py       # 插件解析
+│   │   └── template_engine.py     # 模板引擎
+│   └── dev/                       # 开发模式相关
+├── docs/                          # 文档
+├── examples/                      # 示例
+├── plugin_dev_toolkit_design/     # 设计文档
+├── pyproject.toml                 # 项目配置
+├── README.md                      # 说明文档
+└── LICENSE                        # 许可证
+```
 
 ---
 
@@ -452,6 +594,7 @@ dependencies = [
     "pydantic>=2.5.0",      # 数据验证
     "watchdog>=3.0.0",      # 文件监控
     "websockets>=12.0",     # WebSocket
+    "libcst>=1.8.6",        # Python CST 解析（代码智能注入）
     "aiohttp>=3.9.0",       # 异步 HTTP
     "uvicorn>=0.24.0",      # ASGI 服务器
     "fastapi>=0.104.0",     # Web 框架
@@ -465,7 +608,7 @@ dependencies = [
 ## 💡 常见问题
 
 ### Q: 如何配置开发模式？
-A: 首次运行 `mpdt dev` 时会提示输入 MoFox 主程序路径，配置会保存到 `~/.mpdt/config.toml`。
+A: 首次运行 `mpdt dev` 时会提示输入 MoFox 主程序路径，配置会保存到 `~/.mpdt/config.toml`。也可以使用 `mpdt config init` 进行交互式配置。
 
 ### Q: 检查器报错怎么办？
 A: 首先尝试使用 `mpdt check --fix` 自动修复。如果仍有问题，查看具体错误信息和建议。
@@ -479,13 +622,30 @@ A: 组件会自动放置到对应的目录，例如 Action 放在 `components/ac
 ### Q: 如何更新工具？
 A: 如果是从源码安装，执行 `git pull && pip install -e .`。
 
+### Q: 支持哪些虚拟环境类型？
+A: 支持 venv、uv、conda、poetry，也可以设置为 none 使用系统 Python。
+
+### Q: 开发模式如何工作？
+A: MPDT 会将 DevBridge 插件注入到主程序，该插件负责监控文件变化并自动热重载目标插件。主程序退出时会自动清理 DevBridge。
+
 ---
 
 ## 📝 更新日志
 
+### v0.3.3 (2026-01-02)
+- ✅ 更新项目文档
+- ✅ 完善配置管理功能
+- ✅ 优化代码结构
+
+### v0.3.x
+- ✅ 添加 libcst 代码解析支持
+- ✅ 实现自动修复验证器 (AutoFixValidator)
+- ✅ 支持 JSON 格式报告输出
+- ✅ 改进组件代码注入机制
+
 ### v0.2.1 (2025-12-14)
 - ✅ 实现完整的热重载开发模式 (`mpdt dev`)
-- ✅ 添加 WebSocket 通信机制
+- ✅ 添加 DevBridge 插件注入机制
 - ✅ 实现开发桥接插件自动注入
 - ✅ 改进文件监控和自动重载
 - ✅ 优化用户交互体验
