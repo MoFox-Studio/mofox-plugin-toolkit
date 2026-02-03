@@ -27,7 +27,7 @@ class MPDTConfig:
 
     def __init__(self, config_path: Path | None = None):
         """初始化配置管理器
-        
+
         Args:
             config_path: 配置文件路径，默认为 ~/.mpdt/config.toml
         """
@@ -131,7 +131,7 @@ class MPDTConfig:
 
     def get_python_command(self) -> list[str]:
         """获取 Python 启动命令
-        
+
         Returns:
             Python 命令列表，例如:
             - ["E:/venv/Scripts/python.exe"]
@@ -169,7 +169,7 @@ class MPDTConfig:
 
     def validate(self) -> tuple[bool, list[str]]:
         """验证配置
-        
+
         Returns:
             (是否有效, 错误消息列表)
         """
@@ -212,7 +212,7 @@ def get_default_config() -> MPDTConfig:
 
 def interactive_config() -> MPDTConfig:
     """交互式配置向导
-    
+
     Returns:
         配置好的 MPDTConfig 实例
     """
@@ -223,16 +223,13 @@ def interactive_config() -> MPDTConfig:
     console = Console()
     config = MPDTConfig()
 
-    console.print(Panel.fit(
-        "[bold cyan]MPDT 配置向导[/bold cyan]\n\n"
-        "让我们配置 MoFox 主程序的路径和虚拟环境"
-    ))
+    console.print(Panel.fit("[bold cyan]MPDT 配置向导[/bold cyan]\n\n让我们配置 MoFox 主程序的路径和虚拟环境"))
 
     # 配置 mofox 路径
     while True:
         mofox_path_str = Prompt.ask(
             "\n[bold]请输入 mofox 主程序路径[/bold]",
-            default=str(Path.cwd().parent / "mofox") if Path.cwd().parent.name != "mofox" else str(Path.cwd())
+            default=str(Path.cwd().parent / "mofox") if Path.cwd().parent.name != "mofox" else str(Path.cwd()),
         )
         mofox_path = Path(mofox_path_str).expanduser().absolute()
 
@@ -255,9 +252,7 @@ def interactive_config() -> MPDTConfig:
     # 配置虚拟环境
     console.print("\n[bold]虚拟环境配置[/bold]")
     venv_type_choice = Prompt.ask(
-        "请选择虚拟环境类型",
-        choices=["venv", "uv", "conda", "poetry", "none"],
-        default="venv"
+        "请选择虚拟环境类型", choices=["venv", "uv", "conda", "poetry", "none"], default="venv"
     )
     config.venv_type = venv_type_choice
 
@@ -266,16 +261,14 @@ def interactive_config() -> MPDTConfig:
             console.print("[cyan]使用 poetry，将在 mofox 目录中执行命令[/cyan]")
             config.venv_path = config.mofox_path
         else:
+            assert config.mofox_path is not None
             default_venv_path = str(config.mofox_path.parent / "venv")
             if venv_type_choice == "uv":
                 default_venv_path = str(config.mofox_path.parent / ".venv")
             elif venv_type_choice == "conda":
                 default_venv_path = str(config.mofox_path.parent / "conda_env")
 
-            venv_path_str = Prompt.ask(
-                f"请输入 {venv_type_choice} 虚拟环境路径",
-                default=default_venv_path
-            )
+            venv_path_str = Prompt.ask(f"请输入 {venv_type_choice} 虚拟环境路径", default=default_venv_path)
             venv_path = Path(venv_path_str).expanduser().absolute()
 
             if not venv_path.exists():

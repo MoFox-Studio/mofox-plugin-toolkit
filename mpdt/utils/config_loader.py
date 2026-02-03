@@ -14,7 +14,7 @@ class ConfigLoader:
     def __init__(self, config_path: Path | str | None = None):
         """
         初始化配置加载器
-        
+
         Args:
             config_path: 配置文件路径
         """
@@ -27,7 +27,7 @@ class ConfigLoader:
     def load(self) -> dict[str, Any]:
         """
         加载配置文件
-        
+
         Returns:
             配置字典
         """
@@ -40,13 +40,13 @@ class ConfigLoader:
     def get(self, key: str, default: Any = None) -> Any:
         """
         获取配置项
-        
+
         支持点号分隔的嵌套键，例如: "mpdt.check.level"
-        
+
         Args:
             key: 配置键
             default: 默认值
-            
+
         Returns:
             配置值
         """
@@ -64,7 +64,7 @@ class ConfigLoader:
     def set(self, key: str, value: Any) -> None:
         """
         设置配置项
-        
+
         Args:
             key: 配置键
             value: 配置值
@@ -82,7 +82,7 @@ class ConfigLoader:
     def save(self, path: Path | str | None = None) -> None:
         """
         保存配置到文件
-        
+
         Args:
             path: 保存路径，如果为 None 则使用初始化时的路径
         """
@@ -100,14 +100,14 @@ class ConfigLoader:
 def load_mpdt_config(project_dir: Path | str = ".") -> ConfigLoader:
     """
     加载 MPDT 配置文件
-    
+
     优先级:
     1. .mpdtrc.toml
     2. pyproject.toml 中的 [tool.mpdt] 部分
-    
+
     Args:
         project_dir: 项目目录
-        
+
     Returns:
         ConfigLoader 对象
     """
@@ -134,7 +134,7 @@ def load_mpdt_config(project_dir: Path | str = ".") -> ConfigLoader:
 def get_default_config() -> dict[str, Any]:
     """
     获取默认配置
-    
+
     Returns:
         默认配置字典
     """

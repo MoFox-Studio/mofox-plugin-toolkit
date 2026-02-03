@@ -9,10 +9,10 @@ from pathlib import Path
 def ensure_dir(path: Path | str) -> Path:
     """
     确保目录存在，如果不存在则创建
-    
+
     Args:
         path: 目录路径
-        
+
     Returns:
         Path 对象
     """
@@ -24,15 +24,15 @@ def ensure_dir(path: Path | str) -> Path:
 def safe_write_file(path: Path | str, content: str, force: bool = False) -> bool:
     """
     安全地写入文件
-    
+
     Args:
         path: 文件路径
         content: 文件内容
         force: 是否覆盖已存在的文件
-        
+
     Returns:
         是否写入成功
-        
+
     Raises:
         FileExistsError: 文件已存在且 force=False
     """
@@ -52,12 +52,12 @@ def safe_write_file(path: Path | str, content: str, force: bool = False) -> bool
 def copy_directory(src: Path | str, dst: Path | str, force: bool = False) -> bool:
     """
     复制整个目录
-    
+
     Args:
         src: 源目录
         dst: 目标目录
         force: 是否覆盖已存在的目录
-        
+
     Returns:
         是否复制成功
     """
@@ -77,11 +77,11 @@ def copy_directory(src: Path | str, dst: Path | str, force: bool = False) -> boo
 def list_python_files(path: Path | str, recursive: bool = True) -> list[Path]:
     """
     列出目录中的所有 Python 文件
-    
+
     Args:
         path: 目录路径
         recursive: 是否递归搜索
-        
+
     Returns:
         Python 文件路径列表
     """
@@ -96,32 +96,34 @@ def list_python_files(path: Path | str, recursive: bool = True) -> list[Path]:
 def validate_plugin_name(name: str) -> bool:
     """
     验证插件名称是否符合规范
-    
+
     规范: 使用小写字母、数字和下划线，以字母开头
-    
+
     Args:
         name: 插件名称
-        
+
     Returns:
         是否符合规范
     """
     import re
+
     return bool(re.match(r"^[a-z][a-z0-9_]*$", name))
 
 
 def validate_component_name(name: str) -> bool:
     """
     验证组件名称是否符合规范
-    
+
     规范: 支持 snake_case 或 PascalCase
-    
+
     Args:
         name: 组件名称
-        
+
     Returns:
         是否符合规范
     """
     import re
+
     # 支持 snake_case 或 PascalCase
     return bool(re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", name))
 
@@ -129,7 +131,7 @@ def validate_component_name(name: str) -> bool:
 def get_git_user_info() -> dict[str, str]:
     """
     从 git config 获取用户信息
-    
+
     Returns:
         包含 name 和 email 的字典
     """
@@ -143,8 +145,8 @@ def get_git_user_info() -> dict[str, str]:
             capture_output=True,
             text=True,
             check=False,
-            encoding='utf-8',
-            errors='ignore'
+            encoding="utf-8",
+            errors="ignore",
         )
         if name.returncode == 0:
             result["name"] = name.stdout.strip()
@@ -154,8 +156,8 @@ def get_git_user_info() -> dict[str, str]:
             capture_output=True,
             text=True,
             check=False,
-            encoding='utf-8',
-            errors='ignore'
+            encoding="utf-8",
+            errors="ignore",
         )
         if email.returncode == 0:
             result["email"] = email.stdout.strip()
@@ -201,7 +203,8 @@ def to_snake_case(pascal_str: str) -> str:
         'test_command_handler'
     """
     import re
+
     # 在大写字母前插入下划线
-    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', pascal_str)
+    s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", pascal_str)
     # 处理连续大写字母
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
