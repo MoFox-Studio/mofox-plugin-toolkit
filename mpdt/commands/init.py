@@ -662,7 +662,6 @@ def _generate_example_components(
                 plugin_name=plugin_name,
                 author=author or "",
                 description=comp_desc,
-                is_async=True,
             )
 
             # 渲染模板

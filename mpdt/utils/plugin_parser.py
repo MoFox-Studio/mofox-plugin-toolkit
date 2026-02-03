@@ -1,10 +1,11 @@
 """
 插件名称解析器
-使用 AST 解析插件文件，提取运行时插件名称
+使用统一的 CodeParser 解析插件文件，提取运行时插件名称
 """
 
-import ast
 from pathlib import Path
+
+from .code_parser import CodeParser
 
 
 def extract_plugin_name(plugin_path: Path) -> str | None:
@@ -26,41 +27,8 @@ def extract_plugin_name(plugin_path: Path) -> str | None:
         return None
 
     try:
-        with open(plugin_file, encoding="utf-8") as f:
-            source = f.read()
-
-        tree = ast.parse(source)
-
-        # 查找 BasePlugin 的子类
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                # 检查是否继承自 BasePlugin
-                is_base_plugin = False
-                for base in node.bases:
-                    if isinstance(base, ast.Name) and base.id == "BasePlugin":
-                        is_base_plugin = True
-                        break
-
-                if not is_base_plugin:
-                    continue
-
-                # 查找 plugin_name 属性
-                for item in node.body:
-                    # 处理普通赋值: plugin_name = "xxx"
-                    if isinstance(item, ast.Assign):
-                        for target in item.targets:
-                            if isinstance(target, ast.Name) and target.id == "plugin_name":
-                                if isinstance(item.value, ast.Constant):
-                                    return item.value.value
-
-                    # 处理带类型注解的赋值: plugin_name: str = "xxx"
-                    elif isinstance(item, ast.AnnAssign):
-                        if isinstance(item.target, ast.Name) and item.target.id == "plugin_name":
-                            if item.value and isinstance(item.value, ast.Constant):
-                                return item.value.value
-
-        return None
-
+        parser = CodeParser.from_file(plugin_file)
+        return parser.find_class_attribute(base_class="BasePlugin", attribute_name="plugin_name")
     except Exception:
         return None
 
@@ -99,48 +67,22 @@ def get_plugin_info(plugin_path: Path) -> dict:
     info["has_plugin_file"] = True
 
     try:
-        with open(plugin_file, encoding="utf-8") as f:
-            source = f.read()
-
-        tree = ast.parse(source)
+        parser = CodeParser.from_file(plugin_file)
 
         # 查找 BasePlugin 的子类
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                # 检查是否继承自 BasePlugin
-                is_base_plugin = False
-                for base in node.bases:
-                    if isinstance(base, ast.Name) and base.id == "BasePlugin":
-                        is_base_plugin = True
-                        break
+        classes = parser.find_class(base_class="BasePlugin")
 
-                if not is_base_plugin:
-                    continue
+        if classes:
+            # 获取第一个匹配的类
+            cls = classes[0]
+            info["class_name"] = cls.name.value
 
-                info["class_name"] = node.name
+            # 提取 plugin_name 属性
+            plugin_name = parser.find_class_attribute(base_class="BasePlugin", attribute_name="plugin_name")
 
-                # 查找 plugin_name 属性
-                for item in node.body:
-                    # 处理普通赋值: plugin_name = "xxx"
-                    if isinstance(item, ast.Assign):
-                        for target in item.targets:
-                            if isinstance(target, ast.Name) and target.id == "plugin_name":
-                                if isinstance(item.value, ast.Constant):
-                                    info["plugin_name"] = item.value.value
-                                    info["parse_success"] = True
-                                    break
-
-                    # 处理带类型注解的赋值: plugin_name: str = "xxx"
-                    elif isinstance(item, ast.AnnAssign):
-                        if isinstance(item.target, ast.Name) and item.target.id == "plugin_name":
-                            if item.value and isinstance(item.value, ast.Constant):
-                                info["plugin_name"] = item.value.value
-                                info["parse_success"] = True
-                                break
-
-                # 找到 BasePlugin 子类后跳出
-                if info["class_name"]:
-                    break
+            if plugin_name:
+                info["plugin_name"] = plugin_name
+                info["parse_success"] = True
 
         return info
 

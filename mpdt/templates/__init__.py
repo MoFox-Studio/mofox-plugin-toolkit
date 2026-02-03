@@ -69,7 +69,6 @@ def prepare_component_context(
     plugin_name: str,
     author: str = "",
     description: str = "",
-    is_async: bool = False,
 ) -> dict[str, str]:
     """
     准备组件模板上下文
@@ -116,8 +115,8 @@ def prepare_component_context(
         "author": author,
         "description": description or f"{class_name} 组件",
         "date": date,
-        "async_keyword": "async " if is_async else "",
-        "await_keyword": "await " if is_async else "",
+        "async_keyword": "async " ,
+        "await_keyword": "await ",
         "component_type": component_type + "s",  # actions, tools, etc.
         "module_name": component_name,
         "method_name": _get_method_name(component_type),

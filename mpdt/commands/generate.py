@@ -97,7 +97,6 @@ def generate_component(
         plugin_name=plugin_name,
         author=git_info.get("name", ""),
         description=description or f"{component_name} 组件",
-        is_async=True,  # 始终生成异步方法
     )
 
     # 生成组件文件
