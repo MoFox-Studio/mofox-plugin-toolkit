@@ -9,10 +9,11 @@ from datetime import datetime
 from mpdt.templates.action_template import get_action_template
 from mpdt.templates.adapter_template import get_adapter_template
 from mpdt.templates.chatter_template import get_chatter_template
+from mpdt.templates.config_template import get_config_template
 from mpdt.templates.event_template import get_event_handler_template
 from mpdt.templates.plus_command_template import get_plus_command_template
-from mpdt.templates.prompt_template import get_prompt_template
 from mpdt.templates.router_template import get_router_template
+from mpdt.templates.service_template import get_service_template
 from mpdt.templates.tool_template import get_tool_template
 
 # 导出所有模板获取函数
@@ -21,10 +22,11 @@ __all__ = [
     "get_tool_template",
     "get_event_handler_template",
     "get_adapter_template",
-    "get_prompt_template",
     "get_plus_command_template",
     "get_chatter_template",
     "get_router_template",
+    "get_service_template",
+    "get_config_template",
     "get_component_template",
     "prepare_component_context",
 ]
@@ -48,7 +50,6 @@ def get_component_template(component_type: str) -> str:
         "tool": get_tool_template,
         "event": get_event_handler_template,
         "adapter": get_adapter_template,
-        "prompt": get_prompt_template,
         "plus_command": get_plus_command_template,
         "chatter": get_chatter_template,
         "router": get_router_template,
@@ -74,7 +75,7 @@ def prepare_component_context(
     准备组件模板上下文
 
     Args:
-        component_type: 组件类型 (action, tool, event, adapter, prompt, plus_command,router,chatter)
+        component_type: 组件类型 (action, tool, event, adapter, plus_command, router, chatter, service, config)
         component_name: 组件名称 (snake_case)
         plugin_name: 插件名称
         author: 作者
@@ -99,6 +100,8 @@ def prepare_component_context(
         "plus_command": "PlusCommand",
         "chatter": "Chatter",
         "router": "Router",
+        "service": "Service",
+        "config": "Config",
     }
 
     suffix = suffix_map.get(component_type, "")
@@ -137,6 +140,10 @@ def prepare_component_context(
         context["chatter_name"] = component_name
     elif component_type == "router":
         context["router_name"] = component_name
+    elif component_type == "service":
+        context["service_name"] = component_name
+    elif component_type == "config":
+        context["config_name"] = component_name
 
     return context
 

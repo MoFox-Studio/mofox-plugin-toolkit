@@ -1,5 +1,13 @@
 """
 初始化命令实现
+
+代码结构：
+1. 主入口函数 - 插件初始化的核心逻辑
+2. 交互式处理 - 用户交互相关函数
+3. 目录结构创建 - 创建插件文件和目录
+4. 文件内容生成器 - 各类配置和代码文件的生成
+5. Git 仓库管理 - Git 初始化相关
+6. 工具函数 - 辅助函数和转换工具
 """
 
 from pathlib import Path
@@ -17,6 +25,11 @@ from mpdt.utils.color_printer import (
 )
 from mpdt.utils.file_ops import ensure_dir, get_git_user_info, safe_write_file, validate_plugin_name
 from mpdt.utils.license_generator import get_license_text
+
+
+# ============================================================================
+# 主入口函数
+# ============================================================================
 
 
 def init_plugin(
@@ -132,6 +145,11 @@ def init_plugin(
     print_panel("📝 下一步", next_steps, style="cyan")
 
 
+# ============================================================================
+# 交互式处理
+# ============================================================================
+
+
 def _interactive_init() -> dict[str, Any]:
     """交互式初始化"""
     console.print("\n[bold cyan]🚀 欢迎使用 MPDT 插件初始化向导[/bold cyan]\n")
@@ -176,6 +194,11 @@ def _interactive_init() -> dict[str, Any]:
             "初始化 Git 仓库?",
             default=True,
         ),
+# ============================================================================
+# 目录结构创建
+# ============================================================================
+
+
     ).ask()
 
     return answers
@@ -195,15 +218,15 @@ def _create_plugin_structure(
     # 创建主目录
     ensure_dir(plugin_dir)
 
-    # 创建根目录下的 __init__.py (给 MoFox-Plugin-Repo读取)
-    root_init_content = _generate_init_file(plugin_name, author, license_type)
-    safe_write_file(plugin_dir / "__init__.py", root_init_content)
-
     # 创建插件代码子目录
     plugin_code_dir = ensure_dir(plugin_dir / plugin_name)
 
-    # 创建插件代码目录下的 __init__.py (给插件系统读取，内容与根目录的相同)
-    safe_write_file(plugin_code_dir / "__init__.py", root_init_content)
+    # 创建 manifest.json
+    manifest_content = _generate_manifest_file(plugin_name, author, template)
+    safe_write_file(plugin_code_dir / "manifest.json", manifest_content)
+    safe_write_file(plugin_dir / "manifest.json", manifest_content)
+    if verbose:
+        console.print("[dim]✓ 生成清单文件: manifest.json[/dim]")
 
     # 创建 plugin.py
     plugin_content = _generate_plugin_file(plugin_name, template)
@@ -213,7 +236,7 @@ def _create_plugin_structure(
     components_dir = ensure_dir(plugin_code_dir / "components")
     safe_write_file(components_dir / "__init__.py", '"""\n组件模块\n"""\n')
 
-    for comp_type in ["actions", "plus_command", "tools", "events"]:
+    for comp_type in ["actions", "plus_command", "tools", "events", "configs", "services", "adapters", "chatters", "routers"]:
         comp_dir = ensure_dir(components_dir / comp_type)
         safe_write_file(comp_dir / "__init__.py", f'"""\n{comp_type.title()} 组件\n"""\n')
 
@@ -253,52 +276,76 @@ def _create_plugin_structure(
         console.print(f"[dim]✓ 生成许可证文件: {license_type}[/dim]")
 
 
-def _generate_init_file(plugin_name: str, author: str | None, license_type: str) -> str:
-    """生成 __init__.py 文件内容"""
-    from mpdt.utils.template_engine import prepare_common_context
+def _generate_manifest_file(plugin_name: str, author: str | None, template: str, description: str = "") -> str:
+    """生成 manifest.json 文件内容
 
-    context = prepare_common_context(
-        plugin_name=plugin_name,
-        author=author or "",
-        license=license_type,
-    )
+    Args:
+        plugin_name: 插件名称
+        author: 作者
+        template: 模板类型
+        description: 插件描述
 
-    return f'''"""
-{plugin_name} - MoFox-Bot Plugin
+    Returns:
+        manifest.json 的内容字符串
+    """
+    import json
 
-Author: {context['author']}
-License: {context['license']}
-"""
+    # 根据模板类型生成组件列表
+    template_components = {
+        "basic": [{"component_type": "config", "component_name": "config", "dependencies": []}],
+        "action": [
+            {"component_type": "config", "component_name": "config", "dependencies": []},
+            {"component_type": "action", "component_name": "example_action", "dependencies": []},
+        ],
+        "tool": [
+            {"component_type": "config", "component_name": "config", "dependencies": []},
+            {"component_type": "tool", "component_name": "example_tool", "dependencies": []},
+        ],
+        "plus_command": [
+            {"component_type": "config", "component_name": "config", "dependencies": []},
+            {"component_type": "plus_command", "component_name": "example_command", "dependencies": []},
+        ],
+        "adapter": [
+            {"component_type": "config", "component_name": "config", "dependencies": []},
+            {"component_type": "adapter", "component_name": "example_adapter", "dependencies": []},
+        ],
+        "full": [
+            {"component_type": "config", "component_name": "config", "dependencies": []},
+            {"component_type": "action", "component_name": "example_action", "dependencies": []},
+            {"component_type": "tool", "component_name": "example_tool", "dependencies": []},
+            {"component_type": "plus_command", "component_name": "example_command", "dependencies": []},
+            {"component_type": "event_handler", "component_name": "example_event", "dependencies": []},
+            {"component_type": "service", "component_name": "example_service", "dependencies": []},
+        ],
+    }
 
-from src.plugin_system.base.plugin_metadata import PluginMetadata
+    manifest = {
+        "name": plugin_name,
+        "version": "1.0.0",
+        "description": description or f"{plugin_name} 插件",
+        "author": author or "Your Name",
+        "dependencies": {"plugins": [], "components": []},
+        "include": template_components.get(template, []),
+        "entry_point": "plugin.py",
+        "min_core_version": "1.0.0",
+    }
 
-__plugin_meta__ = PluginMetadata(
-    name="{plugin_name}",
-    description="插件描述",
-    usage="该插件提供 XXX 功能",
-    version="1.0.0",
-    author="{context['author']}",
-    license="{context['license']}",
-    repository_url="https://github.com/{context['author']}/{plugin_name}",
-    keywords=[],
-    categories=[],
-    extra={{"is_built_in": False}},
-)
-'''
+    return json.dumps(manifest, ensure_ascii=False, indent=4)
 
 
 def _generate_plugin_file(plugin_name: str, template: str) -> str:
-    """生成 plugin.py 文件内容"""
+    """生成 plugin.py 文件内容（适配 Neo-MoFox 架构）"""
 
-    # 根据模板类型生成导入语句和组件注册
-    imports, component_registrations = _get_component_imports_and_registrations(plugin_name, template)
+    # 根据模板类型生成导入语句和组件类列表
+    imports, component_list = _get_component_imports_and_list(plugin_name, template)
 
     return f'''"""
 {plugin_name} 插件主类
 """
 
-from src.common.logger import get_logger
-from src.plugin_system import BasePlugin, ComponentInfo, register_plugin
+from src.app.plugin_system.api.log_api import get_logger
+from src.core.components.base import BasePlugin
+from src.core.components.loader import register_plugin
 {imports}
 logger = get_logger("{plugin_name}")
 
@@ -309,92 +356,84 @@ class {_to_pascal_case(plugin_name)}Plugin(BasePlugin):
     {plugin_name} 插件
     """
 
-    plugin_name: str = "{plugin_name}"
-    enable_plugin: bool = True
-    dependencies: list[str] = []
-    config_file_name: str = "config.toml"
-    config_schema: dict = {{}}
+    plugin_name = "{plugin_name}"
+    plugin_version = "1.0.0"
+    plugin_author = "Your Name"
+    plugin_description = "{plugin_name} 插件"
+    config = [config]
 
-    def get_plugin_components(self) -> list[tuple[ComponentInfo, type]]:
-        """
-        获取插件包含的组件列表
+    def get_components(self) -> list[type]:
+        """获取插件内所有组件类
 
         Returns:
-            组件信息和组件类的列表
+            list[type]: 插件内所有组件类的列表
         """
-        components = []
-
-{component_registrations}
-        return components
+        return [{component_list}]
 '''
 
 
-def _get_component_imports_and_registrations(plugin_name: str, template: str) -> tuple[str, str]:
+def _get_component_imports_and_list(plugin_name: str, template: str) -> tuple[str, str]:
     """
-    根据模板类型获取组件导入语句和注册代码
+    根据模板类型获取组件导入语句和组件类列表（适配 Neo-MoFox 架构）
 
     Args:
         plugin_name: 插件名称
         template: 模板类型
 
     Returns:
-        (导入语句, 组件注册代码)
+        (导入语句, 组件类列表字符串)
     """
     # 模板类型与组件配置的映射
-    # (组件类型, 模块名, 类名, 目录名, 获取info的方法名)
+    # (组件类型, 模块名, 类名, 目录名)
     template_components = {
         "basic": [],
         "action": [
-            ("action", "example_action", "ExampleActionAction", "actions", "get_action_info"),
+            ("action", "example_action", "ExampleActionAction", "actions"),
         ],
         "tool": [
-            ("tool", "example_tool", "ExampleToolTool", "tools", "get_tool_info"),
+            ("tool", "example_tool", "ExampleToolTool", "tools"),
         ],
         "plus_command": [
-            ("plus_command", "example_command", "ExampleCommandPlusCommand", "plus_command", "get_plus_command_info"),
+            ("plus_command", "example_command", "ExampleCommandPlusCommand", "plus_command"),
         ],
         "adapter": [
-            ("adapter", "example_adapter", "ExampleAdapterAdapter", "adapters", "get_adapter_info"),
+            ("adapter", "example_adapter", "ExampleAdapterAdapter", "adapters"),
         ],
         "full": [
-            ("action", "example_action", "ExampleActionAction", "actions", "get_action_info"),
-            ("tool", "example_tool", "ExampleToolTool", "tools", "get_tool_info"),
-            ("plus_command", "example_command", "ExampleCommandPlusCommand", "plus_command", "get_plus_command_info"),
-            ("event", "example_event", "ExampleEventEventHandler", "events", "get_handler_info"),
+            ("action", "example_action", "ExampleActionAction", "actions"),
+            ("tool", "example_tool", "ExampleToolTool", "tools"),
+            ("plus_command", "example_command", "ExampleCommandPlusCommand", "plus_command"),
+            ("event_handler", "example_event", "ExampleEventEventHandler", "events"),
         ],
     }
 
     components = template_components.get(template, [])
 
     if not components:
-        return "", "        # TODO: 在这里添加你的组件\n"
+        return "", ""
 
     # 生成导入语句
     import_lines = []
-    for comp_type, module_name, class_name, folder, _ in components:
-        import_lines.append(
-            f"from {plugin_name}.components.{folder}.{module_name} import {class_name}"
-        )
+    for (
+        comp_type,
+        module_name,
+        class_name,
+        folder,
+    ) in components:
+        import_lines.append(f"from {plugin_name}.components.{folder}.{module_name} import {class_name}")
 
-    imports = "\n" + "\n".join(import_lines) + "\n"
+    imports = "\n" + "\n".join(import_lines) + "\n" if import_lines else ""
 
-    # 生成组件注册代码
-    registration_lines = []
-    for comp_type, module_name, class_name, folder, info_method in components:
-        comp_type_display = comp_type.replace("_", " ").title()
-        registration_lines.append(
-            f"        # 注册 {comp_type_display} 组件\n"
-            f"        components.append(({class_name}.{info_method}(), {class_name}))\n"
-        )
+    # 生成组件类列表
+    class_names = [class_name for _, _, class_name, _ in components]
+    component_list = ", ".join(class_names) if class_names else ""
 
-    registrations = "\n".join(registration_lines)
-
-    return imports, registrations
+    return imports, component_list
 
 
 def _generate_readme_file(plugin_name: str) -> str:
     """生成 docs/README.md 文件内容"""
-    return f'''# {plugin_name} 文档
+    return f"""# {plugin_name} 文档
 
 ## 功能说明
 
@@ -407,7 +446,7 @@ TODO: 说明使用方法
 ## API 参考
 
 TODO: API 文档
-'''
+"""
 
 
 def _generate_pyproject_file(plugin_name: str, author: str | None, license_type: str) -> str:
@@ -417,7 +456,7 @@ name = "{plugin_name}"
 version = "1.0.0"
 description = "MoFox-Bot 插件"
 authors = [
-    {{name = "{author or 'Your Name'}", email = "your.email@example.com"}}
+    {{name = "{author or "Your Name"}", email = "your.email@example.com"}}
 ]
 license = {{text = "{license_type}"}}
 requires-python = ">=3.11"
@@ -428,7 +467,7 @@ dependencies = []
 
 def _generate_main_readme_file(plugin_name: str, license_type: str = "GPL-v3.0") -> str:
     """生成主 README.md 文件内容"""
-    return f'''# {plugin_name}
+    return f"""# {plugin_name}
 
 MoFox-Bot 插件
 
@@ -460,7 +499,7 @@ mpdt test
 ## 许可证
 
 本项目基于 {license_type} 许可证开源,详见 [LICENSE](./LICENSE) 文件。
-'''
+"""
 
 
 def _to_pascal_case(snake_str: str) -> str:
@@ -522,8 +561,8 @@ def _init_git_repository(plugin_dir: Path, verbose: bool) -> None:
             check=True,
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            errors='ignore'
+            encoding="utf-8",
+            errors="ignore",
         )
 
         # 创建 .gitignore 文件
@@ -578,12 +617,7 @@ config/local_*.toml
 
         # 执行初始提交
         subprocess.run(
-            ["git", "add", "."],
-            cwd=plugin_dir,
-            check=True,
-            capture_output=True,
-            encoding='utf-8',
-            errors='ignore'
+            ["git", "add", "."], cwd=plugin_dir, check=True, capture_output=True, encoding="utf-8", errors="ignore"
         )
 
         subprocess.run(
@@ -591,8 +625,8 @@ config/local_*.toml
             cwd=plugin_dir,
             check=True,
             capture_output=True,
-            encoding='utf-8',
-            errors='ignore'
+            encoding="utf-8",
+            errors="ignore",
         )
 
         if verbose:
@@ -626,16 +660,30 @@ def _generate_example_components(
 
     # 模板类型与组件类型的映射
     template_component_map = {
-        "basic": [],  # 基础模板不生成示例
-        "action": [("action", "example_action", "示例 Action 组件")],
-        "tool": [("tool", "example_tool", "示例 Tool 组件")],
-        "plus_command": [("plus_command", "example_command", "示例 PlusCommand 组件")],
-        "adapter": [("adapter", "example_adapter", "示例 Adapter 组件")],
+        "basic": [("config", "config", "插件配置")],  # 基础模板至少生成config
+        "action": [
+            ("config", "config", "插件配置"),
+            ("action", "example_action", "示例 Action 组件"),
+        ],
+        "tool": [
+            ("config", "config", "插件配置"),
+            ("tool", "example_tool", "示例 Tool 组件"),
+        ],
+        "plus_command": [
+            ("config", "config", "插件配置"),
+            ("plus_command", "example_command", "示例 PlusCommand 组件"),
+        ],
+        "adapter": [
+            ("config", "config", "插件配置"),
+            ("adapter", "example_adapter", "示例 Adapter 组件"),
+        ],
         "full": [
+            ("config", "config", "插件配置"),
             ("action", "example_action", "示例 Action 组件"),
             ("tool", "example_tool", "示例 Tool 组件"),
             ("plus_command", "example_command", "示例 PlusCommand 组件"),
             ("event", "example_event", "示例 Event 组件"),
+            ("service", "example_service", "示例 Service 组件"),
         ],
     }
 
@@ -646,6 +694,10 @@ def _generate_example_components(
         "plus_command": "plus_command",
         "event": "events",
         "adapter": "adapters",
+        "service": "services",
+        "config": "configs",
+        "chatter": "chatters",
+        "router": "routers",
     }
 
     components_to_create = template_component_map.get(template, [])

@@ -1,5 +1,5 @@
 """
-Tool 组件模板
+Tool 组件模板（Neo-MoFox 架构）
 """
 
 TOOL_TEMPLATE = '''"""
@@ -9,10 +9,10 @@ Created by: {author}
 Created at: {date}
 """
 
-from typing import Any
+from typing import Annotated, Any
 
-from src.common.logger import get_logger
-from src.plugin_system import BaseTool, ToolParamType
+from src.app.plugin_system.api.log_api import get_logger
+from src.core.components.base import BaseTool
 
 logger = get_logger(__name__)
 
@@ -21,50 +21,45 @@ class {class_name}(BaseTool):
     """
     {description}
 
-    Tool 组件可以被 LLM 调用来执行特定功能。
+    Tool 提供特定的功能接口供 LLM 调用。
+    与 Action 不同，Tool 侧重于"查询"功能而非"响应"动作。
     """
 
-    # Tool 元数据
-    name: str = "{tool_name}"
-    description: str = "{description}"
-    available_for_llm: bool = True  # 是否可供 LLM 使用
+    tool_name = "{component_name}"
+    tool_description = "{description}"
 
-    # 定义工具参数
-    # 格式: [("参数名", 参数类型, "参数描述", 是否必填, 枚举值列表)]
-    parameters = [
-        ("query", ToolParamType.STRING, "查询内容", True, None),
-        ("limit", ToolParamType.INTEGER, "返回结果数量限制", False, None),
-        ("format", ToolParamType.STRING, "输出格式", False, ["json", "text", "markdown"]),
-    ]
-
-    # 缓存配置（可选）
-    enable_cache: bool = False  # 是否启用缓存
-    cache_ttl: int = 3600  # 缓存过期时间（秒）
-
-    async def execute(self, function_args: dict[str, Any]) -> dict[str, Any]:
+    async def execute(
+        self,
+        query: Annotated[str, "查询内容"],
+        limit: Annotated[int, "返回结果数量限制"] = 10,
+    ) -> tuple[bool, str | dict]:
         """
-        执行工具功能（供 LLM 调用）
+        执行工具的主要逻辑
+
+        必须编写参数文档来告诉 LLM 每个参数的作用。
+        使用 Annotated 类型提示来提供参数描述。
 
         Args:
-            function_args: LLM 传入的参数，格式符合 parameters 定义
+            query: 查询内容
+            limit: 返回结果数量限制，默认10
 
         Returns:
-            执行结果字典
+            tuple[bool, str | dict]: (是否成功, 返回结果)
+
+        Examples:
+            >>> success, result = await tool.execute("搜索内容", limit=5)
+            >>> if success:
+            ...     print(result)
         """
         try:
-            logger.info(f"执行 Tool: {{self.name}}")
-            logger.debug(f"参数: {{function_args}}")
-
-            # 获取参数
-            query = function_args.get("query")
-            limit = function_args.get("limit", 10)
-            output_format = function_args.get("format", "text")
+            logger.info(f"执行 Tool: {{self.tool_name}}")
+            logger.debug(f"查询: {{query}}, 限制: {{limit}}")
 
             # TODO: 实现工具的核心逻辑
-            result_data = self._process_query(query, limit)
+            result_data = await self._process_query(query, limit)
 
-            # 格式化返回结果
-            return {{
+            # 返回结果（可以是字符串或字典）
+            return True, {{
                 "status": "success",
                 "data": result_data,
                 "message": "执行成功"
@@ -72,12 +67,9 @@ class {class_name}(BaseTool):
 
         except Exception as e:
             logger.error(f"Tool 执行失败: {{e}}")
-            return {{
-                "status": "error",
-                "message": str(e)
-            }}
+            return False, f"执行失败: {{e}}"
 
-    def _process_query(self, query: str, limit: int) -> Any:
+    async def _process_query(self, query: str, limit: int) -> Any:
         """
         处理查询的核心逻辑
 
@@ -86,10 +78,10 @@ class {class_name}(BaseTool):
             limit: 结果数量限制
 
         Returns:
-            处理结果
+            Any: 查询结果
         """
-        # TODO: 实现具体的处理逻辑
-        return {{"query": query, "count": limit}}
+        # TODO: 实现查询逻辑
+        return {{"query": query, "limit": limit, "results": []}}
 '''
 
 

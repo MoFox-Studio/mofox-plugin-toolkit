@@ -1,5 +1,5 @@
 """
-Router 组件模板
+Router 组件模板（Neo-MoFox 架构）
 """
 
 ROUTER_TEMPLATE = '''"""
@@ -9,14 +9,14 @@ Created by: {author}
 Created at: {date}
 """
 
-from fastapi import APIRouter, HTTPException
-from src.common.logger import get_logger
-from src.plugin_system import BaseRouterComponent
+from fastapi import HTTPException
+from src.app.plugin_system.api.log_api import get_logger
+from src.core.components.base import BaseRouter
 
 logger = get_logger(__name__)
 
 
-class {class_name}(BaseRouterComponent):
+class {class_name}(BaseRouter):
     """
     {description}
 
@@ -29,30 +29,30 @@ class {class_name}(BaseRouterComponent):
     - 与外部系统集成
     """
 
-    # Router 元数据
-    component_name: str = "{router_name}"
-    component_description: str = "{description}"
-    component_version: str = "1.0.0"
+    router_name = "{component_name}"
+    router_description = "{description}"
+    custom_route_path = "/api/{component_name}"  # 自定义路由路径
+    cors_origins = ["*"]  # CORS 配置，None 表示禁用 CORS
 
     def register_endpoints(self) -> None:
         """
         注册 HTTP 端点
 
-        使用 self.router 来添加路由:
-        - @self.router.get("/path")
-        - @self.router.post("/path")
-        - @self.router.put("/path")
-        - @self.router.delete("/path")
+        使用 self.app 来添加路由:
+        - @self.app.get("/path")
+        - @self.app.post("/path")
+        - @self.app.put("/path")
+        - @self.app.delete("/path")
         """
 
-        @self.router.get("/hello")
+        @self.app.get("/hello")
         async def hello():
             """
             示例 GET 端点
             """
-            return {{"message": "Hello from {{self.component_name}}"}}
+            return {{"message": f"Hello from {{self.router_name}}"}}
 
-        @self.router.get("/status")
+        @self.app.get("/status")
         async def get_status():
             """
             获取状态
@@ -61,14 +61,13 @@ class {class_name}(BaseRouterComponent):
                 # TODO: 实现状态检查逻辑
                 return {{
                     "status": "ok",
-                    "component": self.component_name,
-                    "version": self.component_version
+                    "router": self.router_name,
                 }}
             except Exception as e:
                 logger.error(f"获取状态失败: {{e}}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.router.post("/webhook")
+        @self.app.post("/webhook")
         async def webhook(data: dict):
             """
             Webhook 接收端点
@@ -80,17 +79,16 @@ class {class_name}(BaseRouterComponent):
                 logger.info(f"收到 webhook 数据: {{data}}")
 
                 # TODO: 处理 webhook 数据
-                result = await self._process_webhook(data)
 
                 return {{
                     "success": True,
-                    "result": result
+                    "message": "Webhook received"
                 }}
             except Exception as e:
                 logger.error(f"处理 webhook 失败: {{e}}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.router.get("/data/{{item_id}}")
+        @self.app.get("/data/{{item_id}}")
         async def get_item(item_id: str):
             """
             获取指定项目
@@ -99,74 +97,15 @@ class {class_name}(BaseRouterComponent):
                 item_id: 项目ID
             """
             try:
+                logger.info(f"获取项目: {{item_id}}")
                 # TODO: 实现获取逻辑
-                item = await self._get_item(item_id)
-                if not item:
-                    raise HTTPException(status_code=404, detail="Item not found")
-                return item
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"获取项目失败: {{e}}")
-                raise HTTPException(status_code=500, detail=str(e))
-
-        @self.router.post("/data")
-        async def create_item(data: dict):
-            """
-            创建新项目
-
-            Args:
-                data: 项目数据
-            """
-            try:
-                # TODO: 实现创建逻辑
-                result = await self._create_item(data)
                 return {{
-                    "success": True,
-                    "item_id": result
+                    "item_id": item_id,
+                    "data": "example data"
                 }}
             except Exception as e:
-                logger.error(f"创建项目失败: {{e}}")
-                raise HTTPException(status_code=500, detail=str(e))
-
-    async def _process_webhook(self, data: dict) -> dict:
-        """
-        处理 webhook 数据
-
-        Args:
-            data: webhook 数据
-
-        Returns:
-            处理结果
-        """
-        # TODO: 实现 webhook 处理逻辑
-        return {{"processed": True}}
-
-    async def _get_item(self, item_id: str) -> dict | None:
-        """
-        获取项目
-
-        Args:
-            item_id: 项目ID
-
-        Returns:
-            项目数据或 None
-        """
-        # TODO: 实现获取逻辑
-        return {{"id": item_id, "name": "示例项目"}}
-
-    async def _create_item(self, data: dict) -> str:
-        """
-        创建项目
-
-        Args:
-            data: 项目数据
-
-        Returns:
-            新项目ID
-        """
-        # TODO: 实现创建逻辑
-        return "new_item_id"
+                logger.error(f"获取项目失败: {{e}}")
+                raise HTTPException(status_code=404, detail=str(e))
 '''
 
 

@@ -9,7 +9,6 @@ import libcst as cst
 import questionary
 
 from mpdt.templates import prepare_component_context
-from mpdt.utils.code_parser import CodeParser
 from mpdt.utils.color_printer import (
     console,
     print_error,
@@ -24,7 +23,41 @@ from mpdt.utils.file_ops import (
     to_snake_case,
     validate_component_name,
 )
-from mpdt.utils.plugin_parser import extract_plugin_name
+
+# =============================================================================
+# 常量定义
+# =============================================================================
+
+# 组件类型到目录名的映射(统一管理)
+COMPONENT_DIR_MAP = {
+    "action": "actions",
+    "tool": "tools",
+    "plus_command": "plus_command",
+    "event": "events",
+    "adapter": "adapters",
+    "chatter": "chatters",
+    "router": "routers",
+    "service": "services",
+    "config": "configs",
+}
+
+# 组件类型到模板 key 的映射
+COMPONENT_TYPE_MAP = {
+    "action": "action",
+    "tool": "tool",
+    "event": "event",
+    "adapter": "adapter",
+    "plus_command": "plus_command",
+    "chatter": "chatter",
+    "router": "router",
+    "service": "service",
+    "config": "config",
+}
+
+
+# =============================================================================
+# 主入口函数
+# =============================================================================
 
 
 def generate_component(
@@ -135,6 +168,11 @@ def generate_component(
     console.print("  3. 运行 mpdt test 测试功能")
 
 
+# =============================================================================
+# 交互式界面
+# =============================================================================
+
+
 def _interactive_generate() -> dict[str, Any]:
     """交互式生成组件"""
     console.print("\n[bold cyan]🔧 组件生成向导[/bold cyan]\n")
@@ -147,10 +185,11 @@ def _interactive_generate() -> dict[str, Any]:
                 questionary.Choice("Tool 组件", value="tool"),
                 questionary.Choice("Event 事件", value="event"),
                 questionary.Choice("Adapter 适配器", value="adapter"),
-                questionary.Choice("Prompt 提示词", value="prompt"),
                 questionary.Choice("Plus Command 命令", value="plus-command"),
                 questionary.Choice("Chatter 聊天组件", value="chatter"),
                 questionary.Choice("Router 路由组件", value="router"),
+                questionary.Choice("Service 服务", value="service"),
+                questionary.Choice("Config 配置", value="config"),
             ],
         ),
         component_name=questionary.text(
@@ -177,6 +216,11 @@ def _interactive_generate() -> dict[str, Any]:
     return answers
 
 
+# =============================================================================
+# 插件检测
+# =============================================================================
+
+
 def _detect_plugin_name(work_dir: Path) -> str | None:
     """
     检测插件名称
@@ -198,6 +242,11 @@ def _detect_plugin_name(work_dir: Path) -> str | None:
 
     # 从目录名推断插件名
     return work_dir.name
+
+
+# =============================================================================
+# 组件文件生成
+# =============================================================================
 
 
 def _generate_component_file(
@@ -226,13 +275,14 @@ def _generate_component_file(
     """
     # 确定组件目录
     if use_components_folder:
-        component_dir = work_dir / "components" / f"{component_type}s"
+        dir_name = COMPONENT_DIR_MAP.get(component_type, f"{component_type}s")
+        component_dir = work_dir / "components" / dir_name
         ensure_dir(component_dir)
 
         # 确保 __init__.py 存在
         init_file = component_dir / "__init__.py"
         if not init_file.exists():
-            safe_write_file(init_file, f'"""\n{component_type.title()}s 组件\n"""\n')
+            safe_write_file(init_file, f'"""\n{dir_name.title()} 组件\n"""\n')
     else:
         # 在插件根目录生成
         component_dir = work_dir
@@ -240,24 +290,14 @@ def _generate_component_file(
     # 生成组件文件
     component_file = component_dir / f"{component_name}.py"
 
-
-    # 组件类型到模板 key 的映射（此时 component_type 已经是标准化的下划线格式）
-    type_map = {
-        "action": "action",
-        "tool": "tool",
-        "event": "event",
-        "adapter": "adapter",
-        "prompt": "prompt",
-        "plus_command": "plus_command",
-        "chatter":"chatter",
-        "router":"router"
-    }
-    template_key = type_map.get(component_type)
+    # 获取模板 key
+    template_key = COMPONENT_TYPE_MAP.get(component_type)
     if not template_key:
         print_error(f"不支持的组件类型: {component_type}")
         return None
 
     from mpdt.templates import get_component_template
+
     template = get_component_template(template_key)
     content = template.format(**context)
 
@@ -275,7 +315,70 @@ def _generate_component_file(
         return None
 
 
-def _update_plugin_registration(
+# =============================================================================
+# 插件注册更新
+# =============================================================================
+
+
+def _update_manifest_json(
+    work_dir: Path,
+    component_type: str,
+    component_name: str,
+    verbose: bool,
+) -> bool:
+    """
+    更新 manifest.json 文件，添加新组件
+
+    Args:
+        work_dir: 工作目录
+        component_type: 组件类型
+        component_name: 组件名称
+        verbose: 详细输出
+
+    Returns:
+        是否更新成功
+    """
+    import json
+
+    manifest_file = work_dir / "manifest.json"
+    if not manifest_file.exists():
+        if verbose:
+            console.print("[dim yellow]⚠ 未找到 manifest.json 文件[/dim yellow]")
+        return False
+
+    try:
+        # 读取现有 manifest
+        with open(manifest_file, encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        # 检查组件是否已存在
+        include_list = manifest.get("include", [])
+        for item in include_list:
+            if item.get("component_name") == component_name and item.get("component_type") == component_type:
+                if verbose:
+                    console.print(f"[dim]组件 {component_name} 已在 manifest.json 中[/dim]")
+                return True
+
+        # 添加新组件
+        new_component = {"component_type": component_type, "component_name": component_name, "dependencies": []}
+        include_list.append(new_component)
+        manifest["include"] = include_list
+
+        # 写回文件
+        with open(manifest_file, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=4)
+
+        if verbose:
+            console.print("[dim]✓ 已更新 manifest.json[/dim]")
+        return True
+
+    except Exception as e:
+        if verbose:
+            console.print(f"[dim red]更新 manifest.json 失败: {e}[/dim red]")
+        return False
+
+
+def _update_plugin_py_components(
     work_dir: Path,
     component_type: str,
     component_name: str,
@@ -284,7 +387,7 @@ def _update_plugin_registration(
     use_components_folder: bool = True,
 ) -> bool:
     """
-    更新插件注册代码 (使用 CodeParser)
+    更新 plugin.py 中的 get_components() 方法，添加组件导入和类引用
 
     Args:
         work_dir: 工作目录
@@ -302,6 +405,8 @@ def _update_plugin_registration(
         return False
 
     try:
+        from mpdt.utils.plugin_parser import extract_plugin_name
+
         # 使用 plugin_parser 验证插件名称
         parsed_plugin_name = extract_plugin_name(work_dir)
         if not parsed_plugin_name:
@@ -309,10 +414,12 @@ def _update_plugin_registration(
             parsed_plugin_name = work_dir.name
 
         # 使用 CodeParser 读取和解析源代码
+        from mpdt.utils.code_parser import CodeParser
+
         parser = CodeParser.from_file(plugin_file)
 
         # 创建转换器
-        transformer = PluginRegistrationTransformer(
+        transformer = ComponentImportTransformer(
             plugin_name=parsed_plugin_name,
             component_type=component_type,
             component_name=component_name,
@@ -326,14 +433,67 @@ def _update_plugin_registration(
         # 写回文件
         plugin_file.write_text(modified_tree.code, encoding="utf-8")
 
-        return transformer.import_added or transformer.registration_added
+        if verbose:
+            console.print("[dim]✓ 已更新 plugin.py[/dim]")
 
-    except Exception:
+        return transformer.import_added or transformer.component_added
+
+    except Exception as e:
+        if verbose:
+            console.print(f"[dim red]更新 plugin.py 失败: {e}[/dim red]")
         return False
 
 
-class PluginRegistrationTransformer(cst.CSTTransformer):
-    """用于添加组件导入和注册的 CST 转换器"""
+def _update_plugin_registration(
+    work_dir: Path,
+    component_type: str,
+    component_name: str,
+    context: dict,
+    verbose: bool,
+    use_components_folder: bool = True,
+) -> bool:
+    """
+    更新插件注册代码（Neo-MoFox 架构）
+
+    更新两个文件：
+    1. manifest.json - 添加组件声明
+    2. plugin.py - 添加组件导入和 get_components() 返回列表
+
+    Args:
+        work_dir: 工作目录
+        component_type: 组件类型
+        component_name: 组件名称
+        context: 模板上下文
+        verbose: 详细输出
+        use_components_folder: 是否使用 components 文件夹
+
+    Returns:
+        是否更新成功
+    """
+    # 更新 manifest.json
+    manifest_updated = _update_manifest_json(work_dir, component_type, component_name, verbose)
+
+    # 更新 plugin.py
+    plugin_updated = _update_plugin_py_components(
+        work_dir, component_type, component_name, context, verbose, use_components_folder
+    )
+
+    return manifest_updated or plugin_updated
+
+
+# =============================================================================
+# CST 代码转换器
+# =============================================================================
+
+
+class ComponentImportTransformer(cst.CSTTransformer):
+    """用于添加组件导入和更新插件类的 CST 转换器（Neo-MoFox 架构）
+
+    功能：
+    1. 添加组件导入语句
+    2. 对于 config 组件：更新 configs 类属性
+    3. 对于其他组件：更新 get_components() 方法返回列表
+    """
 
     def __init__(
         self,
@@ -349,7 +509,8 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
         self.class_name = class_name
         self.use_components_folder = use_components_folder
         self.import_added = False
-        self.registration_added = False
+        self.component_added = False
+        self.is_config = component_type == "config"
 
     def leave_Module(  # noqa: N802
         self, original_node: cst.Module, updated_node: cst.Module
@@ -360,13 +521,12 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
 
         # 根据存放位置构建导入语句
         if self.use_components_folder:
-            import_path = f"{self.plugin_name}.components.{self.component_type}s.{self.component_name}"
+            dir_name = COMPONENT_DIR_MAP.get(self.component_type, f"{self.component_type}s")
+            import_path = f"{self.plugin_name}.components.{dir_name}.{self.component_name}"
         else:
             import_path = f"{self.plugin_name}.{self.component_name}"
 
-        import_statement = cst.parse_statement(
-            f"from {import_path} import {self.class_name}"
-        )
+        import_statement = cst.parse_statement(f"from {import_path} import {self.class_name}")
 
         # 检查是否已存在相同的导入
         for stmt in updated_node.body:
@@ -395,52 +555,93 @@ class PluginRegistrationTransformer(cst.CSTTransformer):
 
         return updated_node
 
+    def leave_ClassDef(  # noqa: N802
+        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
+    ) -> cst.ClassDef:
+        """更新插件类的 configs 类属性（仅用于 config 组件）"""
+        # 只有 config 组件才需要更新 configs 类属性
+        if not self.is_config:
+            return updated_node
+
+        if self.component_added:
+            return updated_node
+
+        # 检查是否已存在 configs 属性
+        new_body = []
+        configs_found = False
+
+        for stmt in updated_node.body.body:
+            # 查找 configs 类属性定义
+            if isinstance(stmt, cst.SimpleStatementLine):
+                for assign in stmt.body:
+                    if isinstance(assign, cst.AnnAssign) and isinstance(assign.target, cst.Name):
+                        if assign.target.value == "configs":
+                            configs_found = True
+                            # 检查是否已包含当前配置类
+                            if assign.value and isinstance(assign.value, cst.List):
+                                existing_elements = list(assign.value.elements)
+                                # 检查是否已存在
+                                has_class = any(
+                                    isinstance(elem.value, cst.Name) and elem.value.value == self.class_name
+                                    for elem in existing_elements
+                                )
+                                if not has_class:
+                                    # 添加新配置类
+                                    new_element = cst.Element(value=cst.Name(self.class_name))
+                                    existing_elements.append(new_element)
+                                    new_list = assign.value.with_changes(elements=existing_elements)
+                                    new_assign = assign.with_changes(value=new_list)
+                                    new_stmt_body = [new_assign if s is assign else s for s in stmt.body]
+                                    stmt = stmt.with_changes(body=new_stmt_body)
+                                    self.component_added = True
+            new_body.append(stmt)
+
+        # 如果找到并更新了 configs 属性
+        if configs_found and self.component_added:
+            return updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
+
+        return updated_node
+
     def leave_FunctionDef(  # noqa: N802
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
     ) -> cst.FunctionDef:
-        """在 get_plugin_components 函数中添加注册代码"""
-        if updated_node.name.value != "get_plugin_components":
+        """在 get_components 函数中添加组件类引用（不包括 config 组件）"""
+        # config 组件在 configs 类属性中处理，不需要在 get_components 中添加
+        if self.is_config:
+            return updated_node
+        if updated_node.name.value != "get_components":
             return updated_node
 
-        if self.registration_added:
+        if self.component_added:
             return updated_node
 
-        # 根据组件类型生成对应的 get_xxx_info() 方法调用
-        info_method_map = {
-            "action": "get_action_info",
-            "tool": "get_tool_info",
-            "event": "get_event_handler_info",
-            "adapter": "get_adapter_info",
-            "prompt": "get_prompt_info",
-            "plus_command": "get_command_info",
-            "chatter": "get_chatter_info",
-            "router": "get_router_info",
-        }
-        info_method = info_method_map.get(self.component_type, "get_component_info")
-
-        # 构建注册代码（带注释的语句）
-        registration_stmt = f"components.append(({self.class_name}.{info_method}(), {self.class_name}))  # 注册 {self.class_name}"
-
-        # 检查是否已存在注册代码
+        # 检查是否已存在组件引用
         function_code = cst.Module([]).code_for_node(updated_node)
-        if self.class_name in function_code and info_method in function_code:
-            self.registration_added = True
+        if self.class_name in function_code:
+            self.component_added = True
             return updated_node
 
-        # 找到 return 语句并在其前面插入注册代码
+        # 找到 return 语句并修改其返回列表
         new_body = []
         for stmt in updated_node.body.body:
-            # 如果是 return 语句，在前面插入注册代码
             if isinstance(stmt, cst.SimpleStatementLine):
-                for s in stmt.body:
-                    if isinstance(s, cst.Return):
-                        # 插入注册代码
-                        new_body.append(cst.parse_statement(registration_stmt))
-                        self.registration_added = True
-
+                for i, s in enumerate(stmt.body):
+                    if isinstance(s, cst.Return) and s.value:
+                        # 尝试解析返回值
+                        if isinstance(s.value, cst.List):
+                            # 如果是列表，添加新组件
+                            existing_elements = list(s.value.elements)
+                            new_element = cst.Element(value=cst.Name(self.class_name))
+                            existing_elements.append(new_element)
+                            new_list = s.value.with_changes(elements=existing_elements)
+                            new_return = s.with_changes(value=new_list)
+                            new_stmt_body = list(stmt.body)
+                            new_stmt_body[i] = new_return
+                            stmt = stmt.with_changes(body=new_stmt_body)
+                            self.component_added = True
             new_body.append(stmt)
 
-        if self.registration_added:
+        if self.component_added:
             new_function_body = updated_node.body.with_changes(body=new_body)
             return updated_node.with_changes(body=new_function_body)
 

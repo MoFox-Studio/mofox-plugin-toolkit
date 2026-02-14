@@ -1,5 +1,5 @@
 """
-Chatter 组件模板
+Chatter 组件模板（Neo-MoFox 架构）
 """
 
 CHATTER_TEMPLATE = '''"""
@@ -9,9 +9,11 @@ Created by: {author}
 Created at: {date}
 """
 
-from src.common.data_models.message_manager_data_model import StreamContext
-from src.common.logger import get_logger
-from src.plugin_system import BaseChatter, ChatType
+from typing import AsyncGenerator
+
+from src.app.plugin_system.api.log_api import get_logger
+from src.core.components.base import BaseChatter
+from src.core.components.types import ChatType
 
 logger = get_logger(__name__)
 
@@ -29,25 +31,41 @@ class {class_name}(BaseChatter):
     - 多轮对话控制
     """
 
-    # Chatter 元数据
-    chatter_name: str = "{chatter_name}"
-    chatter_description: str = "{description}"
+    chatter_name = "{component_name}"
+    chatter_description = "{description}"
     chat_types: list[ChatType] = [ChatType.PRIVATE, ChatType.GROUP]  # 支持的聊天类型
 
-    async def execute(self, context: StreamContext) -> dict:
+    async def chat(self, msg_env) -> AsyncGenerator[str, None]:
         """
-        执行聊天处理逻辑
+        执行聊天处理逻辑（异步生成器）
 
         Args:
-            context: StreamContext对象，包含聊天上下文信息
-                - context.stream_id: 聊天流ID
-                - context.user_id: 用户ID
-                - context.user_name: 用户名
-                - context.message_content: 消息内容
-                - context.chat_type: 聊天类型
+            msg_env: 消息环境对象，包含聊天上下文信息
+                - msg_env.message_id: 消息ID
+                - msg_env.sender_id: 发送者ID
+                - msg_env.text: 消息文本
+                - msg_env.chat_type: 聊天类型
                 - 等等...
 
-        Returns:
+        Yields:
+            str: 聊天响应文本，逐步生成
+        """
+        try:
+            logger.info(f"执行 Chatter: {{self.chatter_name}}")
+            logger.debug(f"消息环境: {{msg_env}}")
+
+            # TODO: 实现聊天处理逻辑
+
+            # 示例：简单回复
+            message = msg_env.text
+            response = f"收到消息: {{message}}"
+            
+            yield response
+
+        except Exception as e:
+            logger.error(f"Chatter 执行失败: {{e}}")
+            yield f"处理失败: {{e}}"
+'''
             处理结果字典，包含：
                 - success: 是否成功
                 - response: 响应内容（可选）
@@ -95,7 +113,7 @@ class {class_name}(BaseChatter):
         """
         # TODO: 实现响应生成逻辑
         return f"收到 {{user_name}} 的消息: {{message}}"
-'''
+        '''
 
 
 def get_chatter_template() -> str:
