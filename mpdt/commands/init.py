@@ -26,7 +26,6 @@ from mpdt.utils.color_printer import (
 from mpdt.utils.file_ops import ensure_dir, get_git_user_info, safe_write_file, validate_plugin_name
 from mpdt.utils.license_generator import get_license_text
 
-
 # ============================================================================
 # 主入口函数
 # ============================================================================
@@ -113,27 +112,15 @@ def init_plugin(
     # 打印成功信息
     print_success("插件创建成功！")
 
-    # 根据模板类型构建目录树显示
-    components_tree = _build_components_tree(template)
-
-    print_tree(
-        plugin_name,
-        {
-            ".gitignore": None,
-            "__init__.py": None,
-            plugin_name: {
-                "__init__.py": None,
-                "plugin.py": None,
-                "components": components_tree,
-                "utils": ["__init__.py"],
-            },
-            "docs": ["README.md"] if with_docs else [],
-            "pyproject.toml": None,
-            "requirements.txt": None,
-            "README.md": None,
-            "LICENSE": None,
-        },
+    # 根据用户选择动态构建目录树
+    plugin_tree = _build_plugin_tree(
+        plugin_name=plugin_name,
+        template=template,
+        with_docs=with_docs,
+        init_git=init_git or False,
     )
+
+    print_tree(plugin_name, plugin_tree)
 
     # 打印下一步指引
     next_steps = f"""
@@ -161,9 +148,6 @@ def _interactive_init() -> dict[str, Any]:
             "插件名称 (使用下划线命名):",
             validate=lambda x: validate_plugin_name(x) or "插件名称格式无效",
         ),
-        display_name=questionary.text(
-            "显示名称 (用户可见):",
-        ),
         description=questionary.text(
             "插件描述:",
         ),
@@ -173,9 +157,12 @@ def _interactive_init() -> dict[str, Any]:
                 questionary.Choice("基础插件", value="basic"),
                 questionary.Choice("Action 插件", value="action"),
                 questionary.Choice("Tool 插件", value="tool"),
+                questionary.Choice("Collection 插件", value="collection"),
+                questionary.Choice("Router 插件", value="router"),
                 questionary.Choice("Plus_Command 插件", value="plus_command"),
                 questionary.Choice("完整插件", value="full"),
                 questionary.Choice("Adapter 插件", value="adapter"),
+                questionary.Choice("Chatter 插件", value="chatter"),
             ],
         ),
         author=questionary.text(
@@ -194,14 +181,13 @@ def _interactive_init() -> dict[str, Any]:
             "初始化 Git 仓库?",
             default=True,
         ),
-# ============================================================================
-# 目录结构创建
-# ============================================================================
-
-
     ).ask()
 
     return answers
+
+        # ============================================================================
+        # 目录结构创建
+        # ============================================================================
 
 
 def _create_plugin_structure(
@@ -236,7 +222,18 @@ def _create_plugin_structure(
     components_dir = ensure_dir(plugin_code_dir / "components")
     safe_write_file(components_dir / "__init__.py", '"""\n组件模块\n"""\n')
 
-    for comp_type in ["actions", "plus_command", "tools", "events", "configs", "services", "adapters", "chatters", "routers"]:
+    for comp_type in [
+        "actions",
+        "plus_command",
+        "tools",
+        "collections",
+        "events",
+        "configs",
+        "services",
+        "adapters",
+        "chatters",
+        "routers",
+    ]:
         comp_dir = ensure_dir(components_dir / comp_type)
         safe_write_file(comp_dir / "__init__.py", f'"""\n{comp_type.title()} 组件\n"""\n')
 
@@ -301,6 +298,10 @@ def _generate_manifest_file(plugin_name: str, author: str | None, template: str,
             {"component_type": "config", "component_name": "config", "dependencies": []},
             {"component_type": "tool", "component_name": "example_tool", "dependencies": []},
         ],
+        "collection": [
+            {"component_type": "config", "component_name": "config", "dependencies": []},
+            {"component_type": "collection", "component_name": "example_collection", "dependencies": []},
+        ],
         "plus_command": [
             {"component_type": "config", "component_name": "config", "dependencies": []},
             {"component_type": "plus_command", "component_name": "example_command", "dependencies": []},
@@ -309,10 +310,19 @@ def _generate_manifest_file(plugin_name: str, author: str | None, template: str,
             {"component_type": "config", "component_name": "config", "dependencies": []},
             {"component_type": "adapter", "component_name": "example_adapter", "dependencies": []},
         ],
+        "chatter": [
+            {"component_type": "config", "component_name": "config", "dependencies": []},
+            {"component_type": "chatter", "component_name": "example_chatter", "dependencies": []},
+        ],
+        "router": [
+            {"component_type": "config", "component_name": "config", "dependencies": []},
+            {"component_type": "router", "component_name": "example_router", "dependencies": []},
+        ],
         "full": [
             {"component_type": "config", "component_name": "config", "dependencies": []},
             {"component_type": "action", "component_name": "example_action", "dependencies": []},
             {"component_type": "tool", "component_name": "example_tool", "dependencies": []},
+            {"component_type": "collection", "component_name": "example_collection", "dependencies": []},
             {"component_type": "plus_command", "component_name": "example_command", "dependencies": []},
             {"component_type": "event_handler", "component_name": "example_event", "dependencies": []},
             {"component_type": "service", "component_name": "example_service", "dependencies": []},
@@ -360,7 +370,7 @@ class {_to_pascal_case(plugin_name)}Plugin(BasePlugin):
     plugin_version = "1.0.0"
     plugin_author = "Your Name"
     plugin_description = "{plugin_name} 插件"
-    config = [config]
+    config = [Config]
 
     def get_components(self) -> list[type]:
         """获取插件内所有组件类
@@ -386,24 +396,45 @@ def _get_component_imports_and_list(plugin_name: str, template: str) -> tuple[st
     # 模板类型与组件配置的映射
     # (组件类型, 模块名, 类名, 目录名)
     template_components = {
-        "basic": [],
+        "basic": [
+            ("config", "config", "Config", "configs"),
+        ],
         "action": [
-            ("action", "example_action", "ExampleActionAction", "actions"),
+            ("config", "config", "Config", "configs"),
+            ("action", "example_action", "ExampleAction", "actions"),
         ],
         "tool": [
-            ("tool", "example_tool", "ExampleToolTool", "tools"),
+            ("config", "config", "Config", "configs"),
+            ("tool", "example_tool", "ExampleTool", "tools"),
+        ],
+        "collection": [
+            ("config", "config", "Config", "configs"),
+            ("collection", "example_collection", "ExampleCollection", "collections"),
         ],
         "plus_command": [
-            ("plus_command", "example_command", "ExampleCommandPlusCommand", "plus_command"),
+            ("config", "config", "Config", "configs"),
+            ("plus_command", "example_command", "ExampleCommand", "plus_command"),
         ],
         "adapter": [
-            ("adapter", "example_adapter", "ExampleAdapterAdapter", "adapters"),
+            ("config", "config", "Config", "configs"),
+            ("adapter", "example_adapter", "ExampleAdapter", "adapters"),
+        ],
+        "chatter": [
+            ("config", "config", "Config", "configs"),
+            ("chatter", "example_chatter", "ExampleChatter", "chatters"),
+        ],
+        "router": [
+            ("config", "config", "Config", "configs"),
+            ("router", "example_router", "ExampleRouter", "routers"),
         ],
         "full": [
-            ("action", "example_action", "ExampleActionAction", "actions"),
-            ("tool", "example_tool", "ExampleToolTool", "tools"),
-            ("plus_command", "example_command", "ExampleCommandPlusCommand", "plus_command"),
-            ("event_handler", "example_event", "ExampleEventEventHandler", "events"),
+            ("config", "config", "Config", "configs"),
+            ("action", "example_action", "ExampleAction", "actions"),
+            ("tool", "example_tool", "ExampleTool", "tools"),
+            ("collection", "example_collection", "ExampleCollection", "collections"),
+            ("plus_command", "example_command", "ExampleCommand", "plus_command"),
+            ("event_handler", "example_event", "ExampleEvent", "events"),
+            ("service", "example_service", "ExampleService", "services"),
         ],
     }
 
@@ -424,8 +455,8 @@ def _get_component_imports_and_list(plugin_name: str, template: str) -> tuple[st
 
     imports = "\n" + "\n".join(import_lines) + "\n" if import_lines else ""
 
-    # 生成组件类列表
-    class_names = [class_name for _, _, class_name, _ in components]
+    # 生成组件类列表（排除 Config，因为它通过 config 属性声明）
+    class_names = [class_name for comp_type, _, class_name, _ in components if comp_type != "config"]
     component_list = ", ".join(class_names) if class_names else ""
 
     return imports, component_list
@@ -507,6 +538,60 @@ def _to_pascal_case(snake_str: str) -> str:
     return "".join(word.capitalize() for word in snake_str.split("_"))
 
 
+#====================================
+#           动态构建完整的插件目录树
+#====================================
+
+def _build_plugin_tree(
+    plugin_name: str,
+    template: str,
+    with_docs: bool,
+    init_git: bool,
+) -> dict[str, Any]:
+    """
+    根据用户选择动态构建完整的插件目录树
+
+    Args:
+        plugin_name: 插件名称
+        template: 模板类型
+        with_docs: 是否包含文档
+        init_git: 是否初始化 Git
+
+    Returns:
+        完整的目录树结构
+    """
+    # 构建组件目录树
+    components_tree = _build_components_tree(template)
+
+    # 构建基础树结构
+    tree: dict[str, Any] = {}
+
+    # Git 相关文件
+    if init_git:
+        tree[".gitignore"] = None
+
+    # 插件代码目录
+    tree[plugin_name] = {
+        "manifest.json": None,
+        "plugin.py": None,
+        "components": components_tree,
+        "utils": ["__init__.py"],
+    }
+
+    # 文档目录（根据 with_docs 决定）
+    if with_docs:
+        tree["docs"] = ["README.md"]
+
+    # 项目配置文件
+    tree["manifest.json"] = None
+    tree["pyproject.toml"] = None
+    tree["requirements.txt"] = None
+    tree["README.md"] = None
+    tree["LICENSE"] = None
+
+    return tree
+
+
 def _build_components_tree(template: str) -> dict[str, list[str]] | list[str]:
     """
     根据模板类型构建组件目录树
@@ -517,28 +602,56 @@ def _build_components_tree(template: str) -> dict[str, list[str]] | list[str]:
     Returns:
         组件目录树结构
     """
-    # 基础目录结构
-    base_tree = {
+    # 初始化基础目录结构（所有模板都需要的基础目录）
+    base_tree: dict[str, list[str]] = {
+        "configs": ["__init__.py", "config.py"],
         "actions": ["__init__.py"],
         "plus_command": ["__init__.py"],
         "tools": ["__init__.py"],
+        "collections": ["__init__.py"],
         "events": ["__init__.py"],
+        "services": ["__init__.py"],
+        "adapters": ["__init__.py"],
+        "chatters": ["__init__.py"],
+        "routers": ["__init__.py"],
     }
 
     # 根据模板类型添加示例文件
-    if template == "action":
+    if template == "basic":
+        # 基础模板仅保留必需的目录
+        return {
+            "configs": ["__init__.py", "config.py"],
+            "actions": ["__init__.py"],
+            "plus_command": ["__init__.py"],
+            "tools": ["__init__.py"],
+            "collections": ["__init__.py"],
+            "events": ["__init__.py"],
+            "services": ["__init__.py"],
+            "adapters": ["__init__.py"],
+            "chatters": ["__init__.py"],
+            "routers": ["__init__.py"],
+        }
+    elif template == "action":
         base_tree["actions"].append("example_action.py")
     elif template == "tool":
         base_tree["tools"].append("example_tool.py")
+    elif template == "collection":
+        base_tree["collections"].append("example_collection.py")
     elif template == "plus_command":
         base_tree["plus_command"].append("example_command.py")
     elif template == "adapter":
-        base_tree["adapters"] = ["__init__.py", "example_adapter.py"]
+        base_tree["adapters"].append("example_adapter.py")
+    elif template == "chatter":
+        base_tree["chatters"].append("example_chatter.py")
+    elif template == "router":
+        base_tree["routers"].append("example_router.py")
     elif template == "full":
         base_tree["actions"].append("example_action.py")
         base_tree["tools"].append("example_tool.py")
+        base_tree["collections"].append("example_collection.py")
         base_tree["plus_command"].append("example_command.py")
         base_tree["events"].append("example_event.py")
+        base_tree["services"].append("example_service.py")
 
     return base_tree
 
@@ -669,6 +782,10 @@ def _generate_example_components(
             ("config", "config", "插件配置"),
             ("tool", "example_tool", "示例 Tool 组件"),
         ],
+        "collection": [
+            ("config", "config", "插件配置"),
+            ("collection", "example_collection", "示例 Collection 组件"),
+        ],
         "plus_command": [
             ("config", "config", "插件配置"),
             ("plus_command", "example_command", "示例 PlusCommand 组件"),
@@ -677,10 +794,19 @@ def _generate_example_components(
             ("config", "config", "插件配置"),
             ("adapter", "example_adapter", "示例 Adapter 组件"),
         ],
+        "chatter": [
+            ("config", "config", "插件配置"),
+            ("chatter", "example_chatter", "示例 Chatter 组件"),
+        ],
+        "router": [
+            ("config", "config", "插件配置"),
+            ("router", "example_router", "示例 Router 组件"),
+        ],
         "full": [
             ("config", "config", "插件配置"),
             ("action", "example_action", "示例 Action 组件"),
             ("tool", "example_tool", "示例 Tool 组件"),
+            ("collection", "example_collection", "示例 Collection 组件"),
             ("plus_command", "example_command", "示例 PlusCommand 组件"),
             ("event", "example_event", "示例 Event 组件"),
             ("service", "example_service", "示例 Service 组件"),
@@ -691,6 +817,7 @@ def _generate_example_components(
     component_dir_map = {
         "action": "actions",
         "tool": "tools",
+        "collection": "collections",
         "plus_command": "plus_command",
         "event": "events",
         "adapter": "adapters",
@@ -733,5 +860,4 @@ def _generate_example_components(
                 console.print(f"[dim]✓ 生成示例组件: {comp_name}.py[/dim]")
 
         except Exception as e:
-            if verbose:
-                console.print(f"[dim yellow]⚠ 生成组件 {comp_name} 失败: {e}[/dim yellow]")
+            console.print(f"[dim yellow]⚠ 生成组件 {comp_name} 失败: {e}[/dim yellow]")

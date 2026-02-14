@@ -39,6 +39,7 @@ COMPONENT_DIR_MAP = {
     "router": "routers",
     "service": "services",
     "config": "configs",
+    "collection": "collections",
 }
 
 # 组件类型到模板 key 的映射
@@ -52,6 +53,7 @@ COMPONENT_TYPE_MAP = {
     "router": "router",
     "service": "service",
     "config": "config",
+    "collection": "collection",
 }
 
 
@@ -183,6 +185,7 @@ def _interactive_generate() -> dict[str, Any]:
             choices=[
                 questionary.Choice("Action 组件", value="action"),
                 questionary.Choice("Tool 组件", value="tool"),
+                questionary.Choice("Collection 集合", value="collection"),
                 questionary.Choice("Event 事件", value="event"),
                 questionary.Choice("Adapter 适配器", value="adapter"),
                 questionary.Choice("Plus Command 命令", value="plus-command"),
@@ -558,25 +561,25 @@ class ComponentImportTransformer(cst.CSTTransformer):
     def leave_ClassDef(  # noqa: N802
         self, original_node: cst.ClassDef, updated_node: cst.ClassDef
     ) -> cst.ClassDef:
-        """更新插件类的 configs 类属性（仅用于 config 组件）"""
-        # 只有 config 组件才需要更新 configs 类属性
+        """更新插件类的 config 类属性（仅用于 config 组件）"""
+        # 只有 config 组件才需要更新 config 类属性
         if not self.is_config:
             return updated_node
 
         if self.component_added:
             return updated_node
 
-        # 检查是否已存在 configs 属性
+        # 检查是否已存在 config 属性
         new_body = []
-        configs_found = False
+        config_found = False
 
         for stmt in updated_node.body.body:
-            # 查找 configs 类属性定义
+            # 查找 config 类属性定义
             if isinstance(stmt, cst.SimpleStatementLine):
                 for assign in stmt.body:
                     if isinstance(assign, cst.AnnAssign) and isinstance(assign.target, cst.Name):
-                        if assign.target.value == "configs":
-                            configs_found = True
+                        if assign.target.value == "config":
+                            config_found = True
                             # 检查是否已包含当前配置类
                             if assign.value and isinstance(assign.value, cst.List):
                                 existing_elements = list(assign.value.elements)
@@ -594,11 +597,18 @@ class ComponentImportTransformer(cst.CSTTransformer):
                                     new_stmt_body = [new_assign if s is assign else s for s in stmt.body]
                                     stmt = stmt.with_changes(body=new_stmt_body)
                                     self.component_added = True
+                                else:
+                                    # 已存在，标记为已添加
+                                    self.component_added = True
             new_body.append(stmt)
 
-        # 如果找到并更新了 configs 属性
-        if configs_found and self.component_added:
-            return updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
+        # 如果找到 config 属性（无论是否更新）
+        if config_found:
+            if self.component_added:
+                return updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
+            else:
+                # 找到了 config 但没有更新，说明已存在
+                self.component_added = True
 
         return updated_node
 
@@ -615,12 +625,6 @@ class ComponentImportTransformer(cst.CSTTransformer):
         if self.component_added:
             return updated_node
 
-        # 检查是否已存在组件引用
-        function_code = cst.Module([]).code_for_node(updated_node)
-        if self.class_name in function_code:
-            self.component_added = True
-            return updated_node
-
         # 找到 return 语句并修改其返回列表
         new_body = []
         for stmt in updated_node.body.body:
@@ -629,8 +633,18 @@ class ComponentImportTransformer(cst.CSTTransformer):
                     if isinstance(s, cst.Return) and s.value:
                         # 尝试解析返回值
                         if isinstance(s.value, cst.List):
-                            # 如果是列表，添加新组件
+                            # 检查是否已存在该组件
                             existing_elements = list(s.value.elements)
+                            has_component = any(
+                                isinstance(elem.value, cst.Name) and elem.value.value == self.class_name
+                                for elem in existing_elements
+                            )
+
+                            if has_component:
+                                self.component_added = True
+                                return updated_node
+
+                            # 如果是列表，添加新组件
                             new_element = cst.Element(value=cst.Name(self.class_name))
                             existing_elements.append(new_element)
                             new_list = s.value.with_changes(elements=existing_elements)

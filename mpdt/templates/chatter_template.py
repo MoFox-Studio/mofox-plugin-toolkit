@@ -11,9 +11,9 @@ Created at: {date}
 
 from typing import AsyncGenerator
 
-from src.app.plugin_system.api.log_api import get_logger
-from src.core.components.base import BaseChatter
+from src.core.components.base import BaseChatter, Wait, Success, Failure, ChatterResult
 from src.core.components.types import ChatType
+from src.kernel.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -23,6 +23,7 @@ class {class_name}(BaseChatter):
     {description}
 
     Chatter 组件用于处理聊天流程，控制对话的整体逻辑。
+    使用生成器模式，通过 yield 返回 Wait/Success/Failure/Stop 结果。
 
     使用场景：
     - 自定义对话流程
@@ -33,87 +34,80 @@ class {class_name}(BaseChatter):
 
     chatter_name = "{component_name}"
     chatter_description = "{description}"
-    chat_types: list[ChatType] = [ChatType.PRIVATE, ChatType.GROUP]  # 支持的聊天类型
+    
+    # 关联平台（可选，默认支持所有平台）
+    associated_platforms: list[str] = []
+    
+    # 支持的聊天类型（私聊/群聊/所有）
+    chat_type: ChatType = ChatType.ALL
 
-    async def chat(self, msg_env) -> AsyncGenerator[str, None]:
+    async def execute(self) -> AsyncGenerator[ChatterResult, None]:
         """
-        执行聊天处理逻辑（异步生成器）
+        执行聊天器的主要逻辑。
 
-        Args:
-            msg_env: 消息环境对象，包含聊天上下文信息
-                - msg_env.message_id: 消息ID
-                - msg_env.sender_id: 发送者ID
-                - msg_env.text: 消息文本
-                - msg_env.chat_type: 聊天类型
-                - 等等...
+        使用生成器模式，通过 yield 返回执行结果：
+        - Wait: 等待一段时间或等待新消息
+        - Success: 成功完成执行
+        - Failure: 执行失败
+        - Stop: 停止一段时间后重新开始
 
         Yields:
-            str: 聊天响应文本，逐步生成
+            ChatterResult: Wait/Success/Failure/Stop 结果
         """
         try:
-            logger.info(f"执行 Chatter: {{self.chatter_name}}")
-            logger.debug(f"消息环境: {{msg_env}}")
+            logger.info(f"[{{self.chatter_name}}] 开始执行")
+
+            # 获取并刷新未读消息
+            unreads_json, unread_messages = await self.fetch_and_flush_unreads(
+                format_as_group=True,
+                time_format="%H:%M"
+            )
+
+            if not unread_messages:
+                logger.debug(f"[{{self.chatter_name}}] 无未读消息，等待新消息")
+                yield Wait(time=None)  # 等待新消息
+                return
+
+            logger.info(f"[{{self.chatter_name}}] 处理 {{len(unread_messages)}} 条未读消息")
 
             # TODO: 实现聊天处理逻辑
+            # 示例：简单响应
+            current_msg = unread_messages[-1]  # 最新消息
+            message_text = current_msg.processed_plain_text or str(current_msg.content or "")
 
-            # 示例：简单回复
-            message = msg_env.text
-            response = f"收到消息: {{message}}"
+            # 示例：获取可用组件
+            # llm_usables = await self.get_llm_usables()
+            # available = await self.modify_llm_usables(llm_usables)
             
-            yield response
-
-        except Exception as e:
-            logger.error(f"Chatter 执行失败: {{e}}")
-            yield f"处理失败: {{e}}"
-'''
-            处理结果字典，包含：
-                - success: 是否成功
-                - response: 响应内容（可选）
-                - next_action: 下一步动作（可选）
-        """
-        try:
-            logger.info(f"执行 Chatter: {{self.chatter_name}}")
-            logger.debug(f"聊天上下文: {{context}}")
-
-            # TODO: 实现聊天处理逻辑
-
-            # 示例：根据消息内容处理
-            message = context.message_content
-            user_name = context.user_name
-
-            # 可以使用 action_manager 调用 Action
-            # result = await self.action_manager.execute_action("action_name", {{}})
+            # 示例：执行某个 Action/Tool
+            # success, result = await self.exec_llm_usable(
+            #     SomeActionClass,
+            #     current_msg,
+            #     param1="value1"
+            # )
 
             # 构建响应
-            response = self._generate_response(message, user_name)
+            response = f"收到消息: {{message_text}}"
+            
+            # 发送响应（需要使用 chat_stream.send 方法）
+            from src.core.managers import get_stream_manager
+            stream_manager = get_stream_manager()
+            chat_stream = await stream_manager.get_or_create_stream(self.stream_id)
+            await chat_stream.send(response)
 
-            return {{
-                "success": True,
-                "response": response,
-                "next_action": None
-            }}
+            # 返回成功结果
+            yield Success(
+                message="处理完成",
+                data={{"processed": len(unread_messages)}}
+            )
 
         except Exception as e:
-            logger.error(f"Chatter 执行失败: {{e}}")
-            return {{
-                "success": False,
-                "error": str(e)
-            }}
-
-    def _generate_response(self, message: str, user_name: str) -> str:
-        """
-        生成响应内容
-
-        Args:
-            message: 用户消息
-            user_name: 用户名
-
-        Returns:
-            响应文本
-        """
-        # TODO: 实现响应生成逻辑
-        return f"收到 {{user_name}} 的消息: {{message}}"
-        '''
+            logger.error(f"[{{self.chatter_name}}] 执行失败: {{e}}", exc_info=True)
+            yield Failure(
+                error=f"处理失败: {{e}}",
+                exception=e
+            )
+'''
 
 
 def get_chatter_template() -> str:

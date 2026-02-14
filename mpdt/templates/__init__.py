@@ -9,6 +9,7 @@ from datetime import datetime
 from mpdt.templates.action_template import get_action_template
 from mpdt.templates.adapter_template import get_adapter_template
 from mpdt.templates.chatter_template import get_chatter_template
+from mpdt.templates.collection_template import get_collection_template
 from mpdt.templates.config_template import get_config_template
 from mpdt.templates.event_template import get_event_handler_template
 from mpdt.templates.plus_command_template import get_plus_command_template
@@ -20,6 +21,7 @@ from mpdt.templates.tool_template import get_tool_template
 __all__ = [
     "get_action_template",
     "get_tool_template",
+    "get_collection_template",
     "get_event_handler_template",
     "get_adapter_template",
     "get_plus_command_template",
@@ -37,7 +39,7 @@ def get_component_template(component_type: str) -> str:
     根据组件类型获取对应的模板
 
     Args:
-        component_type: 组件类型 (action, tool, event, adapter, prompt, plus_command, chatter, router)
+        component_type: 组件类型 (action, tool, event, adapter, prompt, plus_command, chatter, router, config, service)
 
     Returns:
         模板字符串
@@ -48,11 +50,14 @@ def get_component_template(component_type: str) -> str:
     template_map = {
         "action": get_action_template,
         "tool": get_tool_template,
+        "collection": get_collection_template,
         "event": get_event_handler_template,
         "adapter": get_adapter_template,
         "plus_command": get_plus_command_template,
         "chatter": get_chatter_template,
         "router": get_router_template,
+        "config": get_config_template,
+        "service": get_service_template,
     }
 
     if component_type not in template_map:
@@ -90,24 +95,6 @@ def prepare_component_context(
     # 转换为 PascalCase 并添加类型后缀
     class_name = to_pascal_case(component_name)
 
-    # 根据组件类型添加合适的后缀
-    suffix_map = {
-        "action": "Action",
-        "tool": "Tool",
-        "event": "EventHandler",
-        "adapter": "Adapter",
-        "prompt": "Prompt",
-        "plus_command": "PlusCommand",
-        "chatter": "Chatter",
-        "router": "Router",
-        "service": "Service",
-        "config": "Config",
-    }
-
-    suffix = suffix_map.get(component_type, "")
-    if suffix and not class_name.endswith(suffix):
-        class_name = f"{class_name}{suffix}"
-
     date = datetime.now().strftime("%Y-%m-%d")
 
     # 基础上下文
@@ -130,6 +117,8 @@ def prepare_component_context(
         context["command_name"] = component_name
     elif component_type == "tool":
         context["tool_name"] = component_name
+    elif component_type == "collection":
+        context["collection_name"] = component_name
     elif component_type == "event":
         context["event_type"] = component_name.replace("_handler", "").replace("_event", "")
     elif component_type == "adapter":
@@ -162,6 +151,7 @@ def _get_method_name(component_type: str) -> str:
         "action": "execute",
         "plus_command": "execute",
         "tool": "run",
+        "collection": "get_contents",
         "event": "handle",
         "adapter": "connect",
         "prompt": "build",
