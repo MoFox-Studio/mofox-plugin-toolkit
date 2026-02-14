@@ -12,7 +12,7 @@ class StructureValidator(BaseValidator):
     """
 
     # 必需的文件
-    REQUIRED_FILES = ["__init__.py", "plugin.py"]
+    REQUIRED_FILES = ["manifest.json", "plugin.py"]
 
     # 推荐的文件
     RECOMMENDED_FILES = ["README.md"]

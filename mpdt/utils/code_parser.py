@@ -297,6 +297,37 @@ class CodeParser:
         with open(file_path, "w", encoding=encoding) as f:
             f.write(self.get_code())
 
+    def find_imports(self, module_name: str | None = None) -> list[dict[str, Any]]:
+        """查找 import 语句
+
+        Args:
+            module_name: 要查找的模块名，如果为 None 则返回所有 import
+
+        Returns:
+            import 信息列表，每项包含 {
+                'type': 'import' 或 'from_import',
+                'module': 模块名,
+                'names': 导入的名称列表
+            }
+        """
+        visitor = ImportFinderVisitor(module_name)
+        self.module.visit(visitor)
+        return visitor.found_imports
+
+    def get_imported_names(self) -> dict[str, str]:
+        """获取所有导入的名称及其来源模块
+
+        Returns:
+            {导入的名称: 来源模块} 的字典
+        """
+        imports = self.find_imports()
+        result = {}
+        for imp in imports:
+            module = imp['module']
+            for name in imp['names']:
+                result[name] = module
+        return result
+
 
 class ClassFinderVisitor(cst.CSTVisitor):
     """查找类定义的访问器"""
@@ -399,3 +430,66 @@ class CallArgumentsFinderVisitor(cst.CSTVisitor):
                 # 关键字参数: name=value
                 arg_name = arg.keyword.value
                 self.found_arguments[arg_name] = arg.value
+
+
+class ImportFinderVisitor(cst.CSTVisitor):
+    """查找 import 语句的访问器"""
+
+    def __init__(self, module_name: str | None = None):
+        self.module_name = module_name
+        self.found_imports: list[dict[str, Any]] = []
+
+    def visit_Import(self, node: cst.Import) -> None:
+        """访问 import 语句: import module"""
+        for name in node.names:
+            if isinstance(name, cst.ImportAlias):
+                module = self._get_dotted_name(name.name)
+                if self.module_name is None or module == self.module_name:
+                    if name.asname and isinstance(name.asname.name, cst.Name):
+                        imported_name = name.asname.name.value
+                    else:
+                        imported_name = module.split('.')[-1]
+                    self.found_imports.append({
+                        'type': 'import',
+                        'module': module,
+                        'names': [imported_name],
+                    })
+
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
+        """访问 from import 语句: from module import name1, name2"""
+        if node.module is None:
+            return
+
+        module = self._get_dotted_name(node.module)
+        if self.module_name is not None and module != self.module_name:
+            return
+
+        names = []
+        if isinstance(node.names, cst.ImportStar):
+            names = ['*']
+        else:
+            for name in node.names:
+                if isinstance(name, cst.ImportAlias):
+                    if name.asname and isinstance(name.asname.name, cst.Name):
+                        imported_name = name.asname.name.value
+                    elif isinstance(name.name, cst.Name):
+                        imported_name = name.name.value
+                    else:
+                        continue
+                    names.append(imported_name)
+
+        if names:
+            self.found_imports.append({
+                'type': 'from_import',
+                'module': module,
+                'names': names,
+            })
+
+    def _get_dotted_name(self, node: cst.BaseExpression) -> str:
+        """从节点中提取带点的模块名"""
+        if isinstance(node, cst.Name):
+            return node.value
+        elif isinstance(node, cst.Attribute):
+            prefix = self._get_dotted_name(node.value)
+            return f"{prefix}.{node.attr.value}"
+        return ""

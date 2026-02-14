@@ -2,90 +2,71 @@
 插件元数据验证器
 """
 
-from ..utils.code_parser import CodeParser
+import json
+
 from .base import BaseValidator, ValidationResult
 
 
 class MetadataValidator(BaseValidator):
-    """插件元数据验证器
+    """插件清单验证器
 
-    检查 plugin.py 中的 PluginMetadata 是否完整
+    检查 manifest.json 是否完整且格式正确
     """
 
     # 必需的元数据字段
-    REQUIRED_FIELDS = ["name", "description", "usage"]
+    REQUIRED_FIELDS = ["name", "version", "description", "author", "dependencies", "entry_point"]
 
     # 推荐的元数据字段
-    RECOMMENDED_FIELDS = ["version", "author", "license"]
+    RECOMMENDED_FIELDS = ["min_core_version", "include"]
 
     def validate(self) -> ValidationResult:
-        """执行元数据验证
+        """执行清单验证
 
         Returns:
             ValidationResult: 验证结果
         """
-        # 获取插件名称
-        plugin_name = self._get_plugin_name()
-        if not plugin_name:
-            self.result.add_error("无法确定插件名称")
-            return self.result
-
-        # 元数据在 __init__.py 中
-        init_file = self.plugin_path / "__init__.py"
-        if not init_file.exists():
+        # 检查 manifest.json 是否存在
+        manifest_file = self.plugin_path / "manifest.json"
+        if not manifest_file.exists():
             self.result.add_error(
-                "__init__.py 文件不存在",
-                suggestion="请创建 __init__.py 文件并定义 __plugin_meta__",
+                "manifest.json 文件不存在",
+                suggestion="请创建 manifest.json 文件并定义插件清单 | 可运行 'mpdt check --fix' 自动修复",
             )
             return self.result
 
-        # 使用 CodeParser 解析
+        # 读取并解析 manifest.json
         try:
-            parser = CodeParser.from_file(init_file)
-        except SyntaxError as e:
+            with open(manifest_file, encoding="utf-8") as f:
+                manifest_data = json.load(f)
+        except json.JSONDecodeError as e:
             self.result.add_error(
-                f"__init__.py 存在语法错误: {e.msg}",
-                file_path="__init__.py",
+                f"manifest.json 存在 JSON 语法错误: {e.msg}",
+                file_path="manifest.json",
                 line_number=e.lineno if hasattr(e, "lineno") else None,
+                suggestion="请检查 JSON 格式是否正确",
             )
             return self.result
         except Exception as e:
-            self.result.add_error(f"读取 __init__.py 失败: {e}")
-            return self.result
-
-        # 查找 __plugin_meta__ 赋值
-        metadata_values = parser.find_assignments("__plugin_meta__")
-
-        if not metadata_values:
             self.result.add_error(
-                "未找到 __plugin_meta__ 变量或 PluginMetadata 实例",
-                file_path="__init__.py",
-                suggestion="请在 __init__.py 中定义: __plugin_meta__ = PluginMetadata(...) | 可运行 'mpdt check --fix' 自动修复",
+                f"读取 manifest.json 失败: {e}",
+                file_path="manifest.json",
             )
             return self.result
 
-        # 使用增强的 CodeParser 解析 PluginMetadata 的参数
-        metadata_args = parser.find_call_arguments("__plugin_meta__", "PluginMetadata")
-
-        if metadata_args is None:
-            self.result.add_error(
-                "未找到 __plugin_meta__ 的 PluginMetadata 调用",
-                file_path="__init__.py",
-                suggestion="请使用 PluginMetadata(...) 构造 __plugin_meta__ | 可运行 'mpdt check --fix' 自动修复",
-            )
-            return self.result
-
-        self.result.add_info("找到 __plugin_meta__ 定义")
+        self.result.add_info("找到 manifest.json 文件")
 
         # 检查必需字段
-        missing_required = parser.get_missing_call_arguments("__plugin_meta__", self.REQUIRED_FIELDS, "PluginMetadata")
+        missing_required = []
+        for field in self.REQUIRED_FIELDS:
+            if field not in manifest_data or not manifest_data[field]:
+                missing_required.append(field)
 
         if missing_required:
             for field in missing_required:
                 self.result.add_error(
-                    f"PluginMetadata 缺少必需字段: {field}",
-                    file_path="__init__.py",
-                    suggestion=f'请在 PluginMetadata 中添加 {field}="..." 参数 | 可运行 \'mpdt check --fix\' 自动修复',
+                    f"manifest.json 缺少必需字段: {field}",
+                    file_path="manifest.json",
+                    suggestion=f'请在 manifest.json 中添加 "{field}" 字段 | 可运行 \'mpdt check --fix\' 自动修复',
                 )
         else:
             self.result.add_info("所有必需的元数据字段都已提供")
@@ -93,15 +74,96 @@ class MetadataValidator(BaseValidator):
         # 检查推荐字段
         missing_recommended = []
         for field in self.RECOMMENDED_FIELDS:
-            if field not in metadata_args or not metadata_args[field]:
+            if field not in manifest_data or not manifest_data[field]:
                 missing_recommended.append(field)
 
         if missing_recommended:
-            fields_str = ", ".join(f'{f}="..."' for f in missing_recommended)
+            fields_str = ", ".join(f'"{f}"' for f in missing_recommended)
             self.result.add_warning(
                 f"建议添加以下元数据字段: {', '.join(missing_recommended)}",
-                file_path="__init__.py",
-                suggestion=f"在 PluginMetadata 中添加: {fields_str}",
+                file_path="manifest.json",
+                suggestion=f"在 manifest.json 中添加: {fields_str}",
             )
+
+        # 验证 dependencies 结构
+        if "dependencies" in manifest_data:
+            deps = manifest_data["dependencies"]
+            if not isinstance(deps, dict):
+                self.result.add_error(
+                    "dependencies 字段必须是一个对象",
+                    file_path="manifest.json",
+                    suggestion='请使用格式: "dependencies": {"plugins": [], "components": []}',
+                )
+            else:
+                # 检查 plugins 和 components 列表
+                if "plugins" in deps and not isinstance(deps["plugins"], list):
+                    self.result.add_error(
+                        'dependencies.plugins 必须是数组',
+                        file_path="manifest.json",
+                    )
+                if "components" in deps and not isinstance(deps["components"], list):
+                    self.result.add_error(
+                        'dependencies.components 必须是数组',
+                        file_path="manifest.json",
+                    )
+
+        # 验证 include 结构（如果存在）
+        if "include" in manifest_data:
+            include_list = manifest_data["include"]
+            if not isinstance(include_list, list):
+                self.result.add_error(
+                    "include 字段必须是一个数组",
+                    file_path="manifest.json",
+                    suggestion='请使用格式: "include": [{"component_type": "...", "component_name": "..."}]',
+                )
+            else:
+                # 验证每个 include 项
+                for i, item in enumerate(include_list):
+                    if not isinstance(item, dict):
+                        self.result.add_warning(
+                            f"include[{i}] 必须是对象",
+                            file_path="manifest.json",
+                        )
+                        continue
+
+                    # 检查必需的组件字段
+                    if "component_type" not in item:
+                        self.result.add_warning(
+                            f"include[{i}] 缺少 component_type 字段",
+                            file_path="manifest.json",
+                        )
+                    if "component_name" not in item:
+                        self.result.add_warning(
+                            f"include[{i}] 缺少 component_name 字段",
+                            file_path="manifest.json",
+                        )
+
+                    # 验证 dependencies 字段（组件级依赖）
+                    if "dependencies" in item and not isinstance(item["dependencies"], list):
+                        self.result.add_warning(
+                            f"include[{i}].dependencies 必须是数组",
+                            file_path="manifest.json",
+                        )
+
+        # 验证 entry_point 文件是否存在
+        if "entry_point" in manifest_data:
+            entry_point = self.plugin_path / manifest_data["entry_point"]
+            if not entry_point.exists():
+                self.result.add_warning(
+                    f"entry_point 指向的文件不存在: {manifest_data['entry_point']}",
+                    file_path="manifest.json",
+                    suggestion=f"请确保文件 {manifest_data['entry_point']} 存在",
+                )
+
+        # 验证版本号格式
+        if "version" in manifest_data:
+            version = manifest_data["version"]
+            # 简单的版本号格式检查（支持 x.y.z 格式）
+            import re
+            if not re.match(r'^\d+\.\d+\.\d+', str(version)):
+                self.result.add_warning(
+                    f"版本号格式建议使用语义化版本（如 1.0.0）: {version}",
+                    file_path="manifest.json",
+                )
 
         return self.result

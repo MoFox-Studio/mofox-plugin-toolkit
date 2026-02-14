@@ -75,8 +75,9 @@ class AutoFixValidator(BaseValidator):
             return result
 
         # 按问题类型分类并修复
-        self._fix_missing_plugin_meta(all_issues, result)
-        self._fix_missing_metadata_issues(all_issues, result)
+        self._fix_missing_manifest(all_issues, result)
+        self._fix_missing_register_decorator(all_issues, result)
+        self._fix_missing_plugin_attributes(all_issues, result)
         self._fix_missing_component_fields(all_issues, result)
         self._fix_missing_methods(all_issues, result)
         self._fix_method_signatures(all_issues, result)
@@ -84,58 +85,55 @@ class AutoFixValidator(BaseValidator):
 
         return result
 
-    def _fix_missing_plugin_meta(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
-        """修复缺失的 __plugin_meta__ 变量"""
+    def _fix_missing_manifest(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
+        """修复缺失的 manifest.json 文件"""
         for issue in issues:
-            if "未找到 __plugin_meta__ 变量" in issue.message or "未找到 __plugin_meta__" in issue.message:
+            if "manifest.json" in issue.message and "不存在" in issue.message:
                 try:
-                    # 查找 __init__.py 文件
-                    init_file = self.plugin_path / "__init__.py"
-                    if not init_file.exists():
-                        self.fixes_failed.append("未找到 __init__.py 文件")
-                        continue
-
                     before_count = len(self.fixes_applied)
-                    self._add_plugin_meta_variable(init_file, issue)
+                    self._create_manifest_file(issue)
                     if len(self.fixes_applied) > before_count:
                         self.fixed_issues.append(issue)
                 except Exception as e:
-                    self.fixes_failed.append(f"修复 __plugin_meta__ 变量失败: {e}")
+                    self.fixes_failed.append(f"创建 manifest.json 失败: {e}")
 
-    def _fix_missing_metadata_issues(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
-        """修复缺失的元数据问题"""
+    def _fix_missing_register_decorator(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
+        """修复缺失的 @register_plugin 装饰器"""
         for issue in issues:
-            # 修复 PluginMetadata 缺失参数
-            if "PluginMetadata 缺少必需字段" in issue.message:
+            if "register_plugin" in issue.message and "装饰器" in issue.message:
                 try:
-                    # 从消息中提取字段名
-                    match = re.search(r"缺少必需字段[：:]\s*(\w+)", issue.message)
-                    if match:
-                        field_name = match.group(1)
-                        init_file = self.plugin_path / "__init__.py"
-                        if init_file.exists():
-                            before_count = len(self.fixes_applied)
-                            self._add_plugin_meta_argument(init_file, field_name, issue)
-                            if len(self.fixes_applied) > before_count:
-                                self.fixed_issues.append(issue)
+                    plugin_file = self.plugin_path / "plugin.py"
+                    if plugin_file.exists():
+                        before_count = len(self.fixes_applied)
+                        self._add_register_decorator(plugin_file, issue)
+                        if len(self.fixes_applied) > before_count:
+                            self.fixed_issues.append(issue)
                 except Exception as e:
-                    self.fixes_failed.append(f"修复 PluginMetadata 参数失败: {issue.message} - {e}")
-            # 匹配 "缺少必需的类属性" 相关错误
-            elif "缺少必需的类属性" in issue.message or "缺少必需元数据字段" in issue.message:
-                try:
-                    # 从消息中提取字段名
-                    match = re.search(r"[：:]\s*(\w+)", issue.message)
-                    if match:
-                        field_name = match.group(1)
-                        file_path = self._resolve_file_path(issue.file_path)
-                        if file_path and file_path.exists():
-                            before_count = len(self.fixes_applied)
-                            self._add_class_attribute(file_path, field_name, issue)
-                            # 如果修复成功，记录原始问题
-                            if len(self.fixes_applied) > before_count:
-                                self.fixed_issues.append(issue)
-                except Exception as e:
-                    self.fixes_failed.append(f"修复元数据字段失败: {issue.message} - {e}")
+                    self.fixes_failed.append(f"添加 @register_plugin 装饰器失败: {e}")
+
+    def _fix_missing_plugin_attributes(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
+        """修复插件类缺失的属性"""
+        for issue in issues:
+            # 匹配插件类属性相关错误
+            if (
+                "plugin_name" in issue.message
+                or "plugin_description" in issue.message
+                or "plugin_version" in issue.message
+            ):
+                if "缺少" in issue.message or "未定义" in issue.message:
+                    try:
+                        # 从消息中提取属性名
+                        match = re.search(r"(plugin_name|plugin_description|plugin_version)", issue.message)
+                        if match:
+                            attr_name = match.group(1)
+                            plugin_file = self.plugin_path / "plugin.py"
+                            if plugin_file.exists():
+                                before_count = len(self.fixes_applied)
+                                self._add_plugin_class_attribute(plugin_file, attr_name, issue)
+                                if len(self.fixes_applied) > before_count:
+                                    self.fixed_issues.append(issue)
+                    except Exception as e:
+                        self.fixes_failed.append(f"修复插件类属性失败: {issue.message} - {e}")
 
     def _fix_missing_component_fields(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
         """修复组件缺失的字段"""
@@ -218,6 +216,40 @@ class AutoFixValidator(BaseValidator):
                 except Exception as e:
                     self.fixes_failed.append(f"修复方法参数失败: {issue.message} - {e}")
 
+            # 修复缺少返回类型注解问题
+            elif "缺少返回类型注解" in issue.message:
+                try:
+                    # 尝试匹配两种格式
+                    # 格式1: "插件类 {class_name} 的 get_components 方法缺少返回类型注解，建议添加: -> list[type]"
+                    # 格式2: "组件 {class_name} 的方法 {method_name} 缺少返回类型注解，建议添加: -> {expected_return}"
+                    plugin_match = re.search(
+                        r"插件类\s+(\w+)\s+的\s+(\w+)\s+方法缺少返回类型注解，建议添加:\s*->\s*(.+)", issue.message
+                    )
+                    component_match = re.search(
+                        r"组件\s+(\w+)\s+的方法\s+(\w+)\s+缺少返回类型注解，建议添加:\s*->\s*(.+)", issue.message
+                    )
+
+                    if plugin_match:
+                        class_name = plugin_match.group(1)
+                        method_name = plugin_match.group(2)
+                        expected_type = plugin_match.group(3).strip()
+                        file_path = self.plugin_path / "plugin.py"
+                    elif component_match:
+                        class_name = component_match.group(1)
+                        method_name = component_match.group(2)
+                        expected_type = component_match.group(3).strip()
+                        file_path = self._resolve_file_path(issue.file_path)
+                    else:
+                        continue
+
+                    if file_path and file_path.exists():
+                        before_count = len(self.fixes_applied)
+                        self._fix_method_return_type(file_path, class_name, method_name, expected_type, issue)
+                        if len(self.fixes_applied) > before_count:
+                            self.fixed_issues.append(issue)
+                except Exception as e:
+                    self.fixes_failed.append(f"修复返回类型注解失败: {issue.message} - {e}")
+
     def _fix_style_issues(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
         """修复代码风格问题
 
@@ -257,7 +289,12 @@ class AutoFixValidator(BaseValidator):
             return False
 
     def _add_class_attribute(
-        self, file_path: Path, field_name: str, issue: ValidationIssue, class_name: str | None = None
+        self,
+        file_path: Path,
+        field_name: str,
+        issue: ValidationIssue,
+        class_name: str | None = None,
+        default_value: str | None = None,
     ) -> None:
         """添加类属性
 
@@ -266,6 +303,7 @@ class AutoFixValidator(BaseValidator):
             field_name: 字段名
             issue: 验证问题
             class_name: 类名（可选）
+            default_value: 默认值（可选，如果不提供则自动推断）
         """
         try:
             source = file_path.read_text(encoding="utf-8")
@@ -285,9 +323,11 @@ class AutoFixValidator(BaseValidator):
 
             # 使用 libcst 添加属性
             module = cst.parse_module(source)
-            transformer = AddClassAttributeTransformer(
-                target_class.name, field_name, self._get_default_value_for_field(field_name)
-            )
+
+            # 使用提供的默认值或自动推断
+            attr_value = default_value if default_value is not None else self._get_default_value_for_field(field_name)
+
+            transformer = AddClassAttributeTransformer(target_class.name, field_name, attr_value)
             modified = module.visit(transformer)
 
             if transformer.modified:
@@ -397,109 +437,106 @@ class AutoFixValidator(BaseValidator):
         except Exception as e:
             self.fixes_failed.append(f"修复方法参数失败: {e}")
 
-    def _add_plugin_meta_variable(self, file_path: Path, issue: ValidationIssue) -> None:
-        """在 __init__.py 中添加 __plugin_meta__ 变量
+    def _create_manifest_file(self, issue: ValidationIssue) -> None:
+        """创建 manifest.json 文件
 
         Args:
-            file_path: __init__.py 文件路径
             issue: 验证问题
         """
-        try:
-            source = file_path.read_text(encoding="utf-8")
+        import json
 
-            # 检查是否已存在
-            if "__plugin_meta__" in source:
+        try:
+            manifest_path = self.plugin_path / "manifest.json"
+            if manifest_path.exists():
                 return
 
             # 获取插件名称
             plugin_name = self.plugin_path.name
 
-            # 构建 __plugin_meta__ 定义
-            meta_code = """from src.plugin_system.base.plugin_metadata import PluginMetadata
+            # 构建基本的 manifest 内容
+            manifest = {
+                "name": plugin_name,
+                "version": "1.0.0",
+                "description": f"{plugin_name} 插件",
+                "author": "Your Name",
+                "dependencies": {"plugins": [], "components": []},
+                "include": [],
+                "entry_point": "plugin.py",
+                "min_core_version": "1.0.0",
+            }
 
-__plugin_meta__ = PluginMetadata(
-    usage = "unknown",
-    name="hello_world_plugin - 副本",
-    version="0.1.0",
-    author="",
-    description="",
-)
-"""
-
-            # 检查是否已有 PluginMetadata 导入
-            has_import = (
-                "from src.plugin_system.base.plugin_metadata import PluginMetadata" in source
-                or "import src.plugin_system.base.plugin_metadata" in source
-            )
-
-            if has_import:
-                # 如果已有导入，只添加变量定义
-                meta_code = f'''\n__plugin_meta__ = PluginMetadata(
-    name="{plugin_name}",
-    version="0.1.0",
-    author="",
-    description="",
-)
-'''
-
-            # 在文件开头添加（在 docstring 之后）
-            lines = source.split("\n")
-            insert_pos = 0
-
-            # 跳过开头的 docstring
-            in_docstring = False
-            for i, line in enumerate(lines):
-                stripped = line.strip()
-                if i == 0 and (stripped.startswith('"""') or stripped.startswith("'''")):
-                    in_docstring = True
-                    if stripped.count('"""') >= 2 or stripped.count("'''") >= 2:
-                        insert_pos = i + 1
-                        break
-                elif in_docstring and ('"""' in line or "'''" in line):
-                    insert_pos = i + 1
-                    break
-                elif not in_docstring:
-                    insert_pos = i
-                    break
-
-            # 插入代码
-            lines.insert(insert_pos, meta_code)
-            new_source = "\n".join(lines)
-
-            file_path.write_text(new_source, encoding="utf-8")
-            self.fixes_applied.append(f"在 {file_path.name} 中添加 __plugin_meta__ 变量")
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=4), encoding="utf-8")
+            self.fixes_applied.append("创建 manifest.json 文件")
 
         except Exception as e:
-            self.fixes_failed.append(f"添加 __plugin_meta__ 变量失败: {e}")
+            self.fixes_failed.append(f"创建 manifest.json 失败: {e}")
 
-    def _add_plugin_meta_argument(self, file_path: Path, arg_name: str, issue: ValidationIssue) -> None:
-        """在 PluginMetadata 调用中添加缺失的参数
+    def _add_register_decorator(self, file_path: Path, issue: ValidationIssue) -> None:
+        """为插件类添加 @register_plugin 装饰器
 
         Args:
-            file_path: __init__.py 文件路径
-            arg_name: 参数名
+            file_path: plugin.py 文件路径
             issue: 验证问题
         """
         try:
             source = file_path.read_text(encoding="utf-8")
             module = cst.parse_module(source)
 
-            # 获取参数的默认值
-            arg_value = self._get_default_value_for_metadata_field(arg_name)
+            # 检查是否已有 register_plugin 导入
+            has_import = "from src.core.components.loader import register_plugin" in source
 
-            transformer = AddCallArgumentTransformer(
-                variable_name="__plugin_meta__", function_name="PluginMetadata", arg_name=arg_name, arg_value=arg_value
-            )
+            transformer = AddRegisterPluginDecoratorTransformer(has_import=has_import)
             modified = module.visit(transformer)
 
             if transformer.modified:
                 file_path.write_text(modified.code, encoding="utf-8")
-                self.fixes_applied.append(f"在 PluginMetadata 中添加参数 {arg_name}={arg_value}")
+                self.fixes_applied.append("为插件类添加 @register_plugin 装饰器")
             else:
-                self.fixes_failed.append(f"未能在 PluginMetadata 中添加参数 {arg_name}")
+                self.fixes_failed.append("未能添加 @register_plugin 装饰器")
 
         except Exception as e:
-            self.fixes_failed.append(f"添加 PluginMetadata 参数 {arg_name} 失败: {e}")
+            self.fixes_failed.append(f"添加 @register_plugin 装饰器失败: {e}")
+
+    def _add_plugin_class_attribute(self, file_path: Path, attr_name: str, issue: ValidationIssue) -> None:
+        """为插件类添加必需的类属性
+
+        Args:
+            file_path: plugin.py 文件路径
+            attr_name: 属性名
+            issue: 验证问题
+        """
+        try:
+            # 获取插件名称
+            plugin_name = self.plugin_path.name
+
+            # 获取默认值
+            default_value = self._get_default_value_for_plugin_attribute(attr_name, plugin_name)
+
+            # 添加类属性（复用已有方法）
+            self._add_class_attribute(file_path, attr_name, issue, class_name=None, default_value=default_value)
+
+        except Exception as e:
+            self.fixes_failed.append(f"添加插件类属性 {attr_name} 失败: {e}")
+
+    def _get_default_value_for_plugin_attribute(self, attr_name: str, plugin_name: str) -> str:
+        """获取插件类属性的默认值
+
+        Args:
+            attr_name: 属性名
+            plugin_name: 插件名称
+
+        Returns:
+            默认值字符串
+        """
+        defaults = {
+            "plugin_name": f'"{plugin_name}"',
+            "plugin_description": f'"{plugin_name} 插件"',
+            "plugin_version": '"1.0.0"',
+            "plugin_author": '"Your Name"',
+            "configs": "[]",
+            "dependent_components": "[]",
+        }
+        return defaults.get(attr_name, '""')
 
     def _fix_method_return_type(
         self, file_path: Path, class_name: str, method_name: str, expected_type: str, issue: ValidationIssue
@@ -588,34 +625,6 @@ __plugin_meta__ = PluginMetadata(
             return '"0.1.0"'
         elif "author" in field_name.lower():
             return '""'
-        else:
-            return '""'
-
-    def _get_default_value_for_metadata_field(self, field_name: str) -> str:
-        """获取 PluginMetadata 字段的默认值
-
-        Args:
-            field_name: 字段名
-
-        Returns:
-            默认值字符串
-        """
-        # 获取插件名称
-        plugin_name = self.plugin_path.name
-
-        # 根据字段名返回默认值
-        if field_name == "name":
-            return f'"{plugin_name}"'
-        elif field_name == "description":
-            return f'"{plugin_name} 插件"'
-        elif field_name == "usage":
-            return '"待完善"'
-        elif field_name == "version":
-            return '"0.1.0"'
-        elif field_name == "author":
-            return '""'
-        elif field_name == "license":
-            return '"MIT"'
         else:
             return '""'
 
@@ -988,3 +997,110 @@ class FixMethodParametersTransformer(cst.CSTTransformer):
             return updated_node.with_changes(params=updated_node.params.with_changes(params=new_params))
         except Exception:
             return updated_node
+
+
+class AddRegisterPluginDecoratorTransformer(cst.CSTTransformer):
+    """为插件类添加 @register_plugin 装饰器的转换器"""
+
+    def __init__(self, has_import: bool):
+        self.has_import = has_import
+        self.modified = False
+        self.import_added = False
+
+    def visit_Module(self, node: cst.Module) -> None:  # noqa: N802
+        """访问模块，记录是否需要添加导入"""
+        pass
+
+    def leave_Module(  # noqa: N802
+        self, original_node: cst.Module, updated_node: cst.Module
+    ) -> cst.Module:
+        """如果需要，在模块顶部添加 register_plugin 导入"""
+        if not self.has_import and self.modified and not self.import_added:
+            # 在导入部分的末尾添加 register_plugin 导入
+            new_body = []
+            import_section_ended = False
+
+            for i, statement in enumerate(updated_node.body):
+                new_body.append(statement)
+
+                # 检查是否到达导入部分的末尾
+                if not import_section_ended:
+                    if isinstance(statement, cst.SimpleStatementLine):
+                        # 检查是否为导入语句
+                        is_import = any(isinstance(s, cst.Import | cst.ImportFrom) for s in statement.body)
+                        if not is_import:
+                            # 到达非导入语句，在此之前插入
+                            import_line = cst.SimpleStatementLine(
+                                body=[
+                                    cst.ImportFrom(
+                                        module=cst.Attribute(
+                                            value=cst.Attribute(
+                                                value=cst.Attribute(value=cst.Name("src"), attr=cst.Name("core")),
+                                                attr=cst.Name("components"),
+                                            ),
+                                            attr=cst.Name("loader"),
+                                        ),
+                                        names=[cst.ImportAlias(name=cst.Name("register_plugin"))],
+                                    )
+                                ]
+                            )
+                            new_body.insert(-1, import_line)
+                            import_section_ended = True
+                            self.import_added = True
+
+            if not self.import_added:
+                # 如果没有找到合适的位置，在开头添加
+                import_line = cst.SimpleStatementLine(
+                    body=[
+                        cst.ImportFrom(
+                            module=cst.Attribute(
+                                value=cst.Attribute(
+                                    value=cst.Attribute(value=cst.Name("src"), attr=cst.Name("core")),
+                                    attr=cst.Name("components"),
+                                ),
+                                attr=cst.Name("loader"),
+                            ),
+                            names=[cst.ImportAlias(name=cst.Name("register_plugin"))],
+                        )
+                    ]
+                )
+                new_body.insert(0, import_line)
+                self.import_added = True
+
+            if new_body != list(updated_node.body):
+                return updated_node.with_changes(body=new_body)
+
+        return updated_node
+
+    def leave_ClassDef(  # noqa: N802
+        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
+    ) -> cst.ClassDef:
+        """为继承自 BasePlugin 的类添加 @register_plugin 装饰器"""
+        # 检查是否继承自 BasePlugin
+        is_plugin_class = False
+        if updated_node.bases:
+            for base in updated_node.bases:
+                if isinstance(base.value, cst.Name) and base.value.value == "BasePlugin":
+                    is_plugin_class = True
+                    break
+
+        if not is_plugin_class:
+            return updated_node
+
+        # 检查是否已有 register_plugin 装饰器
+        has_decorator = False
+        if updated_node.decorators:
+            for decorator in updated_node.decorators:
+                if isinstance(decorator.decorator, cst.Name) and decorator.decorator.value == "register_plugin":
+                    has_decorator = True
+                    break
+
+        if has_decorator:
+            return updated_node
+
+        # 添加 @register_plugin 装饰器
+        new_decorator = cst.Decorator(decorator=cst.Name("register_plugin"))
+        new_decorators = list(updated_node.decorators) + [new_decorator]
+
+        self.modified = True
+        return updated_node.with_changes(decorators=new_decorators)
