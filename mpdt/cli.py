@@ -135,14 +135,31 @@ def check(ctx: click.Context, path: str, level: str, fix: bool, report: str, out
 
 
 @cli.command()
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
 @click.option("--output", "-o", type=click.Path(), default="dist", help="输出目录")
 @click.option("--with-docs", is_flag=True, help="包含文档")
-@click.option("--format", type=click.Choice(["zip", "tar.gz", "wheel"]), default="zip", help="构建格式")
+@click.option("--format", "fmt", type=click.Choice(["mfp", "zip"]), default="mfp", help="构建格式（mfp 为推荐格式）")
 @click.option("--bump", type=click.Choice(["major", "minor", "patch"]), help="自动升级版本号")
 @click.pass_context
-def build(ctx: click.Context, output: str, with_docs: bool, format: str, bump: str | None) -> None:
-    """构建和打包插件"""
-    console.print("[yellow]⚠️  构建命令尚未实现[/yellow]")
+def build(ctx: click.Context, plugin_path: str, output: str, with_docs: bool, fmt: str, bump: str | None) -> None:
+    """构建并打包插件为 .mfp 文件
+
+    PLUGIN_PATH 为插件根目录（含 manifest.json），默认为当前目录。
+    """
+    from mpdt.commands.build import build_plugin
+
+    try:
+        build_plugin(
+            plugin_path=plugin_path,
+            output_dir=output,
+            with_docs=with_docs,
+            fmt=fmt,
+            bump=bump,
+            verbose=ctx.obj["verbose"],
+        )
+    except Exception as e:
+        console.print(f"[bold red]❌ 构建失败: {e}[/bold red]")
+        raise click.Abort()
 
 
 @cli.command()
