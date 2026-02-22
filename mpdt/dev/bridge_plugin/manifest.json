@@ -1,0 +1,16 @@
+{
+  "name": "dev_bridge",
+  "version": "1.0.0",
+  "description": "开发模式桥接插件，提供文件监控和热重载功能",
+  "author": "MoFox Team",
+  "license": "GPL-3.0",
+  "min_core_version": "0.1.0",
+  "entry_point": "plugin.py",
+  "keywords": ["dev", "watcher", "reload", "bridge"],
+  "categories": ["utility"],
+  "dependencies": {
+    "plugins": [],
+    "components": []
+  },
+  "include": []
+}

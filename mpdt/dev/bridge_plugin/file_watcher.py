@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     pass
 
 try:
-    from src.common.logger import get_logger
+    from src.kernel.logger import get_logger
     logger = get_logger("dev_watcher")
 except ImportError:
     import logging

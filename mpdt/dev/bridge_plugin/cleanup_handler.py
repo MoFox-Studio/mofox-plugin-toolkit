@@ -5,11 +5,10 @@ DevBridge 清理事件处理器
 
 import shutil
 from pathlib import Path
-from typing import ClassVar
 
-from src.common.logger import get_logger
-from src.plugin_system.base import BaseEventHandler
-from src.plugin_system.base.component_types import EventType
+from src.core.components.base.event_handler import BaseEventHandler
+from src.core.components.types import EventType
+from src.kernel.logger import get_logger
 
 from .dev_config import TARGET_PLUGIN_NAME, TARGET_PLUGIN_PATH
 
@@ -22,10 +21,10 @@ class CleanupHandler(BaseEventHandler):
     handler_name = "dev_bridge_cleanup"
     handler_description = "DevBridge 清理处理器"
     weight = -100  # 负权重，确保最后执行
-    init_subscribe: ClassVar[list[EventType | str]] = [EventType.ON_STOP]
+    init_subscribe: list[EventType | str] = [EventType.ON_STOP]
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, plugin=None):
+        super().__init__(plugin)
         self._target_plugin_name = TARGET_PLUGIN_NAME
         self._target_plugin_path = TARGET_PLUGIN_PATH
 

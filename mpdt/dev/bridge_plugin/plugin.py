@@ -2,17 +2,16 @@
 DevBridge 插件 - 完整的开发模式插件
 负责文件监控、插件重载等所有开发操作
 配置通过 dev_config.py 中的常量传递（mpdt dev 注入时动态修改）
+
+Neo-MoFox 版本：适配新版插件系统 API。
 """
 
 import asyncio
 from pathlib import Path
-from typing import ClassVar
 
-from src.common.logger import get_logger
-from src.plugin_system import (
-    BasePlugin,
-    register_plugin,
-)
+from src.core.components.base.plugin import BasePlugin
+from src.core.components.loader import register_plugin
+from src.kernel.logger import get_logger
 
 # 导入配置（由 mpdt dev 注入时修改）
 from .dev_config import (
@@ -37,22 +36,23 @@ class DevBridgePlugin(BasePlugin):
     """
 
     plugin_name = "dev_bridge"
-    enable_plugin = True
-    config_file_name = "config.toml"
-    dependencies: ClassVar = []
-    python_dependencies: ClassVar = []
+    plugin_description = "开发模式桥接插件，提供文件监控和热重载功能"
+    plugin_version = "1.0.0"
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    configs: list = []
+    dependent_components: list[str] = []
+
+    def __init__(self, config=None):
+        super().__init__(config)
         self._file_watcher = None
         self._target_plugin_name = TARGET_PLUGIN_NAME
         self._target_plugin_path = TARGET_PLUGIN_PATH
 
-    def get_plugin_components(self) -> list:
+    def get_components(self) -> list[type]:
         """注册清理事件处理器"""
         from .cleanup_handler import CleanupHandler
 
-        return [(CleanupHandler.get_handler_info(), CleanupHandler)]
+        return [CleanupHandler]
 
     async def on_plugin_loaded(self):
         """插件加载完成后启动文件监控"""
@@ -92,30 +92,20 @@ class DevBridgePlugin(BasePlugin):
             return
 
         try:
-            from src.plugin_system.apis import plugin_manage_api
+            from src.core.managers.plugin_manager import get_plugin_manager
 
-            is_loaded = plugin_manage_api.is_plugin_loaded(self._target_plugin_name)
-            is_enabled = plugin_manage_api.is_plugin_enabled(self._target_plugin_name)
+            plugin_manager = get_plugin_manager()
+            is_loaded = plugin_manager.is_plugin_loaded(self._target_plugin_name)
 
             if not is_loaded:
                 logger.error("=" * 60)
                 logger.error(f"❌ 目标插件 {self._target_plugin_name} 未加载！")
                 logger.error("")
-                if not is_enabled:
-                    logger.error("📋 原因: 插件已被禁用")
-                    logger.error("")
-                    logger.error("🔧 解决方案:")
-                    logger.error("   1. 检查插件的 config.toml 中 [plugin] enabled = true")
-                    logger.error("   2. 或在 plugin.py 中设置 enable_plugin = True")
-                    logger.error("   3. 或直接删除 enable_plugin 行（默认启用）")
-                else:
-                    logger.error("📋 原因: 插件加载失败，请检查插件代码是否有错误")
+                logger.error("📋 原因: 插件加载失败，请检查插件代码是否有错误")
                 logger.error("=" * 60)
             else:
                 logger.info(f"✅ 目标插件 {self._target_plugin_name} 已成功加载")
 
-        except ValueError:
-            logger.error(f"❌ 目标插件 {self._target_plugin_name} 未注册")
         except Exception as e:
             logger.error(f"❌ 检查目标插件状态时出错: {e}")
 
@@ -136,49 +126,29 @@ class DevBridgePlugin(BasePlugin):
             return
 
         try:
-            from src.plugin_system.apis import plugin_manage_api
+            from src.core.managers.plugin_manager import get_plugin_manager
 
+            plugin_manager = get_plugin_manager()
             plugin_name = self._target_plugin_name
-            is_loaded = plugin_manage_api.is_plugin_loaded(plugin_name)
-            is_enabled = plugin_manage_api.is_plugin_enabled(plugin_name)
+            is_loaded = plugin_manager.is_plugin_loaded(plugin_name)
 
             if is_loaded:
-                # 插件已加载，检查是否被禁用
-                if not is_enabled:
-                    logger.info(f"🔓 插件 {plugin_name} 已禁用，正在启用...")
-                    await plugin_manage_api.enable_plugin(plugin_name)
-
-                # 重载插件
+                # 插件已加载，直接重载
                 logger.info(f"🔄 正在重载插件: {plugin_name}...")
-                success = await plugin_manage_api.reload_plugin(plugin_name)
+                success = await plugin_manager.reload_plugin(plugin_name)
                 if success:
                     logger.info(f"✅ 插件 {plugin_name} 重载成功")
                 else:
                     logger.error(f"❌ 插件 {plugin_name} 重载失败")
             else:
-                # 插件未加载，使用 enable_plugin 来加载并启用
-                # enable_plugin 会同时处理加载和启用，即使插件之前被禁用
-                logger.info(f"📦 插件 {plugin_name} 未加载，正在启用并加载...")
-                success = await plugin_manage_api.enable_plugin(plugin_name)
+                # 插件未加载，通过路径直接加载
+                logger.info(f"📦 插件 {plugin_name} 未加载，正在从路径加载...")
+                success = await plugin_manager.load_plugin(self._target_plugin_path)
                 if success:
-                    logger.info(f"✅ 插件 {plugin_name} 启用并加载成功")
+                    logger.info(f"✅ 插件 {plugin_name} 加载成功")
                 else:
-                    logger.error(f"❌ 插件 {plugin_name} 启用/加载失败")
+                    logger.error(f"❌ 插件 {plugin_name} 加载失败")
 
-        except ValueError as e:
-            # 插件未注册，尝试扫描并加载
-            logger.warning(f"⚠️ 插件未注册: {e}")
-            logger.info("🔍 正在扫描插件目录...")
-            try:
-                from src.plugin_system.apis import plugin_manage_api
-
-                plugin_manage_api.rescan_and_register_plugins(load_after_register=True)
-                if plugin_manage_api.is_plugin_loaded(self._target_plugin_name):
-                    logger.info(f"✅ 插件 {self._target_plugin_name} 扫描并加载成功")
-                else:
-                    logger.error(f"❌ 插件 {self._target_plugin_name} 扫描后仍未加载")
-            except Exception as scan_e:
-                logger.error(f"❌ 扫描插件目录失败: {scan_e}")
         except Exception as e:
             logger.error(f"❌ 操作插件时出错: {e}")
             import traceback
