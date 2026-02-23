@@ -3,23 +3,10 @@ MPDT 配置管理器
 管理 mofox 路径、虚拟环境等配置信息
 """
 
-import os
 from pathlib import Path
-from typing import Literal
 
-try:
-    import tomli
-    import tomli_w
-except ImportError:
-    # 如果没有安装 tomli，使用 toml
-    try:
-        import toml as tomli
-        import toml as tomli_w
-    except ImportError:
-        tomli = None
-        tomli_w = None
-
-VenvType = Literal["venv", "uv", "conda", "poetry", "none"]
+import tomli
+import tomli_w
 
 
 class MPDTConfig:
@@ -47,20 +34,12 @@ class MPDTConfig:
             self._config = {}
             return
 
-        if tomli is None:
-            raise ImportError("需要安装 tomli 库来读取配置文件")
-
         with open(self.config_path, "rb") as f:
             self._config = tomli.load(f)
 
     def save(self) -> None:
         """保存配置文件"""
-        if tomli_w is None:
-            raise ImportError("需要安装 tomli-w 库来写入配置文件")
-
-        # 确保目录存在
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
-
         with open(self.config_path, "wb") as f:
             tomli_w.dump(self._config, f)
 
@@ -76,34 +55,6 @@ class MPDTConfig:
         if "mofox" not in self._config:
             self._config["mofox"] = {}
         self._config["mofox"]["path"] = str(Path(path).absolute())
-
-    @property
-    def venv_path(self) -> Path | None:
-        """获取虚拟环境路径"""
-        path_str = self._config.get("mofox", {}).get("venv_path")
-        return Path(path_str) if path_str else None
-
-    @venv_path.setter
-    def venv_path(self, path: Path | str | None) -> None:
-        """设置虚拟环境路径"""
-        if "mofox" not in self._config:
-            self._config["mofox"] = {}
-        if path is None:
-            self._config["mofox"]["venv_path"] = None
-        else:
-            self._config["mofox"]["venv_path"] = str(Path(path).absolute())
-
-    @property
-    def venv_type(self) -> VenvType:
-        """获取虚拟环境类型"""
-        return self._config.get("mofox", {}).get("venv_type", "venv")
-
-    @venv_type.setter
-    def venv_type(self, venv_type: VenvType) -> None:
-        """设置虚拟环境类型"""
-        if "mofox" not in self._config:
-            self._config["mofox"] = {}
-        self._config["mofox"]["venv_type"] = venv_type
 
     @property
     def auto_reload(self) -> bool:
@@ -133,39 +84,9 @@ class MPDTConfig:
         """获取 Python 启动命令
 
         Returns:
-            Python 命令列表，例如:
-            - ["E:/venv/Scripts/python.exe"]
-            - ["conda", "run", "-p", "E:/conda_env", "python"]
-            - ["poetry", "run", "python"]
+            Python 命令列表，使用 uv run
         """
-        venv_type = self.venv_type
-        venv_path = self.venv_path
-
-        if venv_type == "none" or not venv_path:
-            return ["python"]
-
-        if venv_type == "venv" or venv_type == "uv":
-            # venv 和 uv 使用相同的结构
-            if os.name == "nt":  # Windows
-                python_exe = venv_path / "Scripts" / "python.exe"
-            else:  # Unix-like
-                python_exe = venv_path / "bin" / "python"
-
-            if python_exe.exists():
-                return [str(python_exe)]
-            else:
-                # 降级到系统 Python
-                return ["python"]
-
-        elif venv_type == "conda":
-            return ["conda", "run", "-p", str(venv_path), "python"]
-
-        elif venv_type == "poetry":
-            # poetry 需要在 mofox 目录中执行
-            return ["poetry", "run", "python"]
-
-        else:
-            return ["python"]
+        return ["uv", "run"]
 
     def validate(self) -> tuple[bool, list[str]]:
         """验证配置
@@ -175,28 +96,8 @@ class MPDTConfig:
         """
         errors = []
 
-        # 检查 mofox 路径
         if not self.mofox_path:
-            errors.append("未配置 mofox 主程序路径")
-        elif not self.mofox_path.exists():
-            errors.append(f"mofox 路径不存在: {self.mofox_path}")
-        else:
-            # 检查是否有 bot.py
-            bot_file = self.mofox_path / "bot.py"
-            if not bot_file.exists():
-                errors.append(f"未找到 bot.py: {bot_file}")
-
-        # 检查虚拟环境
-        if self.venv_type != "none" and self.venv_path:
-            if not self.venv_path.exists():
-                errors.append(f"虚拟环境路径不存在: {self.venv_path}")
-            else:
-                # 检查 Python 可执行文件
-                python_cmd = self.get_python_command()
-                if self.venv_type in ["venv", "uv"]:
-                    python_path = Path(python_cmd[0])
-                    if not python_path.exists():
-                        errors.append(f"Python 可执行文件不存在: {python_path}")
+            errors.append("未配置 Neo-MoFox 主程序路径")
 
         return len(errors) == 0, errors
 
@@ -223,65 +124,17 @@ def interactive_config() -> MPDTConfig:
     console = Console()
     config = MPDTConfig()
 
-    console.print(Panel.fit("[bold cyan]MPDT 配置向导[/bold cyan]\n\n让我们配置 MoFox 主程序的路径和虚拟环境"))
+    console.print(Panel.fit("[bold cyan]MPDT 配置向导[/bold cyan]\n\n让我们配置 Neo-MoFox 主程序的路径"))
 
-    # 配置 mofox 路径
-    while True:
-        mofox_path_str = Prompt.ask(
-            "\n[bold]请输入 mofox 主程序路径[/bold]",
-            default=str(Path.cwd().parent / "mofox") if Path.cwd().parent.name != "mofox" else str(Path.cwd()),
-        )
-        mofox_path = Path(mofox_path_str).expanduser().absolute()
-
-        if not mofox_path.exists():
-            console.print(f"[red]路径不存在: {mofox_path}[/red]")
-            if not Confirm.ask("重新输入?", default=True):
-                break
-            continue
-
-        bot_file = mofox_path / "bot.py"
-        if not bot_file.exists():
-            console.print("[yellow]警告: 未找到 bot.py[/yellow]")
-            if not Confirm.ask("仍然使用此路径?", default=False):
-                continue
-
-        config.mofox_path = mofox_path
-        console.print(f"[green]✓ mofox 路径已设置: {mofox_path}[/green]")
-        break
-
-    # 配置虚拟环境
-    console.print("\n[bold]虚拟环境配置[/bold]")
-    venv_type_choice = Prompt.ask(
-        "请选择虚拟环境类型", choices=["venv", "uv", "conda", "poetry", "none"], default="venv"
+    # 配置 Neo-MoFox 路径
+    mofox_path_str = Prompt.ask(
+        "\n[bold]请输入 Neo-MoFox 主程序路径[/bold]",
+        default=str(Path.cwd().parent / "Neo-MoFox") if Path.cwd().parent.name != "Neo-MoFox" else str(Path.cwd()),
     )
-    config.venv_type = venv_type_choice
+    mofox_path = Path(mofox_path_str).expanduser().absolute()
 
-    if venv_type_choice != "none":
-        if venv_type_choice == "poetry":
-            console.print("[cyan]使用 poetry，将在 mofox 目录中执行命令[/cyan]")
-            config.venv_path = config.mofox_path
-        else:
-            assert config.mofox_path is not None
-            default_venv_path = str(config.mofox_path.parent / "venv")
-            if venv_type_choice == "uv":
-                default_venv_path = str(config.mofox_path.parent / ".venv")
-            elif venv_type_choice == "conda":
-                default_venv_path = str(config.mofox_path.parent / "conda_env")
-
-            venv_path_str = Prompt.ask(f"请输入 {venv_type_choice} 虚拟环境路径", default=default_venv_path)
-            venv_path = Path(venv_path_str).expanduser().absolute()
-
-            if not venv_path.exists():
-                console.print(f"[yellow]警告: 虚拟环境路径不存在: {venv_path}[/yellow]")
-                if not Confirm.ask("仍然使用此路径?", default=True):
-                    config.venv_type = "none"
-                else:
-                    config.venv_path = venv_path
-            else:
-                config.venv_path = venv_path
-                console.print(f"[green]✓ 虚拟环境路径已设置: {venv_path}[/green]")
-    else:
-        console.print("[cyan]将使用系统 Python[/cyan]")
+    config.mofox_path = mofox_path
+    console.print(f"[green]✓ Neo-MoFox 路径已设置: {mofox_path}[/green]")
 
     # 保存配置
     config.save()

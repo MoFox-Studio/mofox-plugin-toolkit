@@ -12,5 +12,8 @@
     "plugins": [],
     "components": []
   },
+  "python_dependencies": [
+        "watchdog >=2.1.0"
+    ],
   "include": []
 }

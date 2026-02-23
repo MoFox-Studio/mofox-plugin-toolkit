@@ -4,7 +4,7 @@ MoFox Plugin Dev Toolkit
 一个用于 MoFox-Bot 插件开发的工具集
 """
 
-__version__ = "0.4.3"
+__version__ = "0.4.5"
 __author__ = "MoFox-Studio"
 __license__ = "GPL-3.0-or-later"
 

@@ -11,15 +11,15 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version=__version__, prog_name="MPDT - MoFox-Bot 插件开发工具")
+@click.version_option(version=__version__, prog_name="MPDT - Neo-MoFox 插件开发工具")
 @click.option("--verbose", "-v", is_flag=True, help="详细输出模式")
 @click.option("--no-color", is_flag=True, help="禁用彩色输出")
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
     """
-    MoFox Plugin Dev Toolkit - MoFox-Bot 插件开发工具
+    MoFox Plugin Dev Toolkit - Neo-MoFox 插件开发工具
 
-    一个类似 Vite 的开发工具，用于快速创建、开发和测试 MoFox-Bot 插件。
+    一个类似 Vite 的开发工具，用于快速创建、开发和测试 Neo-MoFox 插件。
     """
     # 设置上下文对象
     ctx.ensure_object(dict)
@@ -163,10 +163,10 @@ def build(ctx: click.Context, plugin_path: str, output: str, with_docs: bool, fm
 
 
 @cli.command()
-@click.option("--mmc-path", type=click.Path(exists=True), help="mmc 主程序路径")
+@click.option("--neo-mofox-path", type=click.Path(exists=True), help="Neo-MoFox 主程序路径")
 @click.option("--plugin-path", type=click.Path(exists=True), help="插件路径（默认当前目录）")
 @click.pass_context
-def dev(ctx: click.Context, mmc_path: str | None, plugin_path: str | None) -> None:
+def dev(ctx: click.Context, neo_mofox_path: str | None, plugin_path: str | None) -> None:
     """启动开发模式，支持热重载"""
     from pathlib import Path
 
@@ -175,7 +175,7 @@ def dev(ctx: click.Context, mmc_path: str | None, plugin_path: str | None) -> No
     try:
         dev_command(
             plugin_path=Path(plugin_path) if plugin_path else None,
-            mofox_path=Path(mmc_path) if mmc_path else None
+            mofox_path=Path(neo_mofox_path) if neo_mofox_path else None
         )
     except Exception as e:
         console.print(f"[bold red]❌ 启动失败: {e}[/bold red]")
@@ -223,9 +223,7 @@ def config_show() -> None:
         table.add_column("值", style="green")
 
         table.add_row("配置文件", str(config.config_path))
-        table.add_row("MoFox-Bot 路径", str(config.mofox_path) if config.mofox_path else "[red]未配置[/red]")
-        table.add_row("虚拟环境类型", config.venv_type)
-        table.add_row("虚拟环境路径", str(config.venv_path) if config.venv_path else "[dim]无[/dim]")
+        table.add_row("Neo-MoFox 路径", str(config.mofox_path) if config.mofox_path else "[red]未配置[/red]")
         table.add_row("自动重载", "是" if config.auto_reload else "否")
         table.add_row("重载延迟", f"{config.reload_delay}秒")
 
@@ -259,7 +257,7 @@ def config_test() -> None:
 
         if valid:
             console.print("[bold green]✓ 配置有效！[/bold green]")
-            console.print(f"\nmmc 路径: {config.mofox_path}")
+            console.print(f"\nNeo-MoFox 路径: {config.mofox_path}")
             console.print(f"Python 命令: {' '.join(config.get_python_command())}")
         else:
             console.print("[bold red]✗ 配置验证失败：[/bold red]")
@@ -274,8 +272,8 @@ def config_test() -> None:
 
 @config.command("set-mofox")
 @click.argument("path", type=click.Path(exists=True))
-def config_set_mmc(path: str) -> None:
-    """设置 MoFox 主程序路径"""
+def config_set_mofox(path: str) -> None:
+    """设置 Neo-MoFox 主程序路径"""
     from pathlib import Path
 
     from mpdt.utils.config_manager import MPDTConfig
@@ -285,39 +283,7 @@ def config_set_mmc(path: str) -> None:
         config.mofox_path = Path(path)
         config.save()
 
-        console.print(f"[green]✓ MoFox 路径已设置: {path}[/green]")
-
-    except Exception as e:
-        console.print(f"[bold red]❌ 设置失败: {e}[/bold red]")
-        raise click.Abort()
-
-
-@config.command("set-venv")
-@click.argument("path", type=click.Path(exists=True), required=False)
-@click.option("--type", "venv_type", type=click.Choice(["venv", "uv", "conda", "poetry", "none"]),
-              default="venv", help="虚拟环境类型")
-def config_set_venv(path: str | None, venv_type: str) -> None:
-    """设置虚拟环境"""
-    from pathlib import Path
-    from typing import cast
-
-    from mpdt.utils.config_manager import MPDTConfig, VenvType
-
-    try:
-        config = MPDTConfig()
-        config.venv_type = cast(VenvType, venv_type)
-
-        if venv_type == "none":
-            config.venv_path = None
-            console.print("[green]✓ 已设置为使用系统 Python[/green]")
-        elif path:
-            config.venv_path = Path(path)
-            console.print(f"[green]✓ 虚拟环境已设置: {path} (类型: {venv_type})[/green]")
-        else:
-            console.print("[red]❌ 请提供虚拟环境路径[/red]")
-            raise click.Abort()
-
-        config.save()
+        console.print(f"[green]✓ Neo-MoFox 路径已设置: {path}[/green]")
 
     except Exception as e:
         console.print(f"[bold red]❌ 设置失败: {e}[/bold red]")

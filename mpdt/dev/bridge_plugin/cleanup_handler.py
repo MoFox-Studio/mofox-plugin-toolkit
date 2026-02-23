@@ -20,7 +20,7 @@ class CleanupHandler(BaseEventHandler):
 
     handler_name = "dev_bridge_cleanup"
     handler_description = "DevBridge 清理处理器"
-    weight = -100  # 负权重，确保最后执行
+    weight = 100  # 负权重，确保最后执行
     init_subscribe: list[EventType | str] = [EventType.ON_STOP]
 
     def __init__(self, plugin=None):

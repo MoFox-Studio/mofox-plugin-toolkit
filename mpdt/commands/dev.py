@@ -25,7 +25,7 @@ class DevServer:
 
         resolved_path = mofox_path or config.mofox_path
         if not resolved_path:
-            raise ValueError("未配置 mofox 主程序路径")
+            raise ValueError("未配置 Neo-MoFox 主程序路径")
         self.mofox_path: Path = resolved_path
 
         self.plugin_name: str | None = None
@@ -64,7 +64,7 @@ class DevServer:
         """解析插件信息"""
         console.print(
             Panel.fit(
-                f"[bold cyan]🚀 MoFox Plugin Dev Server[/bold cyan]\n\n"
+                f"[bold cyan]🚀 Neo-MoFox Plugin Dev Server[/bold cyan]\n\n"
                 f"📂 目录: {self.plugin_path.name}\n"
                 f"📍 路径: {self.plugin_path}"
             )
@@ -174,66 +174,22 @@ DISCOVERY_PORT: int = 12318
         """启动主程序"""
         console.print(f"[cyan]🚀 启动主程序: {self.mofox_path / 'bot.py'}[/cyan]")
 
-        # 获取 Python 命令
-        venv_type = self.config.venv_type
-        venv_path = self.config.venv_path
-
         try:
             import os
             import sys
 
             # Windows 下打开新窗口
             if os.name == "nt":
-                if venv_type in ["venv", "uv"] and venv_path:
-                    activate_script = venv_path / "Scripts" / "activate.bat"
-                    if activate_script.exists():
-                        cmd = [
-                            "cmd",
-                            "/c",
-                            f"chcp 65001 && cd /d {self.mofox_path} && {activate_script} && python bot.py",
-                        ]
-                        console.print(f"[dim]命令: 激活 {venv_type} 环境并启动[/dim]")
-                    else:
-                        python_cmd = self.config.get_python_command()
-                        cmd = ["cmd", "/c", f"chcp 65001 && cd /d {self.mofox_path} && {python_cmd[0]} bot.py"]
-                        console.print("[yellow]警告: 未找到激活脚本，使用直接启动[/yellow]")
-                elif venv_type == "conda" and venv_path:
-                    cmd = [
-                        "cmd",
-                        "/c",
-                        f"chcp 65001 && cd /d {self.mofox_path} && conda activate {venv_path} && python bot.py",
-                    ]
-                    console.print("[dim]命令: 激活 conda 环境并启动[/dim]")
-                elif venv_type == "poetry":
-                    cmd = ["cmd", "/c", f"chcp 65001 && cd /d {self.mofox_path} && poetry run python bot.py"]
-                    console.print("[dim]命令: 使用 poetry run 启动[/dim]")
-                else:
-                    cmd = ["cmd", "/c", f"chcp 65001 && cd /d {self.mofox_path} && python bot.py"]
-                    console.print("[dim]命令: 使用系统 Python 启动[/dim]")
+                cmd = ["cmd", "/c", f"chcp 65001 && cd /d {self.mofox_path} && uv run main.py"]
+                console.print("[dim]命令: 使用 Python 启动[/dim]")
 
                 self.process = subprocess.Popen(
                     cmd, creationflags=subprocess.CREATE_NEW_CONSOLE, encoding="utf-8", errors="ignore"
                 )
             else:
                 # Linux/Mac
-                if venv_type in ["venv", "uv"] and venv_path:
-                    activate_script = venv_path / "bin" / "activate"
-                    if activate_script.exists():
-                        shell_cmd = f"cd {self.mofox_path} && source {activate_script} && python bot.py"
-                    else:
-                        python_cmd = self.config.get_python_command()
-                        shell_cmd = f"cd {self.mofox_path} && {python_cmd[0]} bot.py"
-                        console.print("[yellow]警告: 未找到激活脚本，使用直接启动[/yellow]")
-                    console.print(f"[dim]命令: 激活 {venv_type} 环境并启动[/dim]")
-                elif venv_type == "conda" and venv_path:
-                    shell_cmd = f"cd {self.mofox_path} && conda activate {venv_path} && python bot.py"
-                    console.print("[dim]命令: 激活 conda 环境并启动[/dim]")
-                elif venv_type == "poetry":
-                    shell_cmd = f"cd {self.mofox_path} && poetry run python bot.py"
-                    console.print("[dim]命令: 使用 poetry run 启动[/dim]")
-                else:
-                    shell_cmd = f"cd {self.mofox_path} && python bot.py"
-                    console.print("[dim]命令: 使用系统 Python 启动[/dim]")
+                shell_cmd = f"cd {self.mofox_path} && uv run bot.py"
+                console.print("[dim]命令: 使用 Python 启动[/dim]")
 
                 if sys.platform == "darwin":
                     cmd = ["osascript", "-e", f'tell application "Terminal" to do script "{shell_cmd}"']
@@ -286,7 +242,7 @@ def dev_command(
 
     Args:
         plugin_path: 插件路径，默认为当前目录
-        mofox_path: mmc 主程序路径，默认从配置读取
+        mofox_path: Neo-MoFox 主程序路径，默认从配置读取
     """
     # 确定插件路径
     if plugin_path is None:
