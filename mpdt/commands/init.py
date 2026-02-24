@@ -371,7 +371,7 @@ class {_to_pascal_case(plugin_name)}Plugin(BasePlugin):
     plugin_version = "1.0.0"
     plugin_author = "Your Name"
     plugin_description = "{plugin_name} 插件"
-    config = [Config]
+    configs = [Config]
 
     def get_components(self) -> list[type]:
         """获取插件内所有组件类
