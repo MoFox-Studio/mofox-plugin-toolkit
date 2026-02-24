@@ -160,6 +160,7 @@ def _interactive_init() -> dict[str, Any]:
                 questionary.Choice("Collection 插件", value="collection"),
                 questionary.Choice("Router 插件", value="router"),
                 questionary.Choice("Plus_Command 插件", value="plus_command"),
+                questionary.Choice("Event Handler 插件", value="event_handler"),
                 questionary.Choice("完整插件", value="full"),
                 questionary.Choice("Adapter 插件", value="adapter"),
                 questionary.Choice("Chatter 插件", value="chatter"),
@@ -314,6 +315,10 @@ def _generate_manifest_file(plugin_name: str, author: str | None, template: str,
             {"component_type": "config", "component_name": "config", "dependencies": []},
             {"component_type": "router", "component_name": "example_router", "dependencies": []},
         ],
+        "event_handler": [
+            {"component_type": "config", "component_name": "config", "dependencies": []},
+            {"component_type": "event_handler", "component_name": "example_event", "dependencies": []},
+        ],
         "full": [
             {"component_type": "config", "component_name": "config", "dependencies": []},
             {"component_type": "action", "component_name": "example_action", "dependencies": []},
@@ -422,6 +427,10 @@ def _get_component_imports_and_list(plugin_name: str, template: str) -> tuple[st
         "router": [
             ("config", "config", "Config", "configs"),
             ("router", "example_router", "ExampleRouter", "routers"),
+        ],
+        "event_handler": [
+            ("config", "config", "Config", "configs"),
+            ("event_handler", "example_event", "ExampleEvent", "events"),
         ],
         "full": [
             ("config", "config", "Config", "configs"),
@@ -640,6 +649,8 @@ def _build_components_tree(template: str) -> dict[str, list[str]] | list[str]:
         base_tree["chatters"].append("example_chatter.py")
     elif template == "router":
         base_tree["routers"].append("example_router.py")
+    elif template == "event_handler":
+        base_tree["events"].append("example_event.py")
     elif template == "full":
         base_tree["actions"].append("example_action.py")
         base_tree["tools"].append("example_tool.py")
@@ -797,6 +808,10 @@ def _generate_example_components(
             ("config", "config", "插件配置"),
             ("router", "example_router", "示例 Router 组件"),
         ],
+        "event_handler": [
+            ("config", "config", "插件配置"),
+            ("event", "example_event", "示例 Event Handler 组件"),
+        ],
         "full": [
             ("config", "config", "插件配置"),
             ("action", "example_action", "示例 Action 组件"),
@@ -815,6 +830,7 @@ def _generate_example_components(
         "collection": "collections",
         "plus_command": "plus_command",
         "event": "events",
+        "event_handler": "events",
         "adapter": "adapters",
         "service": "services",
         "config": "configs",
