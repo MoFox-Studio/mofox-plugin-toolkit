@@ -33,7 +33,7 @@ class {class_name}(BaseEventHandler):
     handler_description = "{description}"
     weight = 10  # 权重：数值越大优先级越高
     intercept_message = False  # 是否拦截消息（拦截后消息不再传递给后续处理器）
-    init_subscribe = [EventType.MESSAGE_RECEIVED]  # 初始订阅的事件类型列表
+    init_subscribe = [EventType.ON_MESSAGE_RECEIVED]  # 初始订阅的事件类型列表
 
     async def execute(self, kwargs: dict | None) -> tuple[bool, bool, str | None]:
         """
