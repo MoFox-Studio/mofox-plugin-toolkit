@@ -204,22 +204,18 @@ def _create_plugin_structure(
     # 创建主目录
     ensure_dir(plugin_dir)
 
-    # 创建插件代码子目录
-    plugin_code_dir = ensure_dir(plugin_dir / plugin_name)
-
     # 创建 manifest.json
     manifest_content = _generate_manifest_file(plugin_name, author, template)
-    safe_write_file(plugin_code_dir / "manifest.json", manifest_content)
     safe_write_file(plugin_dir / "manifest.json", manifest_content)
     if verbose:
         console.print("[dim]✓ 生成清单文件: manifest.json[/dim]")
 
     # 创建 plugin.py
     plugin_content = _generate_plugin_file(plugin_name, template)
-    safe_write_file(plugin_code_dir / "plugin.py", plugin_content)
+    safe_write_file(plugin_dir / "plugin.py", plugin_content)
 
     # 创建 components 目录
-    components_dir = ensure_dir(plugin_code_dir / "components")
+    components_dir = ensure_dir(plugin_dir / "components")
     safe_write_file(components_dir / "__init__.py", '"""\n组件模块\n"""\n')
 
     for comp_type in [
@@ -238,7 +234,7 @@ def _create_plugin_structure(
         safe_write_file(comp_dir / "__init__.py", f'"""\n{comp_type.title()} 组件\n"""\n')
 
     # 创建 utils 目录
-    utils_dir = ensure_dir(plugin_code_dir / "utils")
+    utils_dir = ensure_dir(plugin_dir / "utils")
     safe_write_file(utils_dir / "__init__.py", '"""\n工具函数\n"""\n')
 
     # 根据模板类型自动生成示例组件
@@ -570,20 +566,19 @@ def _build_plugin_tree(
     if init_git:
         tree[".gitignore"] = None
 
-    # 插件代码目录
-    tree[plugin_name] = {
-        "manifest.json": None,
-        "plugin.py": None,
-        "components": components_tree,
-        "utils": ["__init__.py"],
-    }
+    # 核心文件
+    tree["manifest.json"] = None
+    tree["plugin.py"] = None
+
+    # 组件和工具目录
+    tree["components"] = components_tree
+    tree["utils"] = ["__init__.py"]
 
     # 文档目录（根据 with_docs 决定）
     if with_docs:
         tree["docs"] = ["README.md"]
 
     # 项目配置文件
-    tree["manifest.json"] = None
     tree["pyproject.toml"] = None
     tree["requirements.txt"] = None
     tree["README.md"] = None
