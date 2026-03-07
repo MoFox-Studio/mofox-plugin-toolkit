@@ -39,13 +39,14 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
 @click.option("--template", "-t", type=click.Choice(["basic", "action", "tool", "plus_command", "full", "adapter"]),
               default="basic", help="插件模板类型")
 @click.option("--author", "-a", help="作者名称")
+@click.option("--email", "-e", help="作者电子邮箱")
 @click.option("--license", "-l", type=click.Choice(["GPL-v3.0", "MIT", "Apache-2.0", "BSD-3-Clause"]),
               default="GPL-v3.0", help="开源协议")
 @click.option("--with-docs", is_flag=True, help="创建文档文件")
 @click.option("--init-git/--no-init-git", default=None, help="是否初始化 Git 仓库")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.pass_context
-def init(ctx: click.Context, plugin_name: str | None, template: str, author: str | None,
+def init(ctx: click.Context, plugin_name: str | None, template: str,email: str|  None, author: str | None,
          license: str, with_docs: bool, init_git: bool | None, output: str | None) -> None:
     """初始化新插件项目"""
     from mpdt.commands.init import init_plugin
@@ -56,6 +57,7 @@ def init(ctx: click.Context, plugin_name: str | None, template: str, author: str
             template=template,
             author=author,
             license_type=license,
+            email = email,
             with_docs=with_docs,
             init_git=init_git,
             output_dir=output,

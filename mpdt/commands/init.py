@@ -35,6 +35,7 @@ def init_plugin(
     plugin_name: str | None = None,
     template: str = "basic",
     author: str | None = None,
+    email: str | None = None,
     license_type: str = "GPL-v3.0",
     with_docs: bool = False,
     output_dir: str | None = None,
@@ -48,6 +49,7 @@ def init_plugin(
         plugin_name: 插件名称
         template: 模板类型
         author: 作者名称
+        email: 作者邮箱
         license_type: 开源协议
         with_docs: 是否创建文档
         output_dir: 输出目录
@@ -62,6 +64,7 @@ def init_plugin(
         plugin_name = plugin_info["plugin_name"]
         template = plugin_info["template"]
         author = plugin_info.get("author")
+        email = plugin_info.get("email")
         license_type = plugin_info["license"]
         with_docs = plugin_info.get("with_docs", False)
         init_git = plugin_info.get("init_git", False)
@@ -93,6 +96,7 @@ def init_plugin(
         plugin_name=plugin_name,
         template=template,
         author=author,
+        email=email,
         license_type=license_type,
         with_docs=with_docs,
         verbose=verbose,
@@ -170,6 +174,10 @@ def _interactive_init() -> dict[str, Any]:
             "作者名称:",
             default=git_info.get("name", ""),
         ),
+        email=questionary.text(
+            "邮箱地址:",
+            default=git_info.get("email", ""),
+        ),
         license=questionary.select(
             "选择开源协议:",
             choices=["GPL-v3.0", "MIT", "Apache-2.0", "BSD-3-Clause"],
@@ -196,6 +204,7 @@ def _create_plugin_structure(
     plugin_name: str,
     template: str,
     author: str | None,
+    email: str | None,
     license_type: str,
     with_docs: bool,
     verbose: bool,
@@ -253,7 +262,7 @@ def _create_plugin_structure(
         safe_write_file(docs_dir / "README.md", _generate_readme_file(plugin_name))
 
     # 创建 pyproject.toml
-    pyproject_content = _generate_pyproject_file(plugin_name, author, license_type)
+    pyproject_content = _generate_pyproject_file(plugin_name, author, email, license_type)
     safe_write_file(plugin_dir / "pyproject.toml", pyproject_content)
 
     # 创建 requirements.txt
@@ -485,14 +494,14 @@ TODO: API 文档
 """
 
 
-def _generate_pyproject_file(plugin_name: str, author: str | None, license_type: str) -> str:
+def _generate_pyproject_file(plugin_name: str, author: str | None, email: str | None, license_type: str) -> str:
     """生成 pyproject.toml 文件内容"""
     return f'''[project]
 name = "{plugin_name}"
 version = "1.0.0"
 description = "MoFox-Bot 插件"
 authors = [
-    {{name = "{author or "Your Name"}", email = "your.email@example.com"}}
+    {{name = "{author or "Your Name"}", email = "{email or "your.email@example.com"}"}}
 ]
 license = {{text = "{license_type}"}}
 requires-python = ">=3.11"
