@@ -178,6 +178,7 @@ def build_plugin(
         with_docs:   是否将文档文件打入包中
         fmt:         输出格式，"mfp"（推荐） 或 "zip"
         bump:        自动升级版本，"major" / "minor" / "patch" / None
+                     （升级后会立即写回 manifest.json，打包时使用新版本号）
         verbose:     是否显示详细信息
     """
     plugin_dir = Path(plugin_path).resolve()
@@ -205,7 +206,7 @@ def build_plugin(
     plugin_name: str = manifest["name"]
     plugin_version: str = manifest["version"]
 
-    # ── 2. 版本升级 ──────────────────────────────────────────────────────────
+    # ── 2. 版本升级（先写回文件，再使用新版本号进行打包） ────────────────────
     if bump:
         try:
             new_version = _bump_version(plugin_version, bump)
@@ -214,7 +215,8 @@ def build_plugin(
             return
         print_step(f"版本升级: [yellow]{plugin_version}[/yellow] → [green]{new_version}[/green]")
         manifest["version"] = new_version
-        _save_manifest(plugin_dir, manifest)
+        # 立即写回 manifest.json，确保后续打包使用新版本
+        _save_manifest(plugin_dir, manifest)        
         plugin_version = new_version
 
     # ── 3. 验证入口文件 ───────────────────────────────────────────────────────

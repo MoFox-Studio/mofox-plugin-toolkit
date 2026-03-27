@@ -68,6 +68,7 @@ def generate_component(
     description: str | None = None,
     output_dir: str | None = None,
     force: bool = False,
+    use_components_folder: bool = True,
     verbose: bool = False,
 ) -> None:
     """
@@ -79,6 +80,7 @@ def generate_component(
         description: 组件描述
         output_dir: 输出目录
         force: 是否覆盖
+        use_components_folder: 是否在 components/ 文件夹中生成（False 则在根目录生成）
         verbose: 详细输出
     """
     # 确定工作目录
@@ -98,7 +100,6 @@ def generate_component(
         console.print(f"[dim]检测到插件: {plugin_name}[/dim]")
 
     # 交互式获取组件信息
-    use_components_folder = True  # 默认使用 components 文件夹
     if not component_type or not component_name:
         component_info = _interactive_generate()
         component_type = component_info["component_type"]

@@ -5,12 +5,17 @@ DevBridge 清理事件处理器
 
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from src.core.components.base.event_handler import BaseEventHandler
 from src.core.components.types import EventType
+from src.kernel.event import EventDecision
 from src.kernel.logger import get_logger
 
 from .dev_config import TARGET_PLUGIN_NAME, TARGET_PLUGIN_PATH
+
+if TYPE_CHECKING:
+    from .plugin import DevBridgePlugin
 
 logger = get_logger("dev_bridge_cleanup")
 
@@ -19,22 +24,45 @@ class CleanupHandler(BaseEventHandler):
     """清理事件处理器 - 在程序停止时清理插件文件"""
 
     handler_name = "dev_bridge_cleanup"
-    handler_description = "DevBridge 清理处理器"
-    weight = 100  # 负权重，确保最后执行
+    handler_description = "DevBridge 清理处理器，在系统停止时移除临时插件文件"
+    weight = -100  # 负权重，确保最后执行
+    intercept_message = False
     init_subscribe: list[EventType | str] = [EventType.ON_STOP]
 
-    def __init__(self, plugin=None):
+    def __init__(self, plugin: "DevBridgePlugin") -> None:
+        """初始化清理处理器
+        
+        Args:
+            plugin: DevBridge 插件实例
+        """
         super().__init__(plugin)
         self._target_plugin_name = TARGET_PLUGIN_NAME
         self._target_plugin_path = TARGET_PLUGIN_PATH
 
-    async def execute(self, kwargs: dict | None) -> tuple[bool, bool, str | None]:
-        """程序停止时执行清理（同步删除）"""
+    async def execute(
+        self,
+        event_name: str,
+        params: dict[str, Any],
+    ) -> tuple[EventDecision, dict[str, Any]]:
+        """程序停止时执行清理（同步删除）
+        
+        Args:
+            event_name: 事件名称（ON_STOP）
+            params: 事件参数
+            
+        Returns:
+            事件决策和更新后的参数
+        """
         logger.info("🛑 收到停止事件，准备清理 DevBridge...")
 
-        self._delete_plugins()
+        try:
+            self._delete_plugins()
+            logger.info("✅ DevBridge 清理完成")
+        except Exception as e:
+            logger.error(f"❌ DevBridge 清理失败: {e}", exc_info=True)
 
-        return True, True, None
+        # 返回 SUCCESS，继续执行后续清理处理器
+        return EventDecision.SUCCESS, params
 
     def _delete_plugins(self):
         """同步删除插件目录"""

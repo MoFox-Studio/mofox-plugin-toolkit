@@ -36,7 +36,7 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
 
 @cli.command()
 @click.argument("plugin_name", required=False)
-@click.option("--template", "-t", type=click.Choice(["basic", "action", "tool", "plus_command", "full", "adapter"]),
+@click.option("--template", "-t", type=click.Choice(["basic", "action", "tool", "collection", "router", "plus_command", "event_handler", "full", "adapter", "chatter"]),
               default="basic", help="插件模板类型")
 @click.option("--author", "-a", help="作者名称")
 @click.option("--email", "-e", help="作者电子邮箱")
@@ -69,14 +69,15 @@ def init(ctx: click.Context, plugin_name: str | None, template: str,email: str| 
 
 
 @cli.command()
-@click.argument("component_type", type=click.Choice(["action", "tool", "event", "adapter", "plus-command", "router", "chatter", "service", "config"]), required=False)
+@click.argument("component_type", type=click.Choice(["action", "tool", "collection", "event", "adapter", "plus-command", "router", "chatter", "service", "config"]), required=False)
 @click.argument("component_name", required=False)
 @click.option("--description", "-d", help="组件描述")
-@click.option("--output", "-o", type=click.Path(), help="输出目录")
+@click.option("--output", "-o", type=click.Path(), help="插件根目录路径（默认为当前目录）")
 @click.option("--force", "-f", is_flag=True, help="覆盖已存在的文件")
+@click.option("--root", is_flag=True, help="在插件根目录生成组件文件，而不是 components/ 文件夹")
 @click.pass_context
 def generate(ctx: click.Context, component_type: str | None, component_name: str | None, description: str | None,
-             output: str | None, force: bool) -> None:
+             output: str | None, force: bool, root: bool) -> None:
     """生成插件组件(始终生成异步方法)
 
     如果不提供参数，将进入交互式问答模式
@@ -90,6 +91,7 @@ def generate(ctx: click.Context, component_type: str | None, component_name: str
             description=description,
             output_dir=output,
             force=force,
+            use_components_folder=not root,
             verbose=ctx.obj["verbose"],
         )
     except Exception as e:
