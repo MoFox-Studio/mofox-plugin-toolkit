@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
+from ..utils.plugin_parser import extract_plugin_name
+
 
 class ValidationLevel(str, Enum):
     """验证级别"""
@@ -121,9 +123,4 @@ class BaseValidator(ABC):
 
         插件结构: my_plugin/plugin.py
         """
-        # 检查 plugin.py 是否在根目录
-        if (self.plugin_path / "plugin.py").exists():
-            # 返回插件路径的目录名
-            return self.plugin_path.name
-
-        return None
+        return extract_plugin_name(self.plugin_path)

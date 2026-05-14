@@ -21,6 +21,7 @@ class AutoFixValidator(BaseValidator):
 
     def __init__(self, plugin_path: Path):
         super().__init__(plugin_path)
+        #todo: 不在class变量中记录修复结果，在fix_issues返回成功的修复和失败的修复
         self.fixes_applied = []
         self.fixes_failed = []
         self.fixed_issues = []  # 记录已修复的原始问题
