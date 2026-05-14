@@ -2,12 +2,15 @@
 静态检查命令实现
 """
 
+import json
+
 from pathlib import Path
 
 from rich.panel import Panel
 from rich.table import Table
 
 from mpdt.utils.color_printer import console, print_error, print_info, print_success, print_warning
+from mpdt.utils.manifest_metadata import ensure_manifest_metadata_interactive
 from mpdt.validators import (
     AutoFixValidator,
     ComponentValidator,
@@ -77,6 +80,17 @@ def check_plugin(
     # 元数据验证
     if not skip_metadata:
         print_info("正在检查插件元数据...")
+        manifest_path = path / "manifest.json"
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, encoding="utf-8") as f:
+                    manifest_data = json.load(f)
+                ensure_manifest_metadata_interactive(path, manifest_data)
+            except json.JSONDecodeError:
+                pass
+            except ValueError as e:
+                print_error(str(e))
+                return
         validator = MetadataValidator(path)
         result = validator.validate()
         all_results.append(result)

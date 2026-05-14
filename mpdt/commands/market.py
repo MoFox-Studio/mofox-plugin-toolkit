@@ -30,6 +30,7 @@ from mpdt.market.manifest import (
     version_payload,
 )
 from mpdt.utils.color_printer import console
+from mpdt.utils.manifest_metadata import ensure_manifest_metadata_interactive_async
 
 
 def market_doctor(market_url: str | None = None, token: str | None = None) -> None:
@@ -49,7 +50,7 @@ def market_register(plugin_path: str = ".", market_url: str | None = None, token
     """Register a plugin in the market."""
 
     async def run() -> None:
-        manifest = load_manifest(plugin_path)
+        manifest = await _load_manifest_for_market(plugin_path)
         payload = plugin_payload(manifest, repository_url=repository_url)
         result = await _client(market_url, token).register_plugin(payload)
         _print_ok(f"Plugin registered: {result['plugin_id']} ({result['status']})")
@@ -61,7 +62,7 @@ def market_update(plugin_path: str = ".", market_url: str | None = None, token: 
     """Update plugin metadata in the market."""
 
     async def run() -> None:
-        manifest = load_manifest(plugin_path)
+        manifest = await _load_manifest_for_market(plugin_path)
         payload = plugin_payload(manifest, repository_url=repository_url)
         plugin_id = payload.pop("plugin_id")
         result = await _client(market_url, token).update_plugin(plugin_id, payload)
@@ -98,7 +99,7 @@ def market_submit_version(
     """Build and submit a plugin version to the market."""
 
     async def run() -> None:
-        manifest = load_manifest(plugin_path)
+        manifest = await _load_manifest_for_market(plugin_path)
         package = build_package(plugin_path=plugin_path, output_dir=output_dir, with_docs=with_docs, fmt="mfp", show_progress=False)
         if package is None:
             return
@@ -132,7 +133,7 @@ def market_sync(
     """Rebuild and sync version metadata."""
 
     async def run() -> None:
-        manifest = load_manifest(plugin_path)
+        manifest = await _load_manifest_for_market(plugin_path)
         package = build_package(plugin_path=plugin_path, output_dir=output_dir, with_docs=with_docs, fmt="mfp", show_progress=False)
         if package is None:
             return
@@ -173,7 +174,7 @@ def market_publish(
 
     async def run() -> None:
         plugin_dir = Path(plugin_path).resolve()
-        manifest = load_manifest(str(plugin_dir))
+        manifest = await _load_manifest_for_market(str(plugin_dir))
         package = build_package(plugin_path=str(plugin_dir), output_dir=output_dir, with_docs=with_docs, fmt="mfp", show_progress=False)
         if package is None:
             return
@@ -431,6 +432,14 @@ def _run_market(awaitable) -> None:
         _print_error(str(e))
     except OSError as e:
         _print_error(f"Market server connection failed: {e}")
+
+
+async def _load_manifest_for_market(plugin_path: str) -> dict:
+    """Load manifest and repair required market metadata in async flows before proceeding."""
+    resolved_path = Path(plugin_path).resolve()
+    manifest = load_manifest(str(resolved_path))
+    await ensure_manifest_metadata_interactive_async(resolved_path, manifest)
+    return load_manifest(str(resolved_path))
 
 
 def _print_ok(message: str) -> None:

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import zipfile
 from dataclasses import dataclass
 from hashlib import sha256
@@ -31,6 +32,7 @@ from mpdt.utils.color_printer import (
     print_success,
     print_warning,
 )
+from mpdt.utils.manifest_metadata import ensure_manifest_metadata_interactive, metadata_errors
 
 # 构建时默认排除的文件/目录名称（精确匹配）
 _EXCLUDE_NAMES: set[str] = {
@@ -179,6 +181,18 @@ def _save_manifest(plugin_dir: Path, manifest: dict) -> None:
         json.dump(manifest, f, ensure_ascii=False, indent=4)
 
 
+def _validate_manifest_metadata(manifest: dict) -> None:
+    """验证打包所需的 manifest 元数据。"""
+    required = ["name", "version", "description", "author", "entry_point"]
+    for field in required:
+        if field not in manifest:
+            raise ValueError(f"manifest.json 缺少必需字段: '{field}'")
+
+    errors = metadata_errors(manifest)
+    if errors:
+        raise ValueError(errors[0])
+
+
 def build_plugin(
     plugin_path: str = ".",
     output_dir: str = "dist",
@@ -263,10 +277,9 @@ def build_package(
     if manifest is None:
         return
 
-    required = ["name", "version", "description", "author", "entry_point"]
-    for field in required:
-        if field not in manifest:
-            raise ValueError(f"manifest.json 缺少必需字段: '{field}'")
+    manifest = ensure_manifest_metadata_interactive(plugin_dir, manifest)
+
+    _validate_manifest_metadata(manifest)
 
     plugin_name: str = manifest["name"]
     plugin_version: str = manifest["version"]
