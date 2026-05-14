@@ -190,6 +190,241 @@ def dev(ctx: click.Context, neo_mofox_path: str | None, plugin_path: str | None)
 
 
 @cli.group()
+def market() -> None:
+    """插件市场命令"""
+    pass
+
+
+@market.command("doctor")
+@click.option("--market-url", help="中心服务器地址")
+@click.option("--token", help="中心服务器访问令牌")
+def market_doctor_cmd(market_url: str | None, token: str | None) -> None:
+    """检查中心服务器连通性"""
+    from mpdt.commands.market import market_doctor
+
+    market_doctor(market_url=market_url, token=token)
+
+
+@market.command("register")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--market-url", help="中心服务器地址")
+@click.option("--token", help="中心服务器访问令牌")
+@click.option("--repository-url", help="插件 GitHub 仓库地址")
+def market_register_cmd(plugin_path: str, market_url: str | None, token: str | None, repository_url: str | None) -> None:
+    """注册插件到中心服务器"""
+    from mpdt.commands.market import market_register
+
+    market_register(plugin_path=plugin_path, market_url=market_url, token=token, repository_url=repository_url)
+
+
+@market.command("update")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--market-url", help="中心服务器地址")
+@click.option("--token", help="中心服务器访问令牌")
+@click.option("--repository-url", help="插件 GitHub 仓库地址")
+def market_update_cmd(plugin_path: str, market_url: str | None, token: str | None, repository_url: str | None) -> None:
+    """更新中心服务器插件元数据"""
+    from mpdt.commands.market import market_update
+
+    market_update(plugin_path=plugin_path, market_url=market_url, token=token, repository_url=repository_url)
+
+
+@market.command("package")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--output", "output_dir", type=click.Path(), default="dist", help="输出目录")
+@click.option("--with-docs", is_flag=True, help="包含文档")
+def market_package_cmd(plugin_path: str, output_dir: str, with_docs: bool) -> None:
+    """生成市场发布产物元数据"""
+    from mpdt.commands.market import market_package
+
+    market_package(plugin_path=plugin_path, output_dir=output_dir, with_docs=with_docs)
+
+
+@market.command("submit-version")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--market-url", help="中心服务器地址")
+@click.option("--token", help="中心服务器访问令牌")
+@click.option("--asset-url", help="Release 资产下载地址")
+@click.option("--release-url", help="GitHub Release 页面地址")
+@click.option("--output", "output_dir", type=click.Path(), default="dist", help="输出目录")
+@click.option("--with-docs", is_flag=True, help="包含文档")
+def market_submit_version_cmd(
+    plugin_path: str,
+    market_url: str | None,
+    token: str | None,
+    asset_url: str | None,
+    release_url: str | None,
+    output_dir: str,
+    with_docs: bool,
+) -> None:
+    """打包并提交插件版本"""
+    from mpdt.commands.market import market_submit_version
+
+    market_submit_version(
+        plugin_path=plugin_path,
+        market_url=market_url,
+        token=token,
+        asset_url=asset_url,
+        release_url=release_url,
+        output_dir=output_dir,
+        with_docs=with_docs,
+    )
+
+
+@market.command("sync")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--market-url", help="中心服务器地址")
+@click.option("--token", help="中心服务器访问令牌")
+@click.option("--asset-url", help="Release 资产下载地址")
+@click.option("--release-url", help="GitHub Release 页面地址")
+@click.option("--output", "output_dir", type=click.Path(), default="dist", help="输出目录")
+@click.option("--with-docs", is_flag=True, help="包含文档")
+def market_sync_cmd(
+    plugin_path: str,
+    market_url: str | None,
+    token: str | None,
+    asset_url: str | None,
+    release_url: str | None,
+    output_dir: str,
+    with_docs: bool,
+) -> None:
+    """同步插件版本元数据"""
+    from mpdt.commands.market import market_sync
+
+    market_sync(
+        plugin_path=plugin_path,
+        market_url=market_url,
+        token=token,
+        asset_url=asset_url,
+        release_url=release_url,
+        output_dir=output_dir,
+        with_docs=with_docs,
+    )
+
+
+@market.command("publish")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--market-url", help="中心服务器地址")
+@click.option("--token", help="中心服务器访问令牌")
+@click.option("--github-token", help="GitHub token；也可使用 GITHUB_TOKEN 或 GH_TOKEN")
+@click.option("--owner", help="GitHub 用户或组织名；默认使用当前 GitHub token 用户")
+@click.option("--repo", help="GitHub 仓库名；默认使用插件 ID")
+@click.option("--private", is_flag=True, help="新建私有仓库")
+@click.option("--output", "output_dir", type=click.Path(), default="dist", help="输出目录")
+@click.option("--with-docs", is_flag=True, help="包含文档")
+@click.option("--release-notes", help="GitHub Release 说明")
+@click.option("--skip-push", is_flag=True, help="跳过 git push，仅创建/复用 Release 并同步市场")
+@click.option("--save-github-token/--no-save-github-token", default=None, help="是否保存本次传入的 GitHub token")
+def market_publish_cmd(
+    plugin_path: str,
+    market_url: str | None,
+    token: str | None,
+    github_token: str | None,
+    owner: str | None,
+    repo: str | None,
+    private: bool,
+    output_dir: str,
+    with_docs: bool,
+    release_notes: str | None,
+    skip_push: bool,
+    save_github_token: bool | None,
+) -> None:
+    """一键发布：建仓库、推送 tag、创建 Release、上传产物并同步市场"""
+    from mpdt.commands.market import market_publish
+
+    market_publish(
+        plugin_path=plugin_path,
+        market_url=market_url,
+        token=token,
+        github_token=github_token,
+        owner=owner,
+        repo=repo,
+        private=private,
+        output_dir=output_dir,
+        with_docs=with_docs,
+        release_notes=release_notes,
+        skip_push=skip_push,
+        save_token=save_github_token,
+    )
+
+
+@market.command("status")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--plugin-id", help="插件 ID，不提供则读取 manifest.json")
+@click.option("--market-url", help="中心服务器地址")
+@click.option("--token", help="中心服务器访问令牌")
+def market_status_cmd(plugin_path: str, plugin_id: str | None, market_url: str | None, token: str | None) -> None:
+    """查询插件市场状态"""
+    from mpdt.commands.market import market_status
+
+    market_status(plugin_path=plugin_path, plugin_id=plugin_id, market_url=market_url, token=token)
+
+
+@market.command("yank")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--version", help="插件版本，不提供则读取 manifest.json")
+@click.option("--market-url", help="中心服务器地址")
+@click.option("--token", help="中心服务器访问令牌")
+@click.option("--reason", help="撤回原因")
+def market_yank_cmd(plugin_path: str, version: str | None, market_url: str | None, token: str | None, reason: str | None) -> None:
+    """撤回插件版本"""
+    from mpdt.commands.market import market_yank
+
+    market_yank(plugin_path=plugin_path, version=version, market_url=market_url, token=token, reason=reason)
+
+
+@market.command("search")
+@click.argument("query", required=False)
+@click.option("--category", help="分类过滤")
+@click.option("--tag", help="标签过滤")
+@click.option("--limit", type=int, default=20, help="返回数量")
+@click.option("--market-url", help="中心服务器地址")
+def market_search_cmd(query: str | None, category: str | None, tag: str | None, limit: int, market_url: str | None) -> None:
+    """搜索公开插件"""
+    from mpdt.commands.market import market_search
+
+    market_search(query=query, category=category, tag=tag, limit=limit, market_url=market_url)
+
+
+@market.command("info")
+@click.argument("plugin_id")
+@click.option("--market-url", help="中心服务器地址")
+def market_info_cmd(plugin_id: str, market_url: str | None) -> None:
+    """查看公开插件详情"""
+    from mpdt.commands.market import market_info
+
+    market_info(plugin_id=plugin_id, market_url=market_url)
+
+
+@market.command("install-info")
+@click.argument("plugin_id")
+@click.option("--market-url", help="中心服务器地址")
+@click.option("--host-version", help="当前 Neo-MoFox 宿主版本")
+@click.option("--plugin-api-version", help="插件 API 版本")
+@click.option("--platform", help="目标平台，例如 windows/linux/macos")
+@click.option("--include-prerelease", is_flag=True, help="允许推荐预发布版本")
+def market_install_info_cmd(
+    plugin_id: str,
+    market_url: str | None,
+    host_version: str | None,
+    plugin_api_version: str | None,
+    platform: str | None,
+    include_prerelease: bool,
+) -> None:
+    """查看推荐安装版本元数据"""
+    from mpdt.commands.market import market_install_info
+
+    market_install_info(
+        plugin_id=plugin_id,
+        market_url=market_url,
+        host_version=host_version,
+        plugin_api_version=plugin_api_version,
+        platform=platform,
+        include_prerelease=include_prerelease,
+    )
+
+
+@cli.group()
 def config() -> None:
     """配置管理"""
     pass

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mofox-plugin-dev-toolkit"
-version = "0.4.10"
+version = "0.5.0"
 description = "开发工具集，用于快速创建、开发和测试 MoFox-Bot 插件"
 authors = [
     {name = "MoFox-Studio", email = "wwwww95915@qq.com"}
@@ -14,7 +14,7 @@ requires-python = ">=3.11"
 license = {text = "GPL-3.0-or-later"}
 keywords = ["mofox", "plugin", "toolkit", "cli", "development"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",

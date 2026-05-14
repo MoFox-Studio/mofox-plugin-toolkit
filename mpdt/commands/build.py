@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 import re
 import zipfile
+from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 
 from rich.panel import Panel
@@ -66,6 +68,21 @@ _DOC_NAMES: set[str] = {
     "CHANGELOG.md",
     "CHANGELOG.rst",
 }
+
+
+@dataclass(frozen=True)
+class PackageResult:
+    """插件打包结果。"""
+
+    plugin_name: str
+    plugin_version: str
+    author: str
+    entry_point: str
+    file_count: int
+    source_size: int
+    package_size: int
+    package_path: Path
+    sha256: str
 
 
 def _is_excluded(path: Path, with_docs: bool) -> bool:
@@ -181,17 +198,66 @@ def build_plugin(
                      （升级后会立即写回 manifest.json，打包时使用新版本号）
         verbose:     是否显示详细信息
     """
+    try:
+        result = build_package(
+            plugin_path=plugin_path,
+            output_dir=output_dir,
+            with_docs=with_docs,
+            fmt=fmt,
+            bump=bump,
+            verbose=verbose,
+            show_progress=True,
+        )
+    except ValueError as e:
+        print_error(str(e))
+        return
+    except Exception as e:
+        print_error(f"打包失败: {e}")
+        return
+
+    if result is None:
+        return
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="cyan")
+    table.add_column(style="white")
+    table.add_row("插件名称", result.plugin_name)
+    table.add_row("版本", result.plugin_version)
+    table.add_row("作者", result.author)
+    table.add_row("入口文件", result.entry_point)
+    table.add_row("打包文件数", str(result.file_count))
+    table.add_row("原始大小", _format_size(result.source_size))
+    table.add_row("包大小", _format_size(result.package_size))
+    table.add_row("SHA256", result.sha256)
+    table.add_row("输出路径", str(result.package_path))
+
+    console.print()
+    console.print(table)
+    console.print()
+    print_success(f"构建完成: {result.package_path.name}")
+
+
+def build_package(
+    plugin_path: str = ".",
+    output_dir: str = "dist",
+    with_docs: bool = False,
+    fmt: str = "mfp",
+    bump: str | None = None,
+    verbose: bool = False,
+    show_progress: bool = False,
+) -> PackageResult | None:
+    """构建插件包并返回可供市场发布使用的元数据。"""
+
     plugin_dir = Path(plugin_path).resolve()
 
     # ── 1. 基本验证 ──────────────────────────────────────────────────────────
     if not plugin_dir.exists():
-        print_error(f"插件路径不存在: {plugin_dir}")
-        return
+        raise ValueError(f"插件路径不存在: {plugin_dir}")
     if not plugin_dir.is_dir():
-        print_error(f"插件路径不是目录: {plugin_dir}")
-        return
+        raise ValueError(f"插件路径不是目录: {plugin_dir}")
 
-    console.print(Panel.fit(f"📦 构建插件: [cyan]{plugin_dir.name}[/cyan]", border_style="blue"))
+    if show_progress:
+        console.print(Panel.fit(f"📦 构建插件: [cyan]{plugin_dir.name}[/cyan]", border_style="blue"))
 
     manifest = _load_manifest(plugin_dir)
     if manifest is None:
@@ -200,8 +266,7 @@ def build_plugin(
     required = ["name", "version", "description", "author", "entry_point"]
     for field in required:
         if field not in manifest:
-            print_error(f"manifest.json 缺少必需字段: '{field}'")
-            return
+            raise ValueError(f"manifest.json 缺少必需字段: '{field}'")
 
     plugin_name: str = manifest["name"]
     plugin_version: str = manifest["version"]
@@ -211,9 +276,9 @@ def build_plugin(
         try:
             new_version = _bump_version(plugin_version, bump)
         except ValueError as e:
-            print_error(str(e))
-            return
-        print_step(f"版本升级: [yellow]{plugin_version}[/yellow] → [green]{new_version}[/green]")
+            raise ValueError(str(e)) from e
+        if show_progress:
+            print_step(f"版本升级: [yellow]{plugin_version}[/yellow] → [green]{new_version}[/green]")
         manifest["version"] = new_version
         # 立即写回 manifest.json，确保后续打包使用新版本
         _save_manifest(plugin_dir, manifest)        
@@ -222,15 +287,17 @@ def build_plugin(
     # ── 3. 验证入口文件 ───────────────────────────────────────────────────────
     entry_point = manifest.get("entry_point", "plugin.py")
     entry_file = plugin_dir / entry_point
-    if not entry_file.exists():
+    if show_progress and not entry_file.exists():
         print_warning(f"入口文件不存在: {entry_point}（仍将继续构建）")
 
     # ── 4. 收集文件 ───────────────────────────────────────────────────────────
-    print_step("收集文件...")
+    if show_progress:
+        print_step("收集文件...")
     files = _collect_files(plugin_dir, with_docs)
 
     if not files:
-        print_warning("未找到任何需要打包的文件")
+        if show_progress:
+            print_warning("未找到任何需要打包的文件")
         return
 
     if verbose:
@@ -254,7 +321,8 @@ def build_plugin(
         print_warning(f"目标文件已存在，将覆盖: {archive_path}")
 
     # ── 6. 压缩打包 ───────────────────────────────────────────────────────────
-    print_step(f"正在写入 {suffix} 包...")
+    if show_progress:
+        print_step(f"正在写入 {suffix} 包...")
     total_bytes = 0
 
     try:
@@ -266,31 +334,35 @@ def build_plugin(
                 if verbose:
                     console.print(f"  [dim]  → {arcname}[/dim]")
     except Exception as e:
-        print_error(f"打包失败: {e}")
         # 清理不完整的文件
         if archive_path.exists():
             archive_path.unlink()
-        return
+        raise RuntimeError(str(e)) from e
 
     # ── 7. 摘要 ──────────────────────────────────────────────────────────────
     archive_size = archive_path.stat().st_size
+    digest = _sha256_file(archive_path)
+    return PackageResult(
+        plugin_name=plugin_name,
+        plugin_version=plugin_version,
+        author=str(manifest.get("author", "-")),
+        entry_point=str(entry_point),
+        file_count=len(files),
+        source_size=total_bytes,
+        package_size=archive_size,
+        package_path=archive_path,
+        sha256=digest,
+    )
 
-    table = Table(show_header=False, box=None, padding=(0, 2))
-    table.add_column(style="cyan")
-    table.add_column(style="white")
-    table.add_row("插件名称", plugin_name)
-    table.add_row("版本", plugin_version)
-    table.add_row("作者", manifest.get("author", "-"))
-    table.add_row("入口文件", entry_point)
-    table.add_row("打包文件数", str(len(files)))
-    table.add_row("原始大小", _format_size(total_bytes))
-    table.add_row("包大小", _format_size(archive_size))
-    table.add_row("输出路径", str(archive_path))
 
-    console.print()
-    console.print(table)
-    console.print()
-    print_success(f"构建完成: {archive_path.name}")
+def _sha256_file(path: Path) -> str:
+    """计算文件 sha256。"""
+
+    digest = sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _format_size(size: int) -> str:
