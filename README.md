@@ -253,62 +253,7 @@ mpdt build --with-docs --bump patch --output release
 
 **说明**：`.mfp` 文件是 Neo-MoFox 的标准插件格式（本质为 ZIP 压缩包），可直接被 loader.py 加载。
 
-### 6. 发布到插件市场
-
-MPDT 可以自动完成 GitHub 仓库、tag、Release、资产上传以及中心服务器同步。
-
-准备 GitHub token，至少需要仓库创建和 Release 写入权限：
-
-```bash
-set GITHUB_TOKEN=ghp_xxx
-set PLUGIN_MARKET_BASE_URL=http://127.0.0.1:8787
-set PLUGIN_MARKET_AUTHOR_TOKEN=dev-token
-```
-
-也可以首次发布时传入 token，并在明确确认后保存到 `~/.mpdt/config.toml`，下次会自动读取：
-
-```bash
-mpdt market publish --github-token ghp_xxx --save-github-token --owner your-github-user-or-org
-```
-
-如果只传 `--github-token` 且没有指定 `--save-github-token`，MPDT 会询问是否保存；默认不保存。
-
-在插件目录执行一键发布：
-
-```bash
-mpdt market publish --owner your-github-user-or-org
-```
-
-该命令会依次执行：
-
-1. 读取 `manifest.json`。
-2. 构建 `.mfp` 包并计算 sha256。
-3. 如果 GitHub 仓库不存在则自动创建。
-4. 初始化或复用本地 git 仓库。
-5. 提交当前插件代码。
-6. 创建版本 tag，例如 `v1.0.0`。
-7. 推送分支和 tag 到 GitHub。
-8. 创建或复用 GitHub Release。
-9. 上传 `.mfp` Release 资产。
-10. 注册或更新中心服务器插件元数据。
-11. 提交新版本；如果版本已存在则同步版本元数据。
-
-常用参数：
-
-```bash
-mpdt market publish \
-  --owner MoFox-Studio \
-  --repo my_plugin \
-  --release-notes "First public release"
-```
-
-如果仓库和 tag 已经手动推送，可跳过 git push，仅创建/复用 Release 并同步市场：
-
-```bash
-mpdt market publish --owner MoFox-Studio --skip-push
-```
-
-### 7. 配置管理
+### 6. 配置管理
 
 ```bash
 # 交互式配置向导

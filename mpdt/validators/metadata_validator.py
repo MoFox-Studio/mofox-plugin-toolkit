@@ -4,7 +4,6 @@
 
 import json
 
-from ..utils.manifest_metadata import metadata_errors
 from .base import BaseValidator, ValidationResult
 
 
@@ -71,13 +70,6 @@ class MetadataValidator(BaseValidator):
                 )
         else:
             self.result.add_info("所有必需的元数据字段都已提供")
-
-        for error in metadata_errors(manifest_data, self.plugin_path):
-            self.result.add_error(
-                error,
-                file_path="manifest.json",
-                suggestion='请填写 display_name，并补全 categories/tags；如果配置了 icon，请确保它指向有效的 PNG 文件',
-            )
 
         # 检查推荐字段
         missing_recommended = []

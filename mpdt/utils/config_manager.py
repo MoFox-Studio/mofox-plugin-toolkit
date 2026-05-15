@@ -80,29 +80,6 @@ class MPDTConfig:
             self._config["dev"] = {}
         self._config["dev"]["reload_delay"] = value
 
-    @property
-    def github_token(self) -> str | None:
-        """获取已保存的 GitHub token。"""
-
-        token = self._config.get("github", {}).get("token")
-        return str(token) if token else None
-
-    @github_token.setter
-    def github_token(self, token: str) -> None:
-        """保存 GitHub token。"""
-
-        if "github" not in self._config:
-            self._config["github"] = {}
-        self._config["github"]["token"] = token
-
-    def clear_github_token(self) -> None:
-        """删除已保存的 GitHub token。"""
-
-        if "github" in self._config:
-            self._config["github"].pop("token", None)
-            if not self._config["github"]:
-                self._config.pop("github")
-
     def get_python_command(self) -> list[str]:
         """获取 Python 启动命令
 

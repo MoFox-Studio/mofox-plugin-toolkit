@@ -17,7 +17,6 @@ from typing import Any
 
 import questionary
 
-from mpdt.utils.manifest_metadata import prompt_manifest_metadata
 from mpdt.utils.color_printer import (
     console,
     print_error,
@@ -65,20 +64,12 @@ def init_plugin(
     if not plugin_name:
         plugin_info = _interactive_init()
         plugin_name = plugin_info["plugin_name"]
-        description = plugin_info.get("description", "")
         template = plugin_info["template"]
         author = plugin_info.get("author")
         email = plugin_info.get("email")
         license_type = plugin_info["license"]
         with_docs = plugin_info.get("with_docs", False)
         init_git = plugin_info.get("init_git", False)
-        categories = plugin_info["categories"]
-        tags = plugin_info["tags"]
-    else:
-        description = ""
-        metadata = prompt_manifest_metadata()
-        categories = metadata["categories"]
-        tags = metadata["tags"]
 
     # 此时 plugin_name 必定不为 None
     assert plugin_name is not None
@@ -105,14 +96,11 @@ def init_plugin(
     _create_plugin_structure(
         plugin_dir=plugin_dir,
         plugin_name=plugin_name,
-        description=description,
         template=template,
         author=author,
         email=email,
         license_type=license_type,
         with_docs=with_docs,
-        categories=categories,
-        tags=tags,
         verbose=verbose,
     )
 
@@ -206,10 +194,6 @@ def _interactive_init() -> dict[str, Any]:
         ),
     ).ask()
 
-    metadata = prompt_manifest_metadata()
-    answers["categories"] = metadata["categories"]
-    answers["tags"] = metadata["tags"]
-
     return answers
 
         # ============================================================================
@@ -220,14 +204,11 @@ def _interactive_init() -> dict[str, Any]:
 def _create_plugin_structure(
     plugin_dir: Path,
     plugin_name: str,
-    description: str,
     template: str,
     author: str | None,
     email: str | None,
     license_type: str,
     with_docs: bool,
-    categories: list[str],
-    tags: list[str],
     verbose: bool,
 ) -> None:
     """创建插件目录结构"""
@@ -236,7 +217,7 @@ def _create_plugin_structure(
     ensure_dir(plugin_dir)
 
     # 创建 manifest.json
-    manifest_content = _generate_manifest_file(plugin_name, author, template, description, categories, tags)
+    manifest_content = _generate_manifest_file(plugin_name, author, template)
     safe_write_file(plugin_dir / "manifest.json", manifest_content)
     if verbose:
         console.print("[dim]✓ 生成清单文件: manifest.json[/dim]")
@@ -300,14 +281,7 @@ def _create_plugin_structure(
         console.print(f"[dim]✓ 生成许可证文件: {license_type}[/dim]")
 
 
-def _generate_manifest_file(
-    plugin_name: str,
-    author: str | None,
-    template: str,
-    description: str = "",
-    categories: list[str] | None = None,
-    tags: list[str] | None = None,
-) -> str:
+def _generate_manifest_file(plugin_name: str, author: str | None, template: str, description: str = "") -> str:
     """生成 manifest.json 文件内容
 
     Args:
@@ -369,13 +343,9 @@ def _generate_manifest_file(
 
     manifest = {
         "name": plugin_name,
-        "display_name": plugin_name,
         "version": "1.0.0",
         "description": description or f"{plugin_name} 插件",
         "author": author or "Your Name",
-        "icon": "icon.png",
-        "categories": categories or ["tool"],
-        "tags": tags or [plugin_name],
         "dependencies": {"plugins": [], "components": []},
         "include": template_components.get(template, []),
         "entry_point": "plugin.py",
