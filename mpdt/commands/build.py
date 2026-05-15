@@ -181,14 +181,14 @@ def _save_manifest(plugin_dir: Path, manifest: dict) -> None:
         json.dump(manifest, f, ensure_ascii=False, indent=4)
 
 
-def _validate_manifest_metadata(manifest: dict, plugin_dir: Path) -> None:
+def _validate_manifest_metadata(manifest: dict) -> None:
     """验证打包所需的 manifest 元数据。"""
     required = ["name", "version", "description", "author", "entry_point"]
     for field in required:
         if field not in manifest:
             raise ValueError(f"manifest.json 缺少必需字段: '{field}'")
 
-    errors = metadata_errors(manifest, plugin_dir)
+    errors = metadata_errors(manifest)
     if errors:
         raise ValueError(errors[0])
 
@@ -279,7 +279,7 @@ def build_package(
 
     manifest = ensure_manifest_metadata_interactive(plugin_dir, manifest)
 
-    _validate_manifest_metadata(manifest, plugin_dir)
+    _validate_manifest_metadata(manifest)
 
     plugin_name: str = manifest["name"]
     plugin_version: str = manifest["version"]

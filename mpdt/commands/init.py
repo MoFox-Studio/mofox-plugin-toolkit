@@ -369,11 +369,9 @@ def _generate_manifest_file(
 
     manifest = {
         "name": plugin_name,
-        "display_name": plugin_name,
         "version": "1.0.0",
         "description": description or f"{plugin_name} 插件",
         "author": author or "Your Name",
-        "icon": "icon.png",
         "categories": categories or ["tool"],
         "tags": tags or [plugin_name],
         "dependencies": {"plugins": [], "components": []},
