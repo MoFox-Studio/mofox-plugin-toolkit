@@ -37,7 +37,6 @@ def check_plugin(
     skip_component: bool = False,
     skip_type: bool = False,
     skip_style: bool = False,
-    verbose: bool = False,
 ) -> None:
     """
     检查插件
@@ -54,7 +53,6 @@ def check_plugin(
         skip_type: 跳过类型检查
         skip_style: 跳过代码风格检查
         skip_security: 跳过安全检查
-        verbose: 详细输出
     """
     path = Path(plugin_path).resolve()
 
@@ -77,7 +75,7 @@ def check_plugin(
         validator = StructureValidator(path)
         result = validator.validate()
         all_results.append(result)
-        _print_validation_summary(result, verbose)
+        _print_validation_summary(result)
 
     # 元数据验证
     if not skip_metadata:
@@ -85,7 +83,7 @@ def check_plugin(
         validator = MetadataValidator(path)
         result = validator.validate()
         all_results.append(result)
-        _print_validation_summary(result, verbose)
+        _print_validation_summary(result)
 
     # 组件验证
     if not skip_component:
@@ -93,14 +91,14 @@ def check_plugin(
         validator = ComponentValidator(path)
         result = validator.validate()
         all_results.append(result)
-        _print_validation_summary(result, verbose)
+        _print_validation_summary(result)
 
     # 配置验证
     print_info("正在检查配置文件...")
     validator = ConfigValidator(path)
     result = validator.validate()
     all_results.append(result)
-    _print_validation_summary(result, verbose)
+    _print_validation_summary(result)
 
     # 类型检查
     if not skip_type:
@@ -108,7 +106,7 @@ def check_plugin(
         validator = TypeValidator(path)
         result = validator.validate()
         all_results.append(result)
-        _print_validation_summary(result, verbose)
+        _print_validation_summary(result)
 
     # 代码风格检查
     if not skip_style:
@@ -116,7 +114,7 @@ def check_plugin(
         validator = StyleValidator(path)
         result = validator.validate()
         all_results.append(result)
-        _print_validation_summary(result, verbose)
+        _print_validation_summary(result)
 
     # 自动修复（如果启用）
     fix_result = None
@@ -162,15 +160,9 @@ def check_plugin(
             # 显示修复摘要
             if fix_result.fixes_applied:
                 print_success(f"  ✓ 成功修复 {len(fix_result.fixes_applied)} 个问题")
-                if verbose:
-                    for fix in fix_result.fixes_applied:
-                        console.print(f"    [green]✓[/green] {fix}")
             
             if fix_result.fixes_failed:
                 print_warning(f"  ⚠ {len(fix_result.fixes_failed)} 个问题修复失败")
-                if verbose:
-                    for fail in fix_result.fixes_failed:
-                        console.print(f"    [yellow]✗[/yellow] {fail}")
             
             if not fix_result.fixes_applied and not fix_result.fixes_failed:
                 print_info("  ℹ 未发现可自动修复的问题")
@@ -183,21 +175,16 @@ def check_plugin(
         _save_report(all_results, output_path, report_format, fix_result if auto_fix else None)
 
 
-def _print_validation_summary(result: ValidationResult, verbose: bool = False) -> None:
+def _print_validation_summary(result: ValidationResult) -> None:
     """打印验证摘要
 
     Args:
         result: 验证结果
-        verbose: 是否详细输出
     """
     if result.success:
         print_success(f"  ✓ {result.validator_name}: 通过")
     else:
         print_error(f"  ✗ {result.validator_name}: 发现 {result.error_count} 个错误")
-
-    if verbose and result.issues:
-        for issue in result.issues:
-            _print_issue(issue)
 
 
 def _print_issue(issue) -> None:

@@ -328,6 +328,187 @@ class CodeParser:
                 result[name] = module
         return result
 
+    def get_class_base_name(self, class_node: cst.ClassDef) -> str:
+        """获取类的基类名称
+
+        从类定义节点中提取第一个基类的名称。
+        支持两种导入形式：
+        - 直接名称: class MyAction(BaseAction)
+        - 属性引用: class MyAction(module.BaseAction)
+
+        Args:
+            class_node: 类定义的 CST 节点
+
+        Returns:
+            基类名称字符串，如果没有基类则返回空字符串
+        """
+        if not class_node.bases:
+            return ""
+
+        # 获取第一个基类
+        base = class_node.bases[0]
+        if isinstance(base.value, cst.Name):
+            return base.value.value
+        elif isinstance(base.value, cst.Attribute):
+            return base.value.attr.value
+
+        return ""
+
+    def get_class_attributes(self, class_node: cst.ClassDef) -> dict[str, str | None]:
+        """提取类的所有属性及其值
+
+        解析类定义中的所有属性赋值语句，支持两种格式：
+        1. 带类型注解的赋值: name: str = "value"
+        2. 普通赋值: name = "value"
+
+        将提取出的属性值转换为字符串形式。
+
+        Args:
+            class_node: 类定义的 CST 节点
+
+        Returns:
+            属性字典，格式为 {属性名: 属性值字符串}
+            对于复杂类型（列表、字典），返回简化表示（"[...]" 或 "{...}"）
+        """
+        attributes = {}
+
+        for node in class_node.body.body:
+            if isinstance(node, cst.SimpleStatementLine):
+                for simple_stmt in node.body:
+                    if isinstance(simple_stmt, cst.AnnAssign) and isinstance(simple_stmt.target, cst.Name):
+                        # 类型注解的赋值: name: str = "value"
+                        attr_name = simple_stmt.target.value
+                        attr_value = self.extract_value_as_string(simple_stmt.value) if simple_stmt.value else None
+                        attributes[attr_name] = attr_value
+                    elif isinstance(simple_stmt, cst.Assign):
+                        # 普通赋值: name = "value"
+                        for target in simple_stmt.targets:
+                            if isinstance(target.target, cst.Name):
+                                attr_name = target.target.value
+                                attr_value = self.extract_value_as_string(simple_stmt.value)
+                                attributes[attr_name] = attr_value
+
+        return attributes
+
+    def extract_value_as_string(self, node: cst.BaseExpression) -> str | None:
+        """从 CST 节点提取值的字符串表示
+
+        将各种 CST 节点类型转换为相应的字符串值：
+        - SimpleString/ConcatenatedString: 转换为字符串值
+        - Integer/Float: 转换为数字值
+        - List: 返回 "[...]"
+        - Dict: 返回 "{...}"
+        - 其他: 返回 None
+
+        Args:
+            node: CST 节点
+
+        Returns:
+            值的字符串表示，无法提取则返回 None
+        """
+        if isinstance(node, (cst.SimpleString, cst.ConcatenatedString)):
+            try:
+                return str(node.evaluated_value) if hasattr(node, 'evaluated_value') else None
+            except Exception:
+                return None
+        elif isinstance(node, cst.Integer):
+            return str(node.value)
+        elif isinstance(node, cst.Float):
+            return str(node.value)
+        elif isinstance(node, cst.Name):
+            # 处理 True, False, None
+            if node.value in ("True", "False", "None"):
+                return node.value
+            return None
+        elif isinstance(node, cst.List):
+            return "[...]"
+        elif isinstance(node, cst.Dict):
+            return "{...}"
+        return None
+
+    def extract_type_annotation(self, annotation_node: cst.Annotation) -> str:
+        """提取类型注解的字符串表示
+
+        递归地解析 CST 节点，将复杂的类型注解转换为字符串形式。
+        支持的类型格式：
+        - 简单类型: str, int, bool
+        - 泛型类型: list[str], dict[str, Any]
+        - 元组类型: tuple[bool, str]
+        - 联合类型: str | None
+        - 模块属性: module.Type
+
+        Args:
+            annotation_node: 类型注解的 CST 节点
+
+        Returns:
+            类型注解的字符串表示，如 "tuple[bool, str]" 或 "str | None"
+        """
+        return self._extract_type_from_node(annotation_node.annotation)
+
+    def _extract_type_from_node(self, node: cst.BaseExpression) -> str:
+        """从 CST 节点提取类型字符串（内部辅助方法）"""
+        if isinstance(node, cst.Name):
+            return node.value
+        elif isinstance(node, cst.SimpleString):
+            # 字符串形式的类型注解，如 "str"
+            try:
+                return str(node.evaluated_value) if hasattr(node, 'evaluated_value') else node.value.strip('"\'')
+            except Exception:
+                return node.value.strip('"\'')
+        elif isinstance(node, cst.Subscript):
+            # 处理泛型类型，如 tuple[bool, str], list[str], dict[str, Any]
+            value = self._extract_type_from_node(node.value)
+            # 提取切片部分
+            slice_parts = []
+            for slice_element in node.slice:
+                if isinstance(slice_element, cst.SubscriptElement):
+                    # 处理切片元素
+                    slice_node = slice_element.slice
+                    if isinstance(slice_node, cst.Index):
+                        # 索引类型，如 list[str]
+                        index_value = slice_node.value
+                        if isinstance(index_value, cst.Tuple):
+                            # 元组，如 dict[str, Any]
+                            for element in index_value.elements:
+                                if isinstance(element, cst.Element):
+                                    slice_parts.append(self._extract_type_from_node(element.value))
+                        else:
+                            slice_parts.append(self._extract_type_from_node(index_value))
+                    else:
+                        # 其他切片类型
+                        slice_parts.append("")
+            
+            if slice_parts:
+                return f"{value}[{', '.join(slice_parts)}]"
+            else:
+                return value
+        elif isinstance(node, cst.BinaryOperation) and isinstance(node.operator, cst.BitOr):
+            # 处理联合类型，如 str | None
+            left = self._extract_type_from_node(node.left)
+            right = self._extract_type_from_node(node.right)
+            return f"{left} | {right}"
+        elif isinstance(node, cst.Attribute):
+            # 处理 module.Type 形式
+            return node.attr.value
+        return ""
+
+    @staticmethod
+    def get_dotted_name(node: cst.BaseExpression) -> str:
+        """从 CST 节点中提取带点的模块名
+
+        Args:
+            node: CST 表达式节点
+
+        Returns:
+            带点的名称字符串，如 "module.submodule.name"
+        """
+        if isinstance(node, cst.Name):
+            return node.value
+        elif isinstance(node, cst.Attribute):
+            prefix = CodeParser.get_dotted_name(node.value)
+            return f"{prefix}.{node.attr.value}"
+        return ""
+
 
 class ClassFinderVisitor(cst.CSTVisitor):
     """查找类定义的访问器"""

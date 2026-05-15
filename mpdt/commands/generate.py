@@ -70,7 +70,6 @@ def generate_component(
     output_dir: str | None = None,
     force: bool = False,
     use_components_folder: bool = True,
-    verbose: bool = False,
 ) -> None:
     """
     生成插件组件(始终生成异步方法)
@@ -82,7 +81,6 @@ def generate_component(
         output_dir: 输出目录
         force: 是否覆盖
         use_components_folder: 是否在 components/ 文件夹中生成（False 则在根目录生成）
-        verbose: 详细输出
     """
     # 确定工作目录
     if output_dir:
@@ -96,9 +94,6 @@ def generate_component(
         print_error("未检测到插件目录！请在插件根目录下运行此命令")
         print_warning("提示: 插件目录应包含 plugin.py 文件")
         return
-
-    if verbose:
-        console.print(f"[dim]检测到插件: {plugin_name}[/dim]")
 
     # 交互式获取组件信息
     if not component_type or not component_name:

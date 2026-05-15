@@ -151,7 +151,6 @@ def build_plugin(
     with_docs: bool = False,
     fmt: str = "mfp",
     bump: str | None = None,
-    verbose: bool = False,
 ) -> None:
     """构建并打包插件为 .mfp / .zip 文件。
 
@@ -162,7 +161,6 @@ def build_plugin(
         fmt:         输出格式，"mfp"（推荐） 或 "zip"
         bump:        自动升级版本，"major" / "minor" / "patch" / None
                      （升级后会立即写回 manifest.json，打包时使用新版本号）
-        verbose:     是否显示详细信息
     """
     plugin_dir = Path(plugin_path).resolve()
 
@@ -218,11 +216,6 @@ def build_plugin(
         print_warning("未找到任何需要打包的文件")
         return
 
-    if verbose:
-        for f in files:
-            rel = f.relative_to(plugin_dir)
-            console.print(f"  [dim]+ {rel}[/dim]")
-
     # ── 5. 确定输出路径 ───────────────────────────────────────────────────────
     # output_dir 可以是绝对路径或相对于插件目录
     out_path = Path(output_dir)
@@ -248,8 +241,6 @@ def build_plugin(
                 arcname = file_path.relative_to(plugin_dir)
                 zf.write(file_path, arcname)
                 total_bytes += file_path.stat().st_size
-                if verbose:
-                    console.print(f"  [dim]  → {arcname}[/dim]")
     except Exception as e:
         print_error(f"打包失败: {e}")
         # 清理不完整的文件

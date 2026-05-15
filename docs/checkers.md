@@ -165,9 +165,6 @@ mpdt check path/to/plugin
 
 # 验证并自动修复
 mpdt check path/to/plugin --auto-fix
-
-# 详细输出
-mpdt check path/to/plugin --auto-fix --verbose
 ```
 
 ## 扩展

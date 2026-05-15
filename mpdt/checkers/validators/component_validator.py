@@ -9,11 +9,10 @@
 - 方法的实现完整性
 """
 
-#todo: 改用 plugin_parser 而不是 Python 自带的 ast 模块
-
-import ast
 import re
 from pathlib import Path
+
+import libcst as cst
 
 from ...utils.code_parser import CodeParser
 from ..base import BaseValidator, ValidationResult
@@ -261,47 +260,35 @@ class ComponentValidator(BaseValidator):
                 file_path="plugin.py",
             )
 
-        # 检查必需的方法：get_components
-        try:
-            with open(plugin_file, encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=str(plugin_file))
-        except Exception as e:
-            self.result.add_error(f"解析 plugin.py 失败: {e}")
-            return
-
-        # 查找插件类定义
-        plugin_class_node = None
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == class_name:
-                plugin_class_node = node
+        # 检查必需的方法：get_components using libcst
+        # 检查是否定义了 get_components 方法
+        has_get_components = False
+        get_components_method = None
+        
+        for node in plugin_class.body.body:
+            if isinstance(node, cst.FunctionDef) and node.name.value == "get_components":
+                has_get_components = True
+                get_components_method = node
+                # 检查方法签名
+                if len(node.params.params) != 1:  # 应该只有 self
+                    self.result.add_warning(
+                        f"插件类 {class_name} 的 get_components 方法签名不正确，应该是: def get_components(self) -> list[type]",
+                        file_path="plugin.py",
+                    )
+                # 检查返回类型注解
+                if not node.returns:
+                    self.result.add_warning(
+                        f"插件类 {class_name} 的 get_components 方法缺少返回类型注解，建议添加: -> list[type]",
+                        file_path="plugin.py",
+                    )
                 break
 
-        if plugin_class_node:
-            # 检查是否定义了 get_components 方法
-            has_get_components = False
-            for node in plugin_class_node.body:
-                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == "get_components":
-                    has_get_components = True
-                    # 检查方法签名
-                    if len(node.args.args) != 1:  # 应该只有 self
-                        self.result.add_warning(
-                            f"插件类 {class_name} 的 get_components 方法签名不正确，应该是: def get_components(self) -> list[type]",
-                            file_path="plugin.py",
-                        )
-                    # 检查返回类型注解
-                    if not node.returns:
-                        self.result.add_warning(
-                            f"插件类 {class_name} 的 get_components 方法缺少返回类型注解，建议添加: -> list[type]",
-                            file_path="plugin.py",
-                        )
-                    break
-
-            if not has_get_components:
-                self.result.add_error(
-                    f"插件类 {class_name} 缺少必需的方法: get_components",
-                    file_path="plugin.py",
-                    suggestion="在类中实现方法:\n    def get_components(self) -> list[type]:\n        return [] | 可运行 'mpdt check --fix' 自动修复",
-                )
+        if not has_get_components:
+            self.result.add_error(
+                f"插件类 {class_name} 缺少必需的方法: get_components",
+                file_path="plugin.py",
+                suggestion="在类中实现方法:\n    def get_components(self) -> list[type]:\n        return [] | 可运行 'mpdt check --fix' 自动修复",
+            )
 
     # ========================================
     # 组件提取方法
@@ -314,7 +301,7 @@ class ComponentValidator(BaseValidator):
         同时收集这些组件类的导入信息，用于后续定位组件源文件。
 
         处理流程：
-        1. 解析 plugin.py 文件为 AST
+        1. 解析 plugin.py 文件为 CST (使用 CodeParser)
         2. 收集文件中的所有导入语句
         3. 查找 get_components() 方法
         4. 分析该方法的返回值，提取组件类列表
@@ -329,8 +316,7 @@ class ComponentValidator(BaseValidator):
                 - 'import_from': 导入来源（相对路径，如 '.actions.my_action'）
         """
         try:
-            with open(plugin_file, encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=str(plugin_file))
+            parser = CodeParser.from_file(plugin_file)
         except Exception as e:
             self.result.add_error(f"解析 plugin.py 失败: {e}")
             return []
@@ -338,21 +324,24 @@ class ComponentValidator(BaseValidator):
         components = []
 
         # 收集所有导入的组件类
-        imports = self._collect_imports(tree, plugin_name)
+        imports = self._collect_imports_from_parser(parser, plugin_name)
 
         # 查找 get_components 方法
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "get_components":
-                # 分析函数体，查找返回的组件类列表
-                components.extend(self._extract_components_from_get_components(node, imports))
-                break
+        plugin_classes = parser.find_class(base_class="BasePlugin")
+        if plugin_classes:
+            plugin_class = plugin_classes[0]
+            for node in plugin_class.body.body:
+                if isinstance(node, cst.FunctionDef) and node.name.value == "get_components":
+                    # 分析函数体，查找返回的组件类列表
+                    components.extend(self._extract_components_from_get_components_cst(node, imports))
+                    break
 
         return components
 
-    def _extract_components_from_get_components(
-        self, func_node: ast.FunctionDef, imports: dict[str, str]
+    def _extract_components_from_get_components_cst(
+        self, func_node: cst.FunctionDef, imports: dict[str, str]
     ) -> list[dict]:
-        """从 get_components 函数节点中提取组件信息
+        """从 get_components 函数节点中提取组件信息 (使用 libcst)
 
         分析 get_components 方法的实现，支持多种常见的返回模式：
         - 模式1: 直接返回列表 - return [MyAction, MyTool, MyCommand]
@@ -367,7 +356,7 @@ class ComponentValidator(BaseValidator):
         5. 结合导入信息，构建完整的组件信息字典
 
         Args:
-            func_node: get_components 函数的 AST 节点
+            func_node: get_components 函数的 CST 节点
             imports: 导入映射表，格式为 {类名: 导入路径}
 
         Returns:
@@ -377,72 +366,76 @@ class ComponentValidator(BaseValidator):
         local_vars = {}  # 存储列表变量
         local_appends = {}  # 存储 append 调用: {变量名: [追加的元素]}
 
-        for stmt in func_node.body:
+        for stmt in func_node.body.body:
             # 收集赋值语句: components = [...]
-            if isinstance(stmt, ast.Assign):
-                for target in stmt.targets:
-                    if isinstance(target, ast.Name) and isinstance(stmt.value, ast.List):
-                        var_name = target.id
-                        local_vars[var_name] = stmt.value
-                        if var_name not in local_appends:
-                            local_appends[var_name] = []
+            if isinstance(stmt, cst.SimpleStatementLine):
+                for simple_stmt in stmt.body:
+                    if isinstance(simple_stmt, cst.Assign):
+                        for target in simple_stmt.targets:
+                            if isinstance(target.target, cst.Name) and isinstance(simple_stmt.value, cst.List):
+                                var_name = target.target.value
+                                local_vars[var_name] = simple_stmt.value
+                                if var_name not in local_appends:
+                                    local_appends[var_name] = []
 
-            # 收集 append 调用: components.append(MyAction)
-            elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-                call = stmt.value
-                if isinstance(call.func, ast.Attribute) and call.func.attr == "append":
-                    if isinstance(call.func.value, ast.Name):
-                        var_name = call.func.value.id
-                        if call.args and isinstance(call.args[0], ast.Name):
-                            appended_class = call.args[0].id
-                            if var_name not in local_appends:
-                                local_appends[var_name] = []
-                            local_appends[var_name].append(appended_class)
+                    # 收集 append 调用: components.append(MyAction)
+                    elif isinstance(simple_stmt, cst.Expr) and isinstance(simple_stmt.value, cst.Call):
+                        call = simple_stmt.value
+                        if isinstance(call.func, cst.Attribute) and call.func.attr.value == "append":
+                            if isinstance(call.func.value, cst.Name):
+                                var_name = call.func.value.value
+                                if call.args and isinstance(call.args[0].value, cst.Name):
+                                    appended_class = call.args[0].value.value
+                                    if var_name not in local_appends:
+                                        local_appends[var_name] = []
+                                    local_appends[var_name].append(appended_class)
 
         # 查找 return 语句并提取组件列表
         components = []
-        for stmt in func_node.body:
-            if isinstance(stmt, ast.Return) and stmt.value:
-                component_list = []
+        for stmt in func_node.body.body:
+            if isinstance(stmt, cst.SimpleStatementLine):
+                for simple_stmt in stmt.body:
+                    if isinstance(simple_stmt, cst.Return) and simple_stmt.value:
+                        component_list = []
 
-                # 情况1: return [ComponentClass1, ComponentClass2, ...]
-                if isinstance(stmt.value, ast.List):
-                    for element in stmt.value.elts:
-                        if isinstance(element, ast.Name):
-                            component_list.append(element.id)
+                        # 情况1: return [ComponentClass1, ComponentClass2, ...]
+                        if isinstance(simple_stmt.value, cst.List):
+                            for element in simple_stmt.value.elements:
+                                if isinstance(element, cst.Element) and isinstance(element.value, cst.Name):
+                                    component_list.append(element.value.value)
 
-                # 情况2/3: return variable_name
-                elif isinstance(stmt.value, ast.Name):
-                    var_name = stmt.value.id
+                        # 情况2/3: return variable_name
+                        elif isinstance(simple_stmt.value, cst.Name):
+                            var_name = simple_stmt.value.value
 
-                    # 从初始列表赋值中获取元素
-                    if var_name in local_vars:
-                        list_node = local_vars[var_name]
-                        for element in list_node.elts:
-                            if isinstance(element, ast.Name):
-                                component_list.append(element.id)
+                            # 从初始列表赋值中获取元素
+                            if var_name in local_vars:
+                                list_node = local_vars[var_name]
+                                for element in list_node.elements:
+                                    if isinstance(element, cst.Element) and isinstance(element.value, cst.Name):
+                                        component_list.append(element.value.value)
 
-                    # 从 append 调用中获取元素
-                    if var_name in local_appends:
-                        component_list.extend(local_appends[var_name])
+                            # 从 append 调用中获取元素
+                            if var_name in local_appends:
+                                component_list.extend(local_appends[var_name])
 
-                # 转换为组件信息字典
-                for class_name in component_list:
-                    import_from = imports.get(class_name, "")
-                    components.append(
-                        {
-                            "class_name": class_name,
-                            "import_from": import_from,
-                        }
-                    )
-                break
+                        # 转换为组件信息字典
+                        for class_name in component_list:
+                            import_from = imports.get(class_name, "")
+                            components.append(
+                                {
+                                    "class_name": class_name,
+                                    "import_from": import_from,
+                                }
+                            )
+                        break
 
         return components
 
-    def _collect_imports(self, tree: ast.AST, plugin_name: str) -> dict[str, str]:
-        """收集文件中的所有导入语句信息
+    def _collect_imports_from_parser(self, parser: CodeParser, plugin_name: str) -> dict[str, str]:
+        """收集文件中的所有导入语句信息 (使用 CodeParser)
 
-        扫描 AST 树中的所有 ImportFrom 节点，提取导入的类名和路径映射。
+        扫描模块中的所有 ImportFrom 节点，提取导入的类名和路径映射。
         特别处理相对导入和绝对导入两种情况：
         - 相对导入: from .adapter import MyAdapter
         - 绝对导入: from myplugin.adapter import MyAdapter
@@ -450,7 +443,7 @@ class ComponentValidator(BaseValidator):
         只收集本插件内部的导入，外部库的导入会被忽略。
 
         Args:
-            tree: plugin.py 文件的 AST 树
+            parser: CodeParser 实例
             plugin_name: 插件包名（用于识别绝对导入中的本插件模块）
 
         Returns:
@@ -459,21 +452,43 @@ class ComponentValidator(BaseValidator):
         """
         imports = {}
 
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                # 使用 node.level 判断是否是相对导入
-                # level > 0 表示相对导入（from . import, from .. import 等）
-                if node.level > 0:
-                    # 相对导入: from .adapter import X 或 from ..package.module import X
-                    dots = "." * node.level
-                    relative_module = dots + (node.module if node.module else "")
-                    for alias in node.names:
-                        imports[alias.name] = relative_module
-                elif node.module and node.module.startswith(plugin_name):
-                    # 绝对导入，但是导入本插件的模块
-                    for alias in node.names:
-                        relative_module = "." + node.module[len(plugin_name) :]
-                        imports[alias.name] = relative_module
+        # 遍历模块中的所有语句
+        for stmt in parser.module.body:
+            if isinstance(stmt, cst.SimpleStatementLine):
+                for simple_stmt in stmt.body:
+                    if isinstance(simple_stmt, cst.ImportFrom):
+                        # 使用 relative 判断是否是相对导入
+                        # relative 是一个 Sequence[Dot] 表示前导点的数量
+                        if simple_stmt.relative:
+                            # 相对导入: from .adapter import X 或 from ..package.module import X
+                            dots = "." * len(simple_stmt.relative)
+                            if simple_stmt.module:
+                                module_name = CodeParser.get_dotted_name(simple_stmt.module)
+                                relative_module = dots + module_name
+                            else:
+                                relative_module = dots
+                            
+                            # 收集导入的名称
+                            if isinstance(simple_stmt.names, cst.ImportStar):
+                                continue  # 跳过 from .module import *
+                            else:
+                                for name in simple_stmt.names:
+                                    if isinstance(name, cst.ImportAlias):
+                                        imported_name = name.name.value if isinstance(name.name, cst.Name) else str(name.name)
+                                        imports[imported_name] = relative_module
+                        elif simple_stmt.module:
+                            # 绝对导入，检查是否是本插件的模块
+                            module_name = CodeParser.get_dotted_name(simple_stmt.module)
+                            if module_name.startswith(plugin_name):
+                                # 收集导入的名称
+                                if isinstance(simple_stmt.names, cst.ImportStar):
+                                    continue  # 跳过 from module import *
+                                else:
+                                    for name in simple_stmt.names:
+                                        if isinstance(name, cst.ImportAlias):
+                                            imported_name = name.name.value if isinstance(name.name, cst.Name) else str(name.name)
+                                            relative_module = "." + module_name[len(plugin_name):]
+                                            imports[imported_name] = relative_module
 
         return imports
 
@@ -512,8 +527,7 @@ class ComponentValidator(BaseValidator):
 
         # 解析组件文件
         try:
-            with open(component_file, encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=str(component_file))
+            parser = CodeParser.from_file(component_file)
         except Exception as e:
             self.result.add_error(
                 f"解析组件文件失败: {component_file.name} - {e}",
@@ -522,10 +536,11 @@ class ComponentValidator(BaseValidator):
             return
 
         # 查找组件类定义
-        class_node = self._find_class_definition(tree, class_name)
-        if not class_node:
+        class_nodes = parser.find_class(class_name=class_name)
+        if not class_nodes:
             # 列出文件中所有的类定义，帮助诊断
-            all_classes = [node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+            all_classes_nodes = parser.find_class()
+            all_classes = [node.name.value for node in all_classes_nodes]
             self.result.add_error(
                 f"在文件中未找到类定义: {class_name}",
                 file_path=str(component_file.relative_to(self.plugin_path)),
@@ -533,8 +548,10 @@ class ComponentValidator(BaseValidator):
             )
             return
 
+        class_node = class_nodes[0]
+
         # 确定组件基类
-        base_class = self._get_base_class(class_node)
+        base_class = parser.get_class_base_name(class_node)
 
         # 获取该组件类型需要的字段
         required_fields = self.COMPONENT_REQUIRED_FIELDS.get(base_class, [])
@@ -547,7 +564,7 @@ class ComponentValidator(BaseValidator):
             return
 
         # 检查必需字段
-        class_attributes = self._extract_class_attributes(class_node)
+        class_attributes = parser.get_class_attributes(class_node)
 
         for field in required_fields:
             if field not in class_attributes:
@@ -627,114 +644,14 @@ class ComponentValidator(BaseValidator):
 
         return None
 
-    def _find_class_definition(self, tree: ast.AST, class_name: str) -> ast.ClassDef | None:
-        """在 AST 树中查找指定的类定义
-
-        遍历 AST 树的所有节点，查找名称匹配的类定义节点。
-
-        Args:
-            tree: 文件的 AST 树
-            class_name: 要查找的类名
-
-        Returns:
-            类定义的 AST 节点，如果未找到返回 None
-        """
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == class_name:
-                return node
-        return None
-
-    def _get_base_class(self, class_node: ast.ClassDef) -> str:
-        """获取组件类的基类名称
-
-        从类定义节点中提取第一个基类的名称。
-        支持两种导入形式：
-        - 直接名称: class MyAction(BaseAction)
-        - 属性引用: class MyAction(module.BaseAction)
-
-        Args:
-            class_node: 类定义的 AST 节点
-
-        Returns:
-            基类名称字符串，如果没有基类则返回空字符串
-        """
-        if not class_node.bases:
-            return ""
-
-        # 获取第一个基类
-        base = class_node.bases[0]
-        if isinstance(base, ast.Name):
-            return base.id
-        elif isinstance(base, ast.Attribute):
-            return base.attr
-
-        return ""
-
-    def _extract_class_attributes(self, class_node: ast.ClassDef) -> dict[str, str | None]:
-        """提取类的所有属性及其值
-
-        解析类定义中的所有属性赋值语句，支持两种格式：
-        1. 带类型注解的赋值: name: str = "value"
-        2. 普通赋值: name = "value"
-
-        将提取出的属性值转换为字符串形式。
-
-        Args:
-            class_node: 类定义的 AST 节点
-
-        Returns:
-            属性字典，格式为 {属性名: 属性值字符串}
-            对于复杂类型（列表、字典），返回简化表示（"[...]" 或 "{...}"）
-        """
-        attributes = {}
-
-        for node in class_node.body:
-            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                # 类型注解的赋值: name: str = "value"
-                attr_name = node.target.id
-                attr_value = self._extract_value(node.value) if node.value else None
-                attributes[attr_name] = attr_value
-            elif isinstance(node, ast.Assign):
-                # 普通赋值: name = "value"
-                for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        attr_name = target.id
-                        attr_value = self._extract_value(node.value)
-                        attributes[attr_name] = attr_value
-
-        return attributes
-
-    def _extract_value(self, node: ast.AST) -> str | None:
-        """从 AST 节点提取值的字符串表示
-
-        将各种 AST 节点类型转换为相应的字符串值：
-        - Constant/Str: 转换为字符串值
-        - List: 返回 "[...]"
-        - Dict: 返回 "{...}"
-        - 其他: 返回 None
-
-        Args:
-            node: AST 节点
-
-        Returns:
-            值的字符串表示，无法提取则返回 None
-        """
-        if isinstance(node, ast.Constant):
-            return str(node.value) if node.value else None
-        elif isinstance(node, ast.List):
-            return "[...]"
-        elif isinstance(node, ast.Dict):
-            return "{...}"
-        return None
-
     # ========================================
     # 方法验证方法
     # ========================================
 
     def _validate_required_methods(
-        self, class_node: ast.ClassDef, class_name: str, required_methods: list[str], component_file: Path
+        self, class_node: cst.ClassDef, class_name: str, required_methods: list[str], component_file: Path
     ) -> None:
-        """验证组件类是否实现了所有必需的方法
+        """验证组件类是否实现了所有必需的方法 (使用 libcst)
 
         检查组件类中是否定义了所有必需的方法，并验证：
         1. 方法是否存在
@@ -742,19 +659,27 @@ class ComponentValidator(BaseValidator):
         3. 方法签名是否符合规范（如果有签名要求）
 
         Args:
-            class_node: 组件类的 AST 节点
+            class_node: 组件类的 CST 节点
             class_name: 组件类名
             required_methods: 必需方法名列表
             component_file: 组件源文件路径
         """
         # 提取类中定义的所有方法
         defined_methods = {}
-        for node in class_node.body:
-            if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
-                defined_methods[node.name] = node
+        for node in class_node.body.body:
+            if isinstance(node, cst.FunctionDef):
+                defined_methods[node.name.value] = node
 
-        # 获取基类名以查找签名要求
-        base_class = self._get_base_class(class_node)
+        # 获取基类名以查找签名要求（需要创建临时 parser 或传入）
+        # 直接从 class_node 获取基类
+        base_class = ""
+        if class_node.bases:
+            base = class_node.bases[0]
+            if isinstance(base.value, cst.Name):
+                base_class = base.value.value
+            elif isinstance(base.value, cst.Attribute):
+                base_class = base.value.attr.value
+        
         method_signatures = self.COMPONENT_METHOD_SIGNATURES.get(base_class, {})
 
         # 检查每个必需方法
@@ -769,17 +694,17 @@ class ComponentValidator(BaseValidator):
                 method_node = defined_methods[method_name]
 
                 # 检查方法是否为空实现
-                self._check_method_implementation(class_node, method_name, class_name, component_file)
+                self._check_method_implementation_cst(class_node, method_name, class_name, component_file)
 
                 # 检查方法签名（如果有签名要求）
                 if method_name in method_signatures:
                     signature_spec = method_signatures[method_name]
-                    self._check_method_signature(method_node, class_name, method_name, signature_spec, component_file)
+                    self._check_method_signature_cst(method_node, class_name, method_name, signature_spec, component_file)
 
-    def _check_method_implementation(
-        self, class_node: ast.ClassDef, method_name: str, class_name: str, component_file: Path
+    def _check_method_implementation_cst(
+        self, class_node: cst.ClassDef, method_name: str, class_name: str, component_file: Path
     ) -> None:
-        """检查方法是否为空实现或占位实现
+        """检查方法是否为空实现或占位实现 (使用 libcst)
 
         判断方法体是否只包含以下内容：
         - 文档字符串（docstring）
@@ -796,10 +721,8 @@ class ComponentValidator(BaseValidator):
         """
         # 找到方法定义
         method_node = None
-        for node in class_node.body:
-            if (
-                isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef)
-            ) and node.name == method_name:
+        for node in class_node.body.body:
+            if isinstance(node, cst.FunctionDef) and node.name.value == method_name:
                 method_node = node
                 break
 
@@ -807,7 +730,7 @@ class ComponentValidator(BaseValidator):
             return
 
         # 检查方法体
-        if not method_node.body:
+        if not method_node.body.body:
             self.result.add_warning(
                 f"组件 {class_name} 的方法 {method_name} 为空",
                 file_path=str(component_file.relative_to(self.plugin_path)),
@@ -816,24 +739,35 @@ class ComponentValidator(BaseValidator):
 
         # 检查是否只有 pass 或 raise NotImplementedError
         is_stub = True
-        for stmt in method_node.body:
-            # 跳过文档字符串
-            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
-                continue
+        for stmt in method_node.body.body:
+            # 处理 SimpleStatementLine
+            if isinstance(stmt, cst.SimpleStatementLine):
+                for simple_stmt in stmt.body:
+                    # 跳过文档字符串
+                    if isinstance(simple_stmt, cst.Expr):
+                        if isinstance(simple_stmt.value, (cst.SimpleString, cst.ConcatenatedString)):
+                            continue
 
-            # 检查是否为 pass
-            if isinstance(stmt, ast.Pass):
-                continue
-
-            # 检查是否为 raise NotImplementedError
-            if isinstance(stmt, ast.Raise):
-                if isinstance(stmt.exc, ast.Call):
-                    if isinstance(stmt.exc.func, ast.Name) and stmt.exc.func.id == "NotImplementedError":
+                    # 检查是否为 pass
+                    if isinstance(simple_stmt, cst.Pass):
                         continue
 
-            # 如果有其他语句，说明不是空实现
-            is_stub = False
-            break
+                    # 检查是否为 raise NotImplementedError
+                    if isinstance(simple_stmt, cst.Raise):
+                        if simple_stmt.exc and isinstance(simple_stmt.exc, cst.Call):
+                            if isinstance(simple_stmt.exc.func, cst.Name) and simple_stmt.exc.func.value == "NotImplementedError":
+                                continue
+
+                    # 如果有其他语句，说明不是空实现
+                    is_stub = False
+                    break
+            else:
+                # 如果有复合语句（if, for, while等），说明不是空实现
+                is_stub = False
+                break
+
+            if not is_stub:
+                break
 
         if is_stub:
             self.result.add_warning(
@@ -842,15 +776,15 @@ class ComponentValidator(BaseValidator):
                 suggestion=f"请实现方法 {method_name} 的具体逻辑",
             )
 
-    def _check_method_signature(
+    def _check_method_signature_cst(
         self,
-        method_node: ast.FunctionDef | ast.AsyncFunctionDef,
+        method_node: cst.FunctionDef,
         class_name: str,
         method_name: str,
         signature_spec: dict,
         component_file: Path,
     ) -> None:
-        """检查方法签名是否符合规范要求
+        """检查方法签名是否符合规范要求 (使用 libcst)
 
         根据 COMPONENT_METHOD_SIGNATURES 中定义的规范，验证方法的：
         1. 是否为异步方法（async def）
@@ -860,7 +794,7 @@ class ComponentValidator(BaseValidator):
         对于参数为 "variable" 的方法，跳过严格的参数检查（支持 *args, **kwargs）。
 
         Args:
-            method_node: 方法定义的 AST 节点
+            method_node: 方法定义的 CST 节点
             class_name: 类名
             method_name: 方法名
             signature_spec: 签名规范字典，包含 params, return_type, is_async
@@ -868,7 +802,7 @@ class ComponentValidator(BaseValidator):
         """
         # 检查是否为异步方法
         is_async_required = signature_spec.get("is_async", False)
-        is_async_actual = isinstance(method_node, ast.AsyncFunctionDef)
+        is_async_actual = method_node.asynchronous is not None
 
         if is_async_required and not is_async_actual:
             self.result.add_error(
@@ -891,7 +825,7 @@ class ComponentValidator(BaseValidator):
             # 对于可变参数方法，只需要确保方法存在即可
             pass
         elif isinstance(required_params, list):
-            actual_args = method_node.args.args[1:]  # 跳过 self
+            actual_args = method_node.params.params[1:] if len(method_node.params.params) > 0 else []  # 跳过 self
 
             # 检查参数数量
             min_params = sum(1 for param in required_params if param[1] != "optional")
@@ -904,7 +838,7 @@ class ComponentValidator(BaseValidator):
                     file_path=str(component_file.relative_to(self.plugin_path)),
                     suggestion=f"方法签名应为: {'async ' if is_async_required else ''}def {method_name}(self, {', '.join(param_names)}) | 可运行 'mpdt check --fix' 自动修复",
                 )
-            elif len(actual_args) > max_params and not method_node.args.vararg and not method_node.args.kwarg:
+            elif len(actual_args) > max_params and not method_node.params.star_arg and not method_node.params.star_kwarg:
                 # 如果参数过多且没有 *args 或 **kwargs
                 expected_params = [param[0] for param in required_params]
                 self.result.add_warning(
@@ -916,7 +850,9 @@ class ComponentValidator(BaseValidator):
         # 检查返回类型注解
         expected_return = signature_spec.get("return_type")
         if expected_return and method_node.returns:
-            actual_return = self._extract_return_annotation(method_node.returns)
+            # 使用临时 parser 来提取类型注解
+            temp_parser = CodeParser("")
+            actual_return = temp_parser.extract_type_annotation(method_node.returns)
             if actual_return and not self._compare_type_annotations(actual_return, expected_return):
                 self.result.add_warning(
                     f"组件 {class_name} 的方法 {method_name} 返回类型注解不匹配，预期: {expected_return}，实际: {actual_return}",
@@ -930,48 +866,8 @@ class ComponentValidator(BaseValidator):
             )
 
     # ========================================
-    # 类型注解解析方法
+    # 类型注解比较方法
     # ========================================
-
-    def _extract_return_annotation(self, node: ast.AST) -> str:
-        """提取返回类型注解的字符串表示
-
-        递归地解析 AST 节点，将复杂的类型注解转换为字符串形式。
-        支持的类型格式：
-        - 简单类型: str, int, bool
-        - 泛型类型: list[str], dict[str, Any]
-        - 元组类型: tuple[bool, str]
-        - 联合类型: str | None
-        - 模块属性: module.Type
-
-        Args:
-            node: 返回类型注解的 AST 节点
-
-        Returns:
-            类型注解的字符串表示，如 "tuple[bool, str]" 或 "str | None"
-        """
-        if isinstance(node, ast.Name):
-            return node.id
-        elif isinstance(node, ast.Constant):
-            return str(node.value)
-        elif isinstance(node, ast.Subscript):
-            # 处理泛型类型，如 tuple[bool, str]
-            value = self._extract_return_annotation(node.value)
-            if isinstance(node.slice, ast.Tuple):
-                slice_parts = [self._extract_return_annotation(elt) for elt in node.slice.elts]
-                return f"{value}[{', '.join(slice_parts)}]"
-            else:
-                slice_str = self._extract_return_annotation(node.slice)
-                return f"{value}[{slice_str}]"
-        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-            # 处理联合类型，如 str | None
-            left = self._extract_return_annotation(node.left)
-            right = self._extract_return_annotation(node.right)
-            return f"{left} | {right}"
-        elif isinstance(node, ast.Attribute):
-            # 处理 module.Type 形式
-            return node.attr
-        return ""
 
     def _compare_type_annotations(self, actual: str, expected: str) -> bool:
         """比较两个类型注解是否匹配（采用宽松比较策略）

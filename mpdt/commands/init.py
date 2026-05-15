@@ -44,7 +44,6 @@ def init_plugin(
     with_docs: bool = False,
     output_dir: str | None = None,
     init_git: bool | None = None,
-    verbose: bool = False,
 ) -> None:
     """
     初始化新插件
@@ -58,7 +57,6 @@ def init_plugin(
         with_docs: 是否创建文档
         output_dir: 输出目录
         init_git: 是否初始化 Git 仓库 (None 表示交互式询问)
-        verbose: 是否详细输出
     """
     print_step("开始初始化插件...")
 
@@ -103,7 +101,6 @@ def init_plugin(
         email=email,
         license_type=license_type,
         with_docs=with_docs,
-        verbose=verbose,
     )
 
     # 初始化 Git 仓库
@@ -117,12 +114,10 @@ def init_plugin(
     if init_git:
         git_manager = GitManager(plugin_dir)
         success, message = git_manager.init_repository()
-        if verbose:
-            if success:
-                console.print("[dim]✓ 初始化 Git 仓库[/dim]")
-                print_success(message)
-            else:
-                print_error(message)
+        if success:
+            print_success(message)
+        else:
+            print_error(message)
 
     # 打印成功信息
     print_success("插件创建成功！")
@@ -218,7 +213,6 @@ def _create_plugin_structure(
     email: str | None,
     license_type: str,
     with_docs: bool,
-    verbose: bool,
 ) -> None:
     """创建插件目录结构"""
 
@@ -234,8 +228,6 @@ def _create_plugin_structure(
         description="",
     )
     manifest_manager.save()
-    if verbose:
-        console.print("[dim]✓ 生成清单文件: manifest.json[/dim]")
 
     # 创建 plugin.py
     plugin_content = _generate_plugin_file(plugin_name, template)
@@ -270,7 +262,6 @@ def _create_plugin_structure(
         plugin_name=plugin_name,
         template=template,
         author=author,
-        verbose=verbose,
     )
 
     # 创建文档目录
@@ -292,8 +283,6 @@ def _create_plugin_structure(
     # 创建 LICENSE 文件
     license_content = get_license_text(license_type, author or "")
     safe_write_file(plugin_dir / "LICENSE", license_content)
-    if verbose:
-        console.print(f"[dim]✓ 生成许可证文件: {license_type}[/dim]")
 
 
 # _generate_manifest_file 函数已被 ManifestManager 替代，不再需要
@@ -625,7 +614,6 @@ def _generate_example_components(
     plugin_name: str,
     template: str,
     author: str | None,
-    verbose: bool,
 ) -> None:
     """
     根据模板类型生成示例组件文件
@@ -635,7 +623,6 @@ def _generate_example_components(
         plugin_name: 插件名称
         template: 模板类型 (basic, action, tool, plus_command, full, adapter)
         author: 作者
-        verbose: 是否详细输出
     """
     from mpdt.templates import get_component_template, prepare_component_context
 
@@ -728,9 +715,6 @@ def _generate_example_components(
             # 写入文件
             file_path = target_dir / f"{comp_name}.py"
             safe_write_file(file_path, content)
-
-            if verbose:
-                console.print(f"[dim]✓ 生成示例组件: {comp_name}.py[/dim]")
 
         except Exception as e:
             console.print(f"[dim yellow]⚠ 生成组件 {comp_name} 失败: {e}[/dim yellow]")

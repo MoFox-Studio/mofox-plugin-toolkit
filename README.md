@@ -283,7 +283,6 @@ mpdt config set-mofox /path/to/neo-mofox
 mpdt [OPTIONS] COMMAND [ARGS]...
 
 选项:
-  -v, --verbose    详细输出模式
   --no-color       禁用彩色输出
   --version        显示版本信息
   --help           显示帮助信息

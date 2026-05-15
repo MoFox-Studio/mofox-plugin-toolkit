@@ -12,10 +12,9 @@ console = Console()
 
 @click.group()
 @click.version_option(version=__version__, prog_name="MPDT - Neo-MoFox 插件开发工具")
-@click.option("--verbose", "-v", is_flag=True, help="详细输出模式")
 @click.option("--no-color", is_flag=True, help="禁用彩色输出")
 @click.pass_context
-def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
+def cli(ctx: click.Context, no_color: bool) -> None:
     """
     MoFox Plugin Dev Toolkit - Neo-MoFox 插件开发工具
 
@@ -23,15 +22,11 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
     """
     # 设置上下文对象
     ctx.ensure_object(dict)
-    ctx.obj["verbose"] = verbose
     ctx.obj["no_color"] = no_color
 
     # 禁用彩色输出
     if no_color:
         console._color_system = None
-
-    if verbose:
-        console.print(f"[bold green]MPDT v{__version__}[/bold green]")
 
 
 @cli.group()
@@ -67,7 +62,6 @@ def plugin_init(ctx: click.Context, plugin_name: str | None, template: str,email
             with_docs=with_docs,
             init_git=init_git,
             output_dir=output,
-            verbose=ctx.obj["verbose"],
         )
     except Exception as e:
         console.print(f"[bold red]❌ 初始化失败: {e}[/bold red]")
@@ -98,7 +92,6 @@ def plugin_generate(ctx: click.Context, component_type: str | None, component_na
             output_dir=output,
             force=force,
             use_components_folder=not root,
-            verbose=ctx.obj["verbose"],
         )
     except Exception as e:
         console.print(f"[bold red]❌ 生成失败: {e}[/bold red]")
@@ -137,7 +130,6 @@ def plugin_check(ctx: click.Context, path: str, level: str, fix: bool, report: s
             skip_component=no_component,
             skip_type=no_type,
             skip_style=no_style,
-            verbose=ctx.obj["verbose"],
         )
     except Exception as e:
         console.print(f"[bold red]❌ 检查失败: {e}[/bold red]")
@@ -165,7 +157,6 @@ def plugin_build(ctx: click.Context, plugin_path: str, output: str, with_docs: b
             with_docs=with_docs,
             fmt=fmt,
             bump=bump,
-            verbose=ctx.obj["verbose"],
         )
     except Exception as e:
         console.print(f"[bold red]❌ 构建失败: {e}[/bold red]")
@@ -189,9 +180,6 @@ def plugin_dev(ctx: click.Context, neo_mofox_path: str | None, plugin_path: str 
         )
     except Exception as e:
         console.print(f"[bold red]❌ 启动失败: {e}[/bold red]")
-        if ctx.obj.get("verbose"):
-            import traceback
-            traceback.print_exc()
         raise click.Abort()
 
 
