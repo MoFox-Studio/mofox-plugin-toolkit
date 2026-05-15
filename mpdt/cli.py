@@ -6,8 +6,14 @@ import click
 from rich.console import Console
 
 from mpdt import __version__
-
-console = Console()
+from mpdt.utils.color_printer import (
+    console,
+    print_colored,
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
 
 
 @click.group()
@@ -64,7 +70,7 @@ def plugin_init(ctx: click.Context, plugin_name: str | None, template: str,email
             output_dir=output,
         )
     except Exception as e:
-        console.print(f"[bold red]❌ 初始化失败: {e}[/bold red]")
+        print_error(f"初始化失败: {e}")
         raise click.Abort()
 
 
@@ -94,7 +100,7 @@ def plugin_generate(ctx: click.Context, component_type: str | None, component_na
             use_components_folder=not root,
         )
     except Exception as e:
-        console.print(f"[bold red]❌ 生成失败: {e}[/bold red]")
+        print_error(f"生成失败: {e}")
         raise click.Abort()
 
 
@@ -132,7 +138,7 @@ def plugin_check(ctx: click.Context, path: str, level: str, fix: bool, report: s
             skip_style=no_style,
         )
     except Exception as e:
-        console.print(f"[bold red]❌ 检查失败: {e}[/bold red]")
+        print_error(f"检查失败: {e}")
         raise click.Abort()
 
 
@@ -159,7 +165,7 @@ def plugin_build(ctx: click.Context, plugin_path: str, output: str, with_docs: b
             bump=bump,
         )
     except Exception as e:
-        console.print(f"[bold red]❌ 构建失败: {e}[/bold red]")
+        print_error(f"构建失败: {e}")
         raise click.Abort()
 
 
@@ -179,7 +185,7 @@ def plugin_dev(ctx: click.Context, neo_mofox_path: str | None, plugin_path: str 
             mofox_path=Path(neo_mofox_path) if neo_mofox_path else None
         )
     except Exception as e:
-        console.print(f"[bold red]❌ 启动失败: {e}[/bold red]")
+        print_error(f"启动失败: {e}")
         raise click.Abort()
 
 
@@ -197,7 +203,7 @@ def config_init() -> None:
     try:
         interactive_config()
     except Exception as e:
-        console.print(f"[bold red]❌ 配置失败: {e}[/bold red]")
+        print_error(f"配置失败: {e}")
         raise click.Abort()
 
 
@@ -212,8 +218,8 @@ def config_show() -> None:
         config = get_or_init_mpdt_config()
 
         if not config.is_configured():
-            console.print("[yellow]⚠️  未找到配置文件[/yellow]")
-            console.print("请运行 [cyan]mpdt config init[/cyan] 进行配置")
+            print_warning("未找到配置文件")
+            print_info("请运行 mpdt config init 进行配置")
             return
 
         table = Table(title="MPDT 配置")
@@ -228,7 +234,7 @@ def config_show() -> None:
         console.print(table)
 
     except Exception as e:
-        console.print(f"[bold red]❌ 读取配置失败: {e}[/bold red]")
+        print_error(f"读取配置失败: {e}")
         raise click.Abort()
 
 
@@ -246,8 +252,8 @@ def config_open() -> None:
         config_path = config.config_path
 
         if not config_path.exists():
-            console.print("[yellow]⚠️  配置文件不存在[/yellow]")
-            console.print("请运行 [cyan]mpdt config init[/cyan] 进行配置")
+            print_warning("配置文件不存在")
+            print_info("请运行 mpdt config init 进行配置")
             return
 
         # 尝试使用系统默认编辑器打开
@@ -261,13 +267,13 @@ def config_open() -> None:
             os.startfile(config_path)
         else:
             # fallback: 只显示路径
-            console.print(f"[cyan]配置文件路径: {config_path}[/cyan]")
+            print_info(f"配置文件路径: {config_path}")
 
     except Exception as e:
-        console.print(f"[bold red]❌ 打开失败: {e}[/bold red]")
+        print_error(f"打开失败: {e}")
         # 显示配置文件路径作为后备方案
         try:
-            console.print(f"[cyan]配置文件路径: {config.config_path}[/cyan]")
+            print_info(f"配置文件路径: {config.config_path}")
         except:
             pass
         raise click.Abort()
@@ -286,10 +292,10 @@ def config_set_mofox(path: str) -> None:
         config.mofox_path = Path(path)
         config.save()
 
-        console.print(f"[green]✓ Neo-MoFox 路径已设置: {path}[/green]")
+        print_success(f"Neo-MoFox 路径已设置: {path}")
 
     except Exception as e:
-        console.print(f"[bold red]❌ 设置失败: {e}[/bold red]")
+        print_error(f"设置失败: {e}")
         raise click.Abort()
 
 

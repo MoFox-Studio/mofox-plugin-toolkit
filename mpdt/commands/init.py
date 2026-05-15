@@ -19,6 +19,8 @@ import questionary
 
 from mpdt.utils.color_printer import (
     console,
+    print_colored,
+    print_empty_line,
     print_error,
     print_panel,
     print_step,
@@ -149,7 +151,8 @@ def init_plugin(
 
 def _interactive_init() -> dict[str, Any]:
     """交互式初始化"""
-    console.print("\n[bold cyan]🚀 欢迎使用 MPDT 插件初始化向导[/bold cyan]\n")
+    print_colored("🚀 欢迎使用 MPDT 插件初始化向导", color="cyan", bold=True)
+    print_empty_line()
 
     git_info = GitManager.get_user_info()
 
@@ -717,4 +720,4 @@ def _generate_example_components(
             safe_write_file(file_path, content)
 
         except Exception as e:
-            console.print(f"[dim yellow]⚠ 生成组件 {comp_name} 失败: {e}[/dim yellow]")
+            print_colored(f"⚠ 生成组件 {comp_name} 失败: {e}", color="yellow", dim=True)

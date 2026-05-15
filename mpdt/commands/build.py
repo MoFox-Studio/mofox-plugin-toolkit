@@ -24,7 +24,9 @@ from rich.table import Table
 
 from mpdt.utils.color_printer import (
     console,
+    print_empty_line,
     print_error,
+    print_fit_panel,
     print_step,
     print_success,
     print_warning,
@@ -172,7 +174,7 @@ def build_plugin(
         print_error(f"插件路径不是目录: {plugin_dir}")
         return
 
-    console.print(Panel.fit(f"📦 构建插件: [cyan]{plugin_dir.name}[/cyan]", border_style="blue"))
+    print_fit_panel(f"📦 构建插件: {plugin_dir.name}", "", border_style="blue")
 
     manifest_manager = ManifestManager(plugin_dir)
     manifest = manifest_manager.load()
@@ -196,7 +198,7 @@ def build_plugin(
         except ValueError as e:
             print_error(str(e))
             return
-        print_step(f"版本升级: [yellow]{plugin_version}[/yellow] → [green]{new_version}[/green]")
+        print_step(f"版本升级: {plugin_version} → {new_version}")
         manifest["version"] = new_version
         # 立即写回 manifest.json，确保后续打包使用新版本
         manifest_manager.save(manifest)
@@ -263,9 +265,9 @@ def build_plugin(
     table.add_row("包大小", _format_size(archive_size))
     table.add_row("输出路径", str(archive_path))
 
-    console.print()
+    print_empty_line()
     console.print(table)
-    console.print()
+    print_empty_line()
     print_success(f"构建完成: {archive_path.name}")
 
 

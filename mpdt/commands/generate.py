@@ -11,6 +11,8 @@ import questionary
 from mpdt.templates import prepare_component_context
 from mpdt.utils.color_printer import (
     console,
+    print_colored,
+    print_empty_line,
     print_error,
     print_step,
     print_success,
@@ -138,7 +140,6 @@ def generate_component(
         component_name=component_name,
         context=context,
         force=force,
-        verbose=verbose,
         use_components_folder=use_components_folder,
     )
 
@@ -151,20 +152,21 @@ def generate_component(
         component_type=normalized_type,  # 使用标准化的类型
         component_name=component_name,
         context=context,
-        verbose=verbose,
         use_components_folder=use_components_folder,
     ):
         print_warning("⚠️  自动更新插件注册失败，请手动添加到 plugin.py")
 
     # 打印成功信息
     print_success(f"✨ {context['class_name']} 生成成功！")
-    console.print("\n[bold cyan]生成的文件:[/bold cyan]")
-    console.print(f"  📄 {component_file.relative_to(work_dir)}")
+    print_empty_line()
+    print_colored("生成的文件:", color="cyan", bold=True)
+    print_colored(f"  📄 {component_file.relative_to(work_dir)}")
 
-    console.print("\n[bold cyan]下一步:[/bold cyan]")
-    console.print(f"  1. 编辑 {component_file.name} 实现具体逻辑")
-    console.print("  2. 运行 mpdt check 检查代码")
-    console.print("  3. 运行 mpdt test 测试功能")
+    print_empty_line()
+    print_colored("下一步:", color="cyan", bold=True)
+    print_colored(f"  1. 编辑 {component_file.name} 实现具体逻辑")
+    print_colored("  2. 运行 mpdt check 检查代码")
+    print_colored("  3. 运行 mpdt test 测试功能")
 
 
 # =============================================================================
@@ -174,7 +176,8 @@ def generate_component(
 
 def _interactive_generate() -> dict[str, Any]:
     """交互式生成组件"""
-    console.print("\n[bold cyan]🔧 组件生成向导[/bold cyan]\n")
+    print_colored("🔧 组件生成向导", color="cyan", bold=True)
+    print_empty_line()
 
     answers = questionary.form(
         component_type=questionary.select(
@@ -255,7 +258,6 @@ def _generate_component_file(
     component_name: str,
     context: dict,
     force: bool,
-    verbose: bool,
     use_components_folder: bool = True,
 ) -> Path | None:
     """
@@ -267,7 +269,6 @@ def _generate_component_file(
         component_name: 组件名称
         context: 模板上下文
         force: 是否覆盖
-        verbose: 详细输出
         use_components_folder: 是否使用 components 文件夹，False 则在根目录生成
 
     Returns:
@@ -303,8 +304,6 @@ def _generate_component_file(
 
     try:
         safe_write_file(component_file, content, force=force)
-        if verbose:
-            console.print(f"[dim]✓ 生成文件: {component_file}[/dim]")
         return component_file
     except FileExistsError:
         print_error(f"文件已存在: {component_file}")
@@ -324,7 +323,6 @@ def _update_manifest_json(
     work_dir: Path,
     component_type: str,
     component_name: str,
-    verbose: bool,
 ) -> bool:
     """
     更新 manifest.json 文件，添加新组件
@@ -333,7 +331,6 @@ def _update_manifest_json(
         work_dir: 工作目录
         component_type: 组件类型
         component_name: 组件名称
-        verbose: 详细输出
 
     Returns:
         是否更新成功
@@ -341,8 +338,6 @@ def _update_manifest_json(
     manifest_manager = ManifestManager(work_dir)
     
     if not manifest_manager.exists:
-        if verbose:
-            console.print("[dim yellow]⚠ 未找到 manifest.json 文件[/dim yellow]")
         return False
 
     try:
@@ -352,32 +347,16 @@ def _update_manifest_json(
             component_name=component_name,
         )
         
-        if success and verbose:
-            # 检查是否已存在
-            components = manifest_manager.get_components(component_type)
-            already_exists = any(
-                c.get("component_name") == component_name 
-                for c in components
-            )
-            if already_exists:
-                console.print(f"[dim]组件 {component_name} 已在 manifest.json 中[/dim]")
-            else:
-                console.print("[dim]✓ 已更新 manifest.json[/dim]")
-        
         return success
 
-    except Exception as e:
-        if verbose:
-            console.print(f"[dim red]更新 manifest.json 失败: {e}[/dim red]")
+    except Exception:
         return False
-
 
 def _update_plugin_py_components(
     work_dir: Path,
     component_type: str,
     component_name: str,
     context: dict,
-    verbose: bool,
     use_components_folder: bool = True,
 ) -> bool:
     """
@@ -388,7 +367,6 @@ def _update_plugin_py_components(
         component_type: 组件类型
         component_name: 组件名称
         context: 模板上下文
-        verbose: 详细输出
         use_components_folder: 是否使用 components 文件夹
 
     Returns:
@@ -427,14 +405,9 @@ def _update_plugin_py_components(
         # 写回文件
         plugin_file.write_text(modified_tree.code, encoding="utf-8")
 
-        if verbose:
-            console.print("[dim]✓ 已更新 plugin.py[/dim]")
-
         return transformer.import_added or transformer.component_added
 
-    except Exception as e:
-        if verbose:
-            console.print(f"[dim red]更新 plugin.py 失败: {e}[/dim red]")
+    except Exception:
         return False
 
 
@@ -443,7 +416,6 @@ def _update_plugin_registration(
     component_type: str,
     component_name: str,
     context: dict,
-    verbose: bool,
     use_components_folder: bool = True,
 ) -> bool:
     """
@@ -458,18 +430,17 @@ def _update_plugin_registration(
         component_type: 组件类型
         component_name: 组件名称
         context: 模板上下文
-        verbose: 详细输出
         use_components_folder: 是否使用 components 文件夹
 
     Returns:
         是否更新成功
     """
     # 更新 manifest.json
-    manifest_updated = _update_manifest_json(work_dir, component_type, component_name, verbose)
+    manifest_updated = _update_manifest_json(work_dir, component_type, component_name)
 
     # 更新 plugin.py
     plugin_updated = _update_plugin_py_components(
-        work_dir, component_type, component_name, context, verbose, use_components_folder
+        work_dir, component_type, component_name, context, use_components_folder
     )
 
     return manifest_updated or plugin_updated

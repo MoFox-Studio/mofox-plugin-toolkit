@@ -120,14 +120,14 @@ def interactive_config() -> MPDTConfig:
     Returns:
         配置好的 MPDTConfig 实例
     """
-    from rich.console import Console
     from rich.panel import Panel
     from rich.prompt import Confirm, Prompt
 
-    console = Console()
+    from mpdt.utils.color_printer import console, print_fit_panel, print_success
+
     config = MPDTConfig()
 
-    console.print(Panel.fit("[bold cyan]MPDT 配置向导[/bold cyan]\n\n让我们配置 Neo-MoFox 主程序的路径"))
+    print_fit_panel("MPDT 配置向导\n\n让我们配置 Neo-MoFox 主程序的路径", "", rgb=(0, 255, 255))
 
     # 配置 Neo-MoFox 路径
     mofox_path_str = Prompt.ask(
@@ -137,10 +137,10 @@ def interactive_config() -> MPDTConfig:
     mofox_path = Path(mofox_path_str).expanduser().absolute()
 
     config.mofox_path = mofox_path
-    console.print(f"[green]✓ Neo-MoFox 路径已设置: {mofox_path}[/green]")
+    print_success(f"Neo-MoFox 路径已设置: {mofox_path}")
 
     # 保存配置
     config.save()
-    console.print(f"\n[bold green]✓ 配置已保存: {config.config_path}[/bold green]")
+    print_success(f"\n配置已保存: {config.config_path}")
 
     return config

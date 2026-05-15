@@ -7,7 +7,17 @@ from pathlib import Path
 from rich.panel import Panel
 from rich.table import Table
 
-from mpdt.utils.color_printer import console, print_error, print_info, print_success, print_warning
+from mpdt.utils.color_printer import (
+    console,
+    print_colored,
+    print_divider,
+    print_empty_line,
+    print_error,
+    print_fit_panel,
+    print_info,
+    print_success,
+    print_warning,
+)
 from mpdt.checkers import FixResult, ValidationLevel, ValidationResult
 from mpdt.checkers.validators import (
     ComponentValidator,
@@ -64,7 +74,7 @@ def check_plugin(
         print_error(f"插件路径不是目录: {plugin_path}")
         return
 
-    console.print(Panel.fit(f"🔍 检查插件: [cyan]{path.name}[/cyan]", border_style="blue"))
+    print_fit_panel(f"🔍 检查插件: {path.name}", "", border_style="blue")
 
     # 收集所有验证结果
     all_results: list[ValidationResult] = []
@@ -208,18 +218,19 @@ def _print_issue(issue) -> None:
     color = level_colors.get(issue.level, "white")
     icon = level_icons.get(issue.level, "•")
 
-    message = f"    [{color}]{icon}[/{color}] {issue.message}"
+    message = f"    {icon} {issue.message}"
 
     if issue.file_path:
-        message += f" ([dim]{issue.file_path}"
+        file_info = f" ({issue.file_path}"
         if issue.line_number:
-            message += f":{issue.line_number}"
-        message += "[/dim])"
+            file_info += f":{issue.line_number}"
+        file_info += ")"
+        message += file_info
 
-    console.print(message)
+    print_colored(message, color=color)
 
     if issue.suggestion:
-        console.print(f"      [dim]💡 {issue.suggestion}[/dim]")
+        print_colored(f"      💡 {issue.suggestion}", dim=True)
 
 
 def _print_overall_report(
@@ -232,9 +243,9 @@ def _print_overall_report(
         level: 显示级别
         fix_result: 自动修复结果（如果启用了自动修复）
     """
-    console.print()
-    console.print("=" * 60)
-    console.print()
+    print_empty_line()
+    print_divider("=", 60)
+    print_empty_line()
 
     # 统计总数
     total_errors = sum(r.error_count for r in results)
@@ -260,7 +271,7 @@ def _print_overall_report(
         )
 
     console.print(table)
-    console.print()
+    print_empty_line()
 
     # 打印详细问题列表
     level_filter = ValidationLevel(level)
@@ -277,34 +288,34 @@ def _print_overall_report(
         ]
 
         if filtered_issues:
-            console.print(f"\n[bold]{result.validator_name}:[/bold]")
+            print_colored(f"\n{result.validator_name}:", color="white", bold=True)
             for issue in filtered_issues:
                 _print_issue(issue)
 
     # 总结
-    console.print()
+    print_empty_line()
     if fix_result:
-        console.print("[bold cyan]═══ 修复统计 ═══[/bold cyan]")
-        console.print()
+        print_colored("═══ 修复统计 ═══", color="cyan", bold=True)
+        print_empty_line()
 
         if fix_result.fixes_applied:
-            console.print(f"[green]✓ 成功修复: {len(fix_result.fixes_applied)} 个[/green]")
+            print_colored(f"✓ 成功修复: {len(fix_result.fixes_applied)} 个", color="green")
             for fix in fix_result.fixes_applied:
-                console.print(f"  [green]•[/green] {fix}")
-            console.print()
+                print_colored(f"  • {fix}", color="green")
+            print_empty_line()
 
         if fix_result.fixes_failed:
-            console.print(f"[yellow]✗ 修复失败: {len(fix_result.fixes_failed)} 个[/yellow]")
+            print_colored(f"✗ 修复失败: {len(fix_result.fixes_failed)} 个", color="yellow")
             for fail in fix_result.fixes_failed:
-                console.print(f"  [yellow]•[/yellow] {fail}")
-            console.print()
+                print_colored(f"  • {fail}", color="yellow")
+            print_empty_line()
 
         if not fix_result.fixes_applied and not fix_result.fixes_failed:
-            console.print("[blue]ℹ 未发现可自动修复的问题[/blue]")
-            console.print()
+            print_info("未发现可自动修复的问题")
+            print_empty_line()
 
-    console.print("[bold cyan]═══ 最终结果 ═══[/bold cyan]")
-    console.print()
+    print_colored("═══ 最终结果 ═══", color="cyan", bold=True)
+    print_empty_line()
     if total_errors > 0:
         print_error(f"剩余 {total_errors} 个错误，{total_warnings} 个警告")
     elif total_warnings > 0:
