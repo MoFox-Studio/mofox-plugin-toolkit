@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mofox-plugin-dev-toolkit"
-version = "0.5.1"
+version = "0.5.2"
 description = "开发工具集，用于快速创建、开发和测试 MoFox-Bot 插件"
 authors = [
     {name = "MoFox-Studio", email = "wwwww95915@qq.com"}
@@ -35,6 +35,7 @@ dependencies = [
     "websockets>=12.0",
     "libcst>=1.8.6",
     "aiohttp>=3.9.0",
+    "pillow>=11.2.0",
     "uvicorn>=0.24.0",
     "fastapi>=0.104.0",
     "ruff>=0.1.6",

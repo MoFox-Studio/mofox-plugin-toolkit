@@ -51,7 +51,7 @@ def market_register(plugin_path: str = ".", market_url: str | None = None, token
 
     async def run() -> None:
         manifest = await _load_manifest_for_market(plugin_path)
-        payload = plugin_payload(manifest, repository_url=repository_url)
+        payload = plugin_payload(manifest, repository_url=repository_url, plugin_dir=plugin_path)
         result = await _client(market_url, token).register_plugin(payload)
         _print_ok(f"Plugin registered: {result['plugin_id']} ({result['status']})")
 
@@ -63,7 +63,7 @@ def market_update(plugin_path: str = ".", market_url: str | None = None, token: 
 
     async def run() -> None:
         manifest = await _load_manifest_for_market(plugin_path)
-        payload = plugin_payload(manifest, repository_url=repository_url)
+        payload = plugin_payload(manifest, repository_url=repository_url, plugin_dir=plugin_path)
         plugin_id = payload.pop("plugin_id")
         result = await _client(market_url, token).update_plugin(plugin_id, payload)
         _print_ok(f"Plugin updated: {result['plugin_id']} ({result['status']})")
@@ -232,7 +232,7 @@ def market_publish(
         asset_url = str(asset.get("browser_download_url") or asset_download_url_for(plugin_id, version, package.package_path.name))
 
         market = _client(market_url, token or github_api_token)
-        plugin_registration_payload = plugin_payload(manifest, repository_url=repo_html_url)
+        plugin_registration_payload = plugin_payload(manifest, repository_url=repo_html_url, plugin_dir=plugin_dir)
         try:
             plugin = await market.register_plugin(plugin_registration_payload)
             _print_ok(f"Plugin registered: {plugin['plugin_id']} ({plugin['status']})")
