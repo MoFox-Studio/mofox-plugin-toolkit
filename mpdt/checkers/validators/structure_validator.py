@@ -2,7 +2,7 @@
 插件结构验证器
 """
 
-from .base import BaseValidator, ValidationResult
+from ..base import BaseValidator, ValidationResult
 
 
 class StructureValidator(BaseValidator):

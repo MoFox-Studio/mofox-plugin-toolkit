@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .base import BaseValidator, ValidationResult
+from ..base import BaseValidator, ValidationResult
 
 
 class StyleValidator(BaseValidator):

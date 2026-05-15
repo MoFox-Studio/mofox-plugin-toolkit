@@ -4,8 +4,8 @@
 
 from pathlib import Path
 
-from ..utils.code_parser import CodeParser
-from .base import BaseValidator, ValidationResult
+from ...utils.code_parser import CodeParser
+from ..base import BaseValidator, ValidationResult
 
 
 class ConfigValidator(BaseValidator):

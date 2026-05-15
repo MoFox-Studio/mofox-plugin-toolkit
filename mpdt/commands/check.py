@@ -8,16 +8,21 @@ from rich.panel import Panel
 from rich.table import Table
 
 from mpdt.utils.color_printer import console, print_error, print_info, print_success, print_warning
-from mpdt.validators import (
-    AutoFixValidator,
+from mpdt.checkers import FixResult, ValidationLevel, ValidationResult
+from mpdt.checkers.validators import (
     ComponentValidator,
     ConfigValidator,
     MetadataValidator,
     StructureValidator,
     StyleValidator,
     TypeValidator,
-    ValidationLevel,
-    ValidationResult,
+)
+from mpdt.checkers.fixers import (
+    AttributeFixer,
+    DecoratorFixer,
+    ManifestFixer,
+    MethodFixer,
+    StyleFixer,
 )
 
 
@@ -114,52 +119,61 @@ def check_plugin(
         _print_validation_summary(result, verbose)
 
     # 自动修复（如果启用）
-    auto_fixer = None
+    fix_result = None
     if auto_fix:
         print_info("正在应用自动修复...")
-        auto_fixer = AutoFixValidator(path)
-        fix_result = auto_fixer.fix_issues(all_results)
-
-        # 从原始结果中移除已修复的问题（使用对象 id 比较）
-        fixed_issue_ids = {id(issue) for issue in fix_result.fixed_issues}
+        
+        # 收集所有问题
+        all_issues = []
         for result in all_results:
-            result.issues = [issue for issue in result.issues if id(issue) not in fixed_issue_ids]
-            # 更新计数
-            result._update_counts()
-
-        # 如果应用了 ruff 修复，移除所有可以被 ruff 修复的问题
-        if any("ruff" in fix for fix in fix_result.fixes_applied):
-            import re
-            ruff_fixed_count = 0
+            all_issues.extend(result.issues)
+        
+        if not all_issues:
+            print_info("  ℹ 未发现需要修复的问题")
+        else:
+            # 创建修复器列表
+            fixers = [
+                ManifestFixer(path),
+                DecoratorFixer(path),
+                AttributeFixer(path),
+                MethodFixer(path),
+                StyleFixer(path),
+            ]
+            
+            # 汇总所有修复结果
+            fix_result = FixResult(fixer_name="AutoFix")
+            
+            for fixer in fixers:
+                # 过滤出该修复器可以处理的问题
+                fixable_issues = [issue for issue in all_issues if fixer.can_fix(issue)]
+                
+                if fixable_issues:
+                    result = fixer.fix(fixable_issues)
+                    fix_result.fixes_applied.extend(result.fixes_applied)
+                    fix_result.fixes_failed.extend(result.fixes_failed)
+                    fix_result.fixed_issues.extend(result.fixed_issues)
+            
+            # 从原始结果中移除已修复的问题
+            fixed_issue_ids = {id(issue) for issue in fix_result.fixed_issues}
             for result in all_results:
-                original_count = len(result.issues)
-                # 移除所有 ruff 错误格式的问题（如果建议包含"可自动修复"或问题本身就是 ruff 格式）
-                result.issues = [
-                    issue for issue in result.issues
-                    if not (
-                        re.match(r'^[A-Z]\d+:', issue.message) and
-                        (issue.suggestion is None or "可自动修复" in issue.suggestion or "--fix" in issue.suggestion)
-                    )
-                ]
-                ruff_fixed_count += original_count - len(result.issues)
-                # 更新计数
+                result.issues = [issue for issue in result.issues if id(issue) not in fixed_issue_ids]
                 result._update_counts()
-
-        # 显示修复摘要
-        if fix_result.fixes_applied:
-            print_success(f"  ✓ 成功修复 {len(fix_result.fixes_applied)} 个问题")
-            if verbose:
-                for fix in fix_result.fixes_applied:
-                    console.print(f"    [green]✓[/green] {fix}")
-
-        if fix_result.fixes_failed:
-            print_warning(f"  ⚠ {len(fix_result.fixes_failed)} 个问题修复失败")
-            if verbose:
-                for fail in fix_result.fixes_failed:
-                    console.print(f"    [yellow]✗[/yellow] {fail}")
-
-        if not fix_result.fixes_applied and not fix_result.fixes_failed:
-            print_info("  ℹ 未发现可自动修复的问题")
+            
+            # 显示修复摘要
+            if fix_result.fixes_applied:
+                print_success(f"  ✓ 成功修复 {len(fix_result.fixes_applied)} 个问题")
+                if verbose:
+                    for fix in fix_result.fixes_applied:
+                        console.print(f"    [green]✓[/green] {fix}")
+            
+            if fix_result.fixes_failed:
+                print_warning(f"  ⚠ {len(fix_result.fixes_failed)} 个问题修复失败")
+                if verbose:
+                    for fail in fix_result.fixes_failed:
+                        console.print(f"    [yellow]✗[/yellow] {fail}")
+            
+            if not fix_result.fixes_applied and not fix_result.fixes_failed:
+                print_info("  ℹ 未发现可自动修复的问题")
 
     # 生成总体报告
     _print_overall_report(all_results, level, fix_result if auto_fix else None)
@@ -222,14 +236,14 @@ def _print_issue(issue) -> None:
 
 
 def _print_overall_report(
-    results: list[ValidationResult], level: str, fix_result: ValidationResult | None = None
+    results: list[ValidationResult], level: str, fix_result: FixResult | None = None
 ) -> None:
     """打印总体报告
 
     Args:
         results: 所有验证结果
         level: 显示级别
-        fix_result: 自动修复的验证结果（如果启用了自动修复）
+        fix_result: 自动修复结果（如果启用了自动修复）
     """
     console.print()
     console.print("=" * 60)
@@ -313,7 +327,7 @@ def _print_overall_report(
 
 
 def _save_report(
-    results: list[ValidationResult], output_path: str, report_format: str, fix_result: ValidationResult | None = None
+    results: list[ValidationResult], output_path: str, report_format: str, fix_result: FixResult | None = None
 ) -> None:
     """保存检查报告
 
@@ -321,7 +335,7 @@ def _save_report(
         results: 验证结果列表
         output_path: 输出路径
         report_format: 报告格式
-        fix_result: 自动修复的验证结果（如果启用了自动修复）
+        fix_result: 自动修复结果（如果启用了自动修复）
     """
     if report_format == "markdown":
         _save_markdown_report(results, output_path, fix_result)
@@ -332,14 +346,14 @@ def _save_report(
 
 
 def _save_markdown_report(
-    results: list[ValidationResult], output_path: str, fix_result: ValidationResult | None = None
+    results: list[ValidationResult], output_path: str, fix_result: FixResult | None = None
 ) -> None:
     """保存 Markdown 格式的报告
 
     Args:
         results: 验证结果列表
         output_path: 输出路径
-        fix_result: 自动修复的验证结果（如果启用了自动修复）
+        fix_result: 自动修复结果（如果启用了自动修复）
     """
     lines = ["# 插件检查报告\n\n"]
 
@@ -424,14 +438,14 @@ def _save_markdown_report(
 
 
 def _save_json_report(
-    results: list[ValidationResult], output_path: str, fix_result: ValidationResult | None = None
+    results: list[ValidationResult], output_path: str, fix_result: FixResult | None = None
 ) -> None:
     """保存 JSON 格式的报告
 
     Args:
         results: 验证结果列表
         output_path: 输出路径
-        fix_result: 自动修复的验证结果（如果启用了自动修复）
+        fix_result: 自动修复结果（如果启用了自动修复）
     """
     import json
     from datetime import datetime

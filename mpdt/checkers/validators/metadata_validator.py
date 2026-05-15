@@ -3,7 +3,7 @@
 """
 
 from mpdt.utils.managers.manifest_manager import ManifestManager
-from .base import BaseValidator, ValidationResult
+from ..base import BaseValidator, ValidationResult
 
 
 class MetadataValidator(BaseValidator):

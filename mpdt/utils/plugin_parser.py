@@ -24,10 +24,23 @@ def extract_plugin_name(plugin_path: Path) -> str | None:
     plugin_file = plugin_path / "plugin.py"
 
     if not plugin_file.exists():
+        # 如果没有 plugin.py，尝试返回目录名作为后备
+        if plugin_path.is_dir():
+            return plugin_path.name
         return None
 
     try:
         parser = CodeParser.from_file(plugin_file)
-        return parser.find_class_attribute(base_class="BasePlugin", attribute_name="plugin_name")
+        plugin_name = parser.find_class_attribute(base_class="BasePlugin", attribute_name="plugin_name")
+        
+        # 如果找到了 plugin_name 属性，使用它
+        if plugin_name:
+            return plugin_name
+        
+        # 否则，使用目录名作为后备
+        return plugin_path.name
     except Exception:
+        # 出错时，尝试使用目录名
+        if plugin_path.is_dir():
+            return plugin_path.name
         return None

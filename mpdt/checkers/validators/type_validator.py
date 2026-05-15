@@ -9,7 +9,7 @@ from pathlib import Path
 
 from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
 
-from .base import BaseValidator, ValidationResult
+from ..base import BaseValidator, ValidationResult
 
 
 class TypeValidator(BaseValidator):

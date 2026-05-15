@@ -15,8 +15,8 @@ import ast
 import re
 from pathlib import Path
 
-from ..utils.code_parser import CodeParser
-from .base import BaseValidator, ValidationResult
+from ...utils.code_parser import CodeParser
+from ..base import BaseValidator, ValidationResult
 
 
 class ComponentValidator(BaseValidator):
@@ -721,8 +721,6 @@ class ComponentValidator(BaseValidator):
         """
         if isinstance(node, ast.Constant):
             return str(node.value) if node.value else None
-        elif isinstance(node, ast.Str):  # Python 3.7 兼容
-            return str(node.s) if node.s else None
         elif isinstance(node, ast.List):
             return "[...]"
         elif isinstance(node, ast.Dict):
@@ -820,7 +818,7 @@ class ComponentValidator(BaseValidator):
         is_stub = True
         for stmt in method_node.body:
             # 跳过文档字符串
-            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Str | ast.Constant):
+            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
                 continue
 
             # 检查是否为 pass
