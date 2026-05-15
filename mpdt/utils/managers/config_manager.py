@@ -8,6 +8,9 @@ from pathlib import Path
 import tomli
 import tomli_w
 
+# 全局单例实例
+_global_config: "MPDTConfig | None" = None
+
 
 class MPDTConfig:
     """MPDT 配置管理器"""
@@ -80,14 +83,6 @@ class MPDTConfig:
             self._config["dev"] = {}
         self._config["dev"]["reload_delay"] = value
 
-    def get_python_command(self) -> list[str]:
-        """获取 Python 启动命令
-
-        Returns:
-            Python 命令列表，使用 uv run
-        """
-        return ["uv", "run"]
-
     def validate(self) -> tuple[bool, list[str]]:
         """验证配置
 
@@ -106,9 +101,17 @@ class MPDTConfig:
         return self.mofox_path is not None
 
 
-def get_default_config() -> MPDTConfig:
-    """获取默认配置实例"""
-    return MPDTConfig()
+def get_or_init_mpdt_config() -> MPDTConfig:
+    """获取或初始化全局配置实例（单例模式）
+    
+    Returns:
+        全局配置实例
+    """
+    global _global_config
+    if _global_config is None:
+        _global_config = MPDTConfig()
+    return _global_config
+
 
 
 def interactive_config() -> MPDTConfig:

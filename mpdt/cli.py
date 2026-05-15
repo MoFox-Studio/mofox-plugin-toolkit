@@ -198,7 +198,7 @@ def config() -> None:
 @config.command("init")
 def config_init() -> None:
     """交互式配置向导"""
-    from mpdt.utils.config_manager import interactive_config
+    from mpdt.utils.managers.config_manager import interactive_config
 
     try:
         interactive_config()
@@ -212,10 +212,10 @@ def config_show() -> None:
     """显示当前配置"""
     from rich.table import Table
 
-    from mpdt.utils.config_manager import MPDTConfig
+    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
 
     try:
-        config = MPDTConfig()
+        config = get_or_init_mpdt_config()
 
         if not config.is_configured():
             console.print("[yellow]⚠️  未找到配置文件[/yellow]")
@@ -233,10 +233,6 @@ def config_show() -> None:
 
         console.print(table)
 
-        # 显示 Python 命令
-        console.print("\n[bold]Python 命令:[/bold]")
-        console.print(f"  {' '.join(config.get_python_command())}")
-
     except Exception as e:
         console.print(f"[bold red]❌ 读取配置失败: {e}[/bold red]")
         raise click.Abort()
@@ -245,10 +241,10 @@ def config_show() -> None:
 @config.command("test")
 def config_test() -> None:
     """测试配置是否有效"""
-    from mpdt.utils.config_manager import MPDTConfig
+    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
 
     try:
-        config = MPDTConfig()
+        config = get_or_init_mpdt_config()
 
         if not config.is_configured():
             console.print("[yellow]⚠️  未找到配置文件[/yellow]")
@@ -262,7 +258,6 @@ def config_test() -> None:
         if valid:
             console.print("[bold green]✓ 配置有效！[/bold green]")
             console.print(f"\nNeo-MoFox 路径: {config.mofox_path}")
-            console.print(f"Python 命令: {' '.join(config.get_python_command())}")
         else:
             console.print("[bold red]✗ 配置验证失败：[/bold red]")
             for error in errors:
@@ -280,10 +275,10 @@ def config_set_mofox(path: str) -> None:
     """设置 Neo-MoFox 主程序路径"""
     from pathlib import Path
 
-    from mpdt.utils.config_manager import MPDTConfig
+    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
 
     try:
-        config = MPDTConfig()
+        config = get_or_init_mpdt_config()
         config.mofox_path = Path(path)
         config.save()
 

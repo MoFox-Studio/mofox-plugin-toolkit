@@ -36,6 +36,9 @@ class ValidationResult:
     validator_name: str
     issues: list[ValidationIssue] = field(default_factory=list)
     success: bool = True
+    fixes_applied: list[str] = field(default_factory=list)
+    fixes_failed: list[str] = field(default_factory=list)
+    fixed_issues: list[ValidationIssue] = field(default_factory=list)
 
     def add_error(self, message: str, file_path: str | None = None, line_number: int | None = None, suggestion: str | None = None) -> None:
         """添加错误"""

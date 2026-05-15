@@ -18,11 +18,12 @@ from mpdt.utils.color_printer import (
 )
 from mpdt.utils.file_ops import (
     ensure_dir,
-    get_git_user_info,
     safe_write_file,
     to_snake_case,
     validate_component_name,
 )
+from mpdt.utils.managers.git_manager import GitManager
+from mpdt.utils.managers.manifest_manager import ManifestManager
 
 # =============================================================================
 # 常量定义
@@ -126,7 +127,7 @@ def generate_component(
     normalized_type = component_type.replace("-", "_")
 
     # 准备上下文
-    git_info = get_git_user_info()
+    git_info = GitManager.get_user_info()
     context = prepare_component_context(
         component_type=normalized_type,
         component_name=component_name,
@@ -342,39 +343,33 @@ def _update_manifest_json(
     Returns:
         是否更新成功
     """
-    import json
-
-    manifest_file = work_dir / "manifest.json"
-    if not manifest_file.exists():
+    manifest_manager = ManifestManager(work_dir)
+    
+    if not manifest_manager.exists:
         if verbose:
             console.print("[dim yellow]⚠ 未找到 manifest.json 文件[/dim yellow]")
         return False
 
     try:
-        # 读取现有 manifest
-        with open(manifest_file, encoding="utf-8") as f:
-            manifest = json.load(f)
-
-        # 检查组件是否已存在
-        include_list = manifest.get("include", [])
-        for item in include_list:
-            if item.get("component_name") == component_name and item.get("component_type") == component_type:
-                if verbose:
-                    console.print(f"[dim]组件 {component_name} 已在 manifest.json 中[/dim]")
-                return True
-
-        # 添加新组件
-        new_component = {"component_type": component_type, "component_name": component_name, "dependencies": []}
-        include_list.append(new_component)
-        manifest["include"] = include_list
-
-        # 写回文件
-        with open(manifest_file, "w", encoding="utf-8") as f:
-            json.dump(manifest, f, ensure_ascii=False, indent=4)
-
-        if verbose:
-            console.print("[dim]✓ 已更新 manifest.json[/dim]")
-        return True
+        # 更新组件
+        success = manifest_manager.update_component(
+            component_type=component_type,
+            component_name=component_name,
+        )
+        
+        if success and verbose:
+            # 检查是否已存在
+            components = manifest_manager.get_components(component_type)
+            already_exists = any(
+                c.get("component_name") == component_name 
+                for c in components
+            )
+            if already_exists:
+                console.print(f"[dim]组件 {component_name} 已在 manifest.json 中[/dim]")
+            else:
+                console.print("[dim]✓ 已更新 manifest.json[/dim]")
+        
+        return success
 
     except Exception as e:
         if verbose:

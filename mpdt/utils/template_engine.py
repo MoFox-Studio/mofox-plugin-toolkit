@@ -97,9 +97,9 @@ def prepare_common_context(**kwargs: Any) -> dict[str, Any]:
     """
     from datetime import datetime
 
-    from mpdt.utils.file_ops import get_git_user_info
+    from mpdt.utils.managers.git_manager import GitManager
 
-    git_info = get_git_user_info()
+    git_info = GitManager.get_user_info()
 
     context = {
         "timestamp": datetime.now().isoformat(),

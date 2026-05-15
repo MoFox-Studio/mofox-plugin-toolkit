@@ -25,8 +25,10 @@ from mpdt.utils.color_printer import (
     print_success,
     print_tree,
 )
-from mpdt.utils.file_ops import ensure_dir, get_git_user_info, safe_write_file, validate_plugin_name
+from mpdt.utils.file_ops import ensure_dir, safe_write_file, validate_plugin_name
 from mpdt.utils.license_generator import get_license_text
+from mpdt.utils.managers.manifest_manager import ManifestManager
+from mpdt.utils.managers.git_manager import GitManager
 
 # ============================================================================
 # 主入口函数
@@ -113,7 +115,14 @@ def init_plugin(
         ).ask()
 
     if init_git:
-        _init_git_repository(plugin_dir, verbose)
+        git_manager = GitManager(plugin_dir)
+        success, message = git_manager.init_repository()
+        if verbose:
+            if success:
+                console.print("[dim]✓ 初始化 Git 仓库[/dim]")
+                print_success(message)
+            else:
+                print_error(message)
 
     # 打印成功信息
     print_success("插件创建成功！")
@@ -147,7 +156,7 @@ def _interactive_init() -> dict[str, Any]:
     """交互式初始化"""
     console.print("\n[bold cyan]🚀 欢迎使用 MPDT 插件初始化向导[/bold cyan]\n")
 
-    git_info = get_git_user_info()
+    git_info = GitManager.get_user_info()
 
     answers = questionary.form(
         plugin_name=questionary.text(
@@ -217,8 +226,14 @@ def _create_plugin_structure(
     ensure_dir(plugin_dir)
 
     # 创建 manifest.json
-    manifest_content = _generate_manifest_file(plugin_name, author, template)
-    safe_write_file(plugin_dir / "manifest.json", manifest_content)
+    manifest_manager = ManifestManager(plugin_dir)
+    manifest_manager.create(
+        name=plugin_name,
+        author=author or "Your Name",
+        template=template,
+        description="",
+    )
+    manifest_manager.save()
     if verbose:
         console.print("[dim]✓ 生成清单文件: manifest.json[/dim]")
 
@@ -281,78 +296,7 @@ def _create_plugin_structure(
         console.print(f"[dim]✓ 生成许可证文件: {license_type}[/dim]")
 
 
-def _generate_manifest_file(plugin_name: str, author: str | None, template: str, description: str = "") -> str:
-    """生成 manifest.json 文件内容
-
-    Args:
-        plugin_name: 插件名称
-        author: 作者
-        template: 模板类型
-        description: 插件描述
-
-    Returns:
-        manifest.json 的内容字符串
-    """
-    import json
-
-    # 根据模板类型生成组件列表
-    template_components = {
-        "basic": [{"component_type": "config", "component_name": "config", "dependencies": []}],
-        "action": [
-            {"component_type": "config", "component_name": "config", "dependencies": []},
-            {"component_type": "action", "component_name": "example_action", "dependencies": []},
-        ],
-        "tool": [
-            {"component_type": "config", "component_name": "config", "dependencies": []},
-            {"component_type": "tool", "component_name": "example_tool", "dependencies": []},
-        ],
-        "collection": [
-            {"component_type": "config", "component_name": "config", "dependencies": []},
-            {"component_type": "collection", "component_name": "example_collection", "dependencies": []},
-        ],
-        "plus_command": [
-            {"component_type": "config", "component_name": "config", "dependencies": []},
-            {"component_type": "plus_command", "component_name": "example_command", "dependencies": []},
-        ],
-        "adapter": [
-            {"component_type": "config", "component_name": "config", "dependencies": []},
-            {"component_type": "adapter", "component_name": "example_adapter", "dependencies": []},
-        ],
-        "chatter": [
-            {"component_type": "config", "component_name": "config", "dependencies": []},
-            {"component_type": "chatter", "component_name": "example_chatter", "dependencies": []},
-        ],
-        "router": [
-            {"component_type": "config", "component_name": "config", "dependencies": []},
-            {"component_type": "router", "component_name": "example_router", "dependencies": []},
-        ],
-        "event_handler": [
-            {"component_type": "config", "component_name": "config", "dependencies": []},
-            {"component_type": "event_handler", "component_name": "example_event", "dependencies": []},
-        ],
-        "full": [
-            {"component_type": "config", "component_name": "config", "dependencies": []},
-            {"component_type": "action", "component_name": "example_action", "dependencies": []},
-            {"component_type": "tool", "component_name": "example_tool", "dependencies": []},
-            {"component_type": "collection", "component_name": "example_collection", "dependencies": []},
-            {"component_type": "plus_command", "component_name": "example_command", "dependencies": []},
-            {"component_type": "event_handler", "component_name": "example_event", "dependencies": []},
-            {"component_type": "service", "component_name": "example_service", "dependencies": []},
-        ],
-    }
-
-    manifest = {
-        "name": plugin_name,
-        "version": "1.0.0",
-        "description": description or f"{plugin_name} 插件",
-        "author": author or "Your Name",
-        "dependencies": {"plugins": [], "components": []},
-        "include": template_components.get(template, []),
-        "entry_point": "plugin.py",
-        "min_core_version": "1.0.0",
-    }
-
-    return json.dumps(manifest, ensure_ascii=False, indent=4)
+# _generate_manifest_file 函数已被 ManifestManager 替代，不再需要
 
 
 def _generate_plugin_file(plugin_name: str, template: str) -> str:
@@ -673,100 +617,7 @@ def _build_components_tree(template: str) -> dict[str, list[str]] | list[str]:
     return base_tree
 
 
-def _init_git_repository(plugin_dir: Path, verbose: bool) -> None:
-    """
-    初始化 Git 仓库
-
-    Args:
-        plugin_dir: 插件目录
-        verbose: 是否详细输出
-    """
-    import subprocess
-
-    try:
-        # 初始化 Git 仓库
-        subprocess.run(
-            ["git", "init"],
-            cwd=plugin_dir,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-        )
-
-        # 创建 .gitignore 文件
-        gitignore_content = """# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-venv/
-ENV/
-env/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# MoFox-Bot specific
-config/local_*.toml
-*.log
-"""
-        safe_write_file(plugin_dir / ".gitignore", gitignore_content)
-
-        # 执行初始提交
-        subprocess.run(
-            ["git", "add", "."], cwd=plugin_dir, check=True, capture_output=True, encoding="utf-8", errors="ignore"
-        )
-
-        subprocess.run(
-            ["git", "commit", "-m", "Initial commit"],
-            cwd=plugin_dir,
-            check=True,
-            capture_output=True,
-            encoding="utf-8",
-            errors="ignore",
-        )
-
-        if verbose:
-            console.print("[dim]✓ 初始化 Git 仓库[/dim]")
-        print_success("Git 仓库初始化成功")
-
-    except subprocess.CalledProcessError as e:
-        print_error(f"Git 初始化失败: {e}")
-    except FileNotFoundError:
-        print_error("未找到 Git 命令，请确保已安装 Git")
+# _init_git_repository 函数已被 GitManager 替代，不再需要
 
 
 def _generate_example_components(

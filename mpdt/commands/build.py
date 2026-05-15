@@ -29,6 +29,7 @@ from mpdt.utils.color_printer import (
     print_success,
     print_warning,
 )
+from mpdt.utils.managers.manifest_manager import ManifestManager
 
 # 构建时默认排除的文件/目录名称（精确匹配）
 _EXCLUDE_NAMES: set[str] = {
@@ -141,25 +142,7 @@ def _bump_version(version: str, bump: str) -> str:
     return f"{major}.{minor}.{patch}{suffix}"
 
 
-def _load_manifest(plugin_dir: Path) -> dict | None:
-    """读取并解析 manifest.json，返回字典；失败返回 None。"""
-    manifest_path = plugin_dir / "manifest.json"
-    if not manifest_path.exists():
-        print_error(f"manifest.json 不存在: {manifest_path}")
-        return None
-    try:
-        with open(manifest_path, encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        print_error(f"manifest.json 解析失败: {e}")
-        return None
-
-
-def _save_manifest(plugin_dir: Path, manifest: dict) -> None:
-    """将 manifest 字典写回 manifest.json。"""
-    manifest_path = plugin_dir / "manifest.json"
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=4)
+# _load_manifest 和 _save_manifest 函数已被 ManifestManager 替代，不再需要
 
 
 def build_plugin(
@@ -193,8 +176,10 @@ def build_plugin(
 
     console.print(Panel.fit(f"📦 构建插件: [cyan]{plugin_dir.name}[/cyan]", border_style="blue"))
 
-    manifest = _load_manifest(plugin_dir)
+    manifest_manager = ManifestManager(plugin_dir)
+    manifest = manifest_manager.load()
     if manifest is None:
+        print_error(f"manifest.json 不存在或无法解析")
         return
 
     required = ["name", "version", "description", "author", "entry_point"]
@@ -216,7 +201,7 @@ def build_plugin(
         print_step(f"版本升级: [yellow]{plugin_version}[/yellow] → [green]{new_version}[/green]")
         manifest["version"] = new_version
         # 立即写回 manifest.json，确保后续打包使用新版本
-        _save_manifest(plugin_dir, manifest)        
+        manifest_manager.save(manifest)
         plugin_version = new_version
 
     # ── 3. 验证入口文件 ───────────────────────────────────────────────────────

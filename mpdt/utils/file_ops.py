@@ -128,45 +128,6 @@ def validate_component_name(name: str) -> bool:
     return bool(re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", name))
 
 
-def get_git_user_info() -> dict[str, str]:
-    """
-    从 git config 获取用户信息
-
-    Returns:
-        包含 name 和 email 的字典
-    """
-    import subprocess
-
-    result = {"name": "", "email": ""}
-
-    try:
-        name = subprocess.run(
-            ["git", "config", "--get", "user.name"],
-            capture_output=True,
-            text=True,
-            check=False,
-            encoding="utf-8",
-            errors="ignore",
-        )
-        if name.returncode == 0:
-            result["name"] = name.stdout.strip()
-
-        email = subprocess.run(
-            ["git", "config", "--get", "user.email"],
-            capture_output=True,
-            text=True,
-            check=False,
-            encoding="utf-8",
-            errors="ignore",
-        )
-        if email.returncode == 0:
-            result["email"] = email.stdout.strip()
-    except Exception:
-        pass
-
-    return result
-
-
 def to_pascal_case(snake_str: str) -> str:
     """
     将 snake_case 转换为 PascalCase

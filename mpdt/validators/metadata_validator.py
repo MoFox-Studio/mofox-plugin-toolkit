@@ -2,8 +2,7 @@
 插件元数据验证器
 """
 
-import json
-
+from mpdt.utils.managers.manifest_manager import ManifestManager
 from .base import BaseValidator, ValidationResult
 
 
@@ -25,9 +24,10 @@ class MetadataValidator(BaseValidator):
         Returns:
             ValidationResult: 验证结果
         """
-        # 检查 manifest.json 是否存在
-        manifest_file = self.plugin_path / "manifest.json"
-        if not manifest_file.exists():
+        # 使用 ManifestManager 加载 manifest
+        manifest_manager = ManifestManager(self.plugin_path)
+        
+        if not manifest_manager.exists:
             self.result.add_error(
                 "manifest.json 文件不存在",
                 suggestion="请创建 manifest.json 文件并定义插件清单 | 可运行 'mpdt check --fix' 自动修复",
@@ -36,13 +36,18 @@ class MetadataValidator(BaseValidator):
 
         # 读取并解析 manifest.json
         try:
-            with open(manifest_file, encoding="utf-8") as f:
-                manifest_data = json.load(f)
-        except json.JSONDecodeError as e:
+            manifest_data = manifest_manager.load()
+            if manifest_data is None:
+                self.result.add_error(
+                    "无法加载 manifest.json",
+                    file_path="manifest.json",
+                )
+                return self.result
+        except ValueError as e:
+            # ManifestManager 抛出 ValueError 表示 JSON 解析错误
             self.result.add_error(
-                f"manifest.json 存在 JSON 语法错误: {e.msg}",
+                f"manifest.json 存在 JSON 语法错误: {e}",
                 file_path="manifest.json",
-                line_number=e.lineno if hasattr(e, "lineno") else None,
                 suggestion="请检查 JSON 格式是否正确",
             )
             return self.result

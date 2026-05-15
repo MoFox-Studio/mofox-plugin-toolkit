@@ -10,6 +10,7 @@ from pathlib import Path
 
 import libcst as cst
 
+from mpdt.utils.managers.manifest_manager import ManifestManager
 from .base import BaseValidator, ValidationIssue, ValidationLevel, ValidationResult
 
 
@@ -21,34 +22,13 @@ class AutoFixValidator(BaseValidator):
 
     def __init__(self, plugin_path: Path):
         super().__init__(plugin_path)
-        #todo: 不在class变量中记录修复结果，在fix_issues返回成功的修复和失败的修复
-        self.fixes_applied = []
-        self.fixes_failed = []
-        self.fixed_issues = []  # 记录已修复的原始问题
 
-    def validate(self) -> ValidationResult:
+    def validate(self) -> None:
         """执行自动修复（实际上是 fix 而非 validate）
 
         这是一个兼容方法，建议使用 fix_issues 方法
         """
-        result = ValidationResult(validator_name="AutoFixValidator", success=True)
-
-        plugin_name = self._get_plugin_name()
-        if not plugin_name:
-            result.add_error("无法确定插件名称")
-            return result
-
-        # 修复导入顺序
-
-        # 汇总修复结果
-        if self.fixes_applied:
-            result.add_info(f"应用了 {len(self.fixes_applied)} 个自动修复")
-            for fix in self.fixes_applied:
-                result.add_info(fix)
-        else:
-            result.add_info("未发现可自动修复的问题")
-
-        return result
+        pass
 
     def fix_issues(self, validation_results: list[ValidationResult]) -> ValidationResult:
         """自动修复验证问题
@@ -91,12 +71,12 @@ class AutoFixValidator(BaseValidator):
         for issue in issues:
             if "manifest.json" in issue.message and "不存在" in issue.message:
                 try:
-                    before_count = len(self.fixes_applied)
-                    self._create_manifest_file(issue)
-                    if len(self.fixes_applied) > before_count:
-                        self.fixed_issues.append(issue)
+                    before_count = len(result.fixes_applied)
+                    self._create_manifest_file(issue, result)
+                    if len(result.fixes_applied) > before_count:
+                        result.fixed_issues.append(issue)
                 except Exception as e:
-                    self.fixes_failed.append(f"创建 manifest.json 失败: {e}")
+                    result.fixes_failed.append(f"创建 manifest.json 失败: {e}")
 
     def _fix_missing_register_decorator(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
         """修复缺失的 @register_plugin 装饰器"""
@@ -105,12 +85,12 @@ class AutoFixValidator(BaseValidator):
                 try:
                     plugin_file = self.plugin_path / "plugin.py"
                     if plugin_file.exists():
-                        before_count = len(self.fixes_applied)
-                        self._add_register_decorator(plugin_file, issue)
-                        if len(self.fixes_applied) > before_count:
-                            self.fixed_issues.append(issue)
+                        before_count = len(result.fixes_applied)
+                        self._add_register_decorator(plugin_file, issue, result)
+                        if len(result.fixes_applied) > before_count:
+                            result.fixed_issues.append(issue)
                 except Exception as e:
-                    self.fixes_failed.append(f"添加 @register_plugin 装饰器失败: {e}")
+                    result.fixes_failed.append(f"添加 @register_plugin 装饰器失败: {e}")
 
     def _fix_missing_plugin_attributes(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
         """修复插件类缺失的属性"""
@@ -129,12 +109,12 @@ class AutoFixValidator(BaseValidator):
                             attr_name = match.group(1)
                             plugin_file = self.plugin_path / "plugin.py"
                             if plugin_file.exists():
-                                before_count = len(self.fixes_applied)
-                                self._add_plugin_class_attribute(plugin_file, attr_name, issue)
-                                if len(self.fixes_applied) > before_count:
-                                    self.fixed_issues.append(issue)
+                                before_count = len(result.fixes_applied)
+                                self._add_plugin_class_attribute(plugin_file, attr_name, issue, result)
+                                if len(result.fixes_applied) > before_count:
+                                    result.fixed_issues.append(issue)
                     except Exception as e:
-                        self.fixes_failed.append(f"修复插件类属性失败: {issue.message} - {e}")
+                        result.fixes_failed.append(f"修复插件类属性失败: {issue.message} - {e}")
 
     def _fix_missing_component_fields(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
         """修复组件缺失的字段"""
@@ -150,12 +130,12 @@ class AutoFixValidator(BaseValidator):
                         file_path = self._resolve_file_path(issue.file_path)
 
                         if file_path and file_path.exists():
-                            before_count = len(self.fixes_applied)
-                            self._add_class_attribute(file_path, field_name, issue, class_name=class_name)
-                            if len(self.fixes_applied) > before_count:
-                                self.fixed_issues.append(issue)
+                            before_count = len(result.fixes_applied)
+                            self._add_class_attribute(file_path, field_name, issue, result, class_name=class_name)
+                            if len(result.fixes_applied) > before_count:
+                                result.fixed_issues.append(issue)
                 except Exception as e:
-                    self.fixes_failed.append(f"修复组件字段失败: {issue.message} - {e}")
+                    result.fixes_failed.append(f"修复组件字段失败: {issue.message} - {e}")
 
     def _fix_missing_methods(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
         """修复缺失的方法"""
@@ -171,12 +151,12 @@ class AutoFixValidator(BaseValidator):
                         file_path = self._resolve_file_path(issue.file_path)
 
                         if file_path and file_path.exists():
-                            before_count = len(self.fixes_applied)
-                            self._add_method_to_class(file_path, class_name, method_name, issue)
-                            if len(self.fixes_applied) > before_count:
-                                self.fixed_issues.append(issue)
+                            before_count = len(result.fixes_applied)
+                            self._add_method_to_class(file_path, class_name, method_name, issue, result)
+                            if len(result.fixes_applied) > before_count:
+                                result.fixed_issues.append(issue)
                 except Exception as e:
-                    self.fixes_failed.append(f"修复缺失方法失败: {issue.message} - {e}")
+                    result.fixes_failed.append(f"修复缺失方法失败: {issue.message} - {e}")
 
     def _fix_method_signatures(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
         """修复方法签名问题"""
@@ -193,12 +173,12 @@ class AutoFixValidator(BaseValidator):
                         should_be_async = "应该是异步方法" in issue.message
 
                         if file_path and file_path.exists():
-                            before_count = len(self.fixes_applied)
-                            self._fix_method_async(file_path, class_name, method_name, should_be_async, issue)
-                            if len(self.fixes_applied) > before_count:
-                                self.fixed_issues.append(issue)
+                            before_count = len(result.fixes_applied)
+                            self._fix_method_async(file_path, class_name, method_name, should_be_async, issue, result)
+                            if len(result.fixes_applied) > before_count:
+                                result.fixed_issues.append(issue)
                 except Exception as e:
-                    self.fixes_failed.append(f"修复方法签名失败: {issue.message} - {e}")
+                    result.fixes_failed.append(f"修复方法签名失败: {issue.message} - {e}")
 
             # 修复参数问题
             elif "缺少必需参数" in issue.message or "参数过多" in issue.message:
@@ -210,12 +190,12 @@ class AutoFixValidator(BaseValidator):
                         file_path = self._resolve_file_path(issue.file_path)
 
                         if file_path and file_path.exists() and issue.suggestion:
-                            before_count = len(self.fixes_applied)
-                            self._fix_method_parameters(file_path, class_name, method_name, issue)
-                            if len(self.fixes_applied) > before_count:
-                                self.fixed_issues.append(issue)
+                            before_count = len(result.fixes_applied)
+                            self._fix_method_parameters(file_path, class_name, method_name, issue, result)
+                            if len(result.fixes_applied) > before_count:
+                                result.fixed_issues.append(issue)
                 except Exception as e:
-                    self.fixes_failed.append(f"修复方法参数失败: {issue.message} - {e}")
+                    result.fixes_failed.append(f"修复方法参数失败: {issue.message} - {e}")
 
             # 修复缺少返回类型注解问题
             elif "缺少返回类型注解" in issue.message:
@@ -244,12 +224,12 @@ class AutoFixValidator(BaseValidator):
                         continue
 
                     if file_path and file_path.exists():
-                        before_count = len(self.fixes_applied)
-                        self._fix_method_return_type(file_path, class_name, method_name, expected_type, issue)
-                        if len(self.fixes_applied) > before_count:
-                            self.fixed_issues.append(issue)
+                        before_count = len(result.fixes_applied)
+                        self._fix_method_return_type(file_path, class_name, method_name, expected_type, issue, result)
+                        if len(result.fixes_applied) > before_count:
+                            result.fixed_issues.append(issue)
                 except Exception as e:
-                    self.fixes_failed.append(f"修复返回类型注解失败: {issue.message} - {e}")
+                    result.fixes_failed.append(f"修复返回类型注解失败: {issue.message} - {e}")
 
     def _fix_style_issues(self, issues: list[ValidationIssue], result: ValidationResult) -> None:
         """修复代码风格问题
@@ -264,7 +244,7 @@ class AutoFixValidator(BaseValidator):
 
         # 检查 ruff 是否安装
         if not self._is_ruff_installed():
-            self.fixes_failed.append("未安装 ruff，无法自动修复代码风格问题")
+            result.fixes_failed.append("未安装 ruff，无法自动修复代码风格问题")
             return
 
         try:
@@ -276,10 +256,10 @@ class AutoFixValidator(BaseValidator):
             cmd_format = ["ruff", "format", str(self.plugin_path)]
             subprocess.run(cmd_format, capture_output=True, text=True, encoding="utf-8", errors="ignore")
 
-            self.fixes_applied.append("使用 ruff 自动修复了代码风格问题")
+            result.fixes_applied.append("使用 ruff 自动修复了代码风格问题")
 
         except Exception as e:
-            self.fixes_failed.append(f"运行 ruff 自动修复失败: {e}")
+            result.fixes_failed.append(f"运行 ruff 自动修复失败: {e}")
 
     def _is_ruff_installed(self) -> bool:
         """检查 ruff 是否安装"""
@@ -294,6 +274,7 @@ class AutoFixValidator(BaseValidator):
         file_path: Path,
         field_name: str,
         issue: ValidationIssue,
+        result: ValidationResult,
         class_name: str | None = None,
         default_value: str | None = None,
     ) -> None:
@@ -303,6 +284,7 @@ class AutoFixValidator(BaseValidator):
             file_path: 文件路径
             field_name: 字段名
             issue: 验证问题
+            result: 验证结果
             class_name: 类名（可选）
             default_value: 默认值（可选，如果不提供则自动推断）
         """
@@ -319,7 +301,7 @@ class AutoFixValidator(BaseValidator):
                         break
 
             if not target_class:
-                self.fixes_failed.append(f"未找到类定义: {class_name or '任意类'}")
+                result.fixes_failed.append(f"未找到类定义: {class_name or '任意类'}")
                 return
 
             # 使用 libcst 添加属性
@@ -333,14 +315,14 @@ class AutoFixValidator(BaseValidator):
 
             if transformer.modified:
                 file_path.write_text(modified.code, encoding="utf-8")
-                self.fixes_applied.append(f"在 {file_path.name} 的类 {target_class.name} 中添加属性 {field_name}")
+                result.fixes_applied.append(f"在 {file_path.name} 的类 {target_class.name} 中添加属性 {field_name}")
             else:
-                self.fixes_failed.append(f"未能修改类 {target_class.name}")
+                result.fixes_failed.append(f"未能修改类 {target_class.name}")
 
         except Exception as e:
-            self.fixes_failed.append(f"添加类属性 {field_name} 失败: {e}")
+            result.fixes_failed.append(f"添加类属性 {field_name} 失败: {e}")
 
-    def _add_method_to_class(self, file_path: Path, class_name: str, method_name: str, issue: ValidationIssue) -> None:
+    def _add_method_to_class(self, file_path: Path, class_name: str, method_name: str, issue: ValidationIssue, result: ValidationResult) -> None:
         """添加方法到类
 
         Args:
@@ -348,6 +330,7 @@ class AutoFixValidator(BaseValidator):
             class_name: 类名
             method_name: 方法名
             issue: 验证问题
+            result: 验证结果
         """
         try:
             source = file_path.read_text(encoding="utf-8")
@@ -361,15 +344,15 @@ class AutoFixValidator(BaseValidator):
 
             if transformer.modified:
                 file_path.write_text(modified.code, encoding="utf-8")
-                self.fixes_applied.append(f"在 {file_path.name} 的类 {class_name} 中添加方法 {method_name}")
+                result.fixes_applied.append(f"在 {file_path.name} 的类 {class_name} 中添加方法 {method_name}")
             else:
-                self.fixes_failed.append(f"未能在类 {class_name} 中添加方法 {method_name}")
+                result.fixes_failed.append(f"未能在类 {class_name} 中添加方法 {method_name}")
 
         except Exception as e:
-            self.fixes_failed.append(f"添加方法 {method_name} 失败: {e}")
+            result.fixes_failed.append(f"添加方法 {method_name} 失败: {e}")
 
     def _fix_method_async(
-        self, file_path: Path, class_name: str, method_name: str, should_be_async: bool, issue: ValidationIssue
+        self, file_path: Path, class_name: str, method_name: str, should_be_async: bool, issue: ValidationIssue, result: ValidationResult
     ) -> None:
         """修复方法的异步性
 
@@ -379,6 +362,7 @@ class AutoFixValidator(BaseValidator):
             method_name: 方法名
             should_be_async: 是否应该是异步方法
             issue: 验证问题
+            result: 验证结果
         """
         try:
             source = file_path.read_text(encoding="utf-8")
@@ -390,15 +374,15 @@ class AutoFixValidator(BaseValidator):
             if transformer.modified:
                 file_path.write_text(modified.code, encoding="utf-8")
                 async_str = "异步" if should_be_async else "同步"
-                self.fixes_applied.append(f"修复 {file_path.name} 中 {class_name}.{method_name} 为{async_str}方法")
+                result.fixes_applied.append(f"修复 {file_path.name} 中 {class_name}.{method_name} 为{async_str}方法")
             else:
-                self.fixes_failed.append(f"未能修复方法 {class_name}.{method_name}")
+                result.fixes_failed.append(f"未能修复方法 {class_name}.{method_name}")
 
         except Exception as e:
-            self.fixes_failed.append(f"修复方法异步性失败: {e}")
+            result.fixes_failed.append(f"修复方法异步性失败: {e}")
 
     def _fix_method_parameters(
-        self, file_path: Path, class_name: str, method_name: str, issue: ValidationIssue
+        self, file_path: Path, class_name: str, method_name: str, issue: ValidationIssue, result: ValidationResult
     ) -> None:
         """修复方法参数
 
@@ -407,6 +391,7 @@ class AutoFixValidator(BaseValidator):
             class_name: 类名
             method_name: 方法名
             issue: 验证问题
+            result: 验证结果
         """
         try:
             # 从建议中提取参数列表
@@ -431,53 +416,51 @@ class AutoFixValidator(BaseValidator):
 
             if transformer.modified:
                 file_path.write_text(modified.code, encoding="utf-8")
-                self.fixes_applied.append(f"修复 {file_path.name} 中 {class_name}.{method_name} 的参数")
+                result.fixes_applied.append(f"修复 {file_path.name} 中 {class_name}.{method_name} 的参数")
             else:
-                self.fixes_failed.append(f"未能修复方法 {class_name}.{method_name} 的参数")
+                result.fixes_failed.append(f"未能修复方法 {class_name}.{method_name} 的参数")
 
         except Exception as e:
-            self.fixes_failed.append(f"修复方法参数失败: {e}")
+            result.fixes_failed.append(f"修复方法参数失败: {e}")
 
-    def _create_manifest_file(self, issue: ValidationIssue) -> None:
+    def _create_manifest_file(self, issue: ValidationIssue, result: ValidationResult) -> None:
         """创建 manifest.json 文件
 
         Args:
             issue: 验证问题
+            result: 验证结果
         """
-        import json
-
         try:
-            manifest_path = self.plugin_path / "manifest.json"
-            if manifest_path.exists():
+            manifest_manager = ManifestManager(self.plugin_path)
+            
+            if manifest_manager.exists:
                 return
 
             # 获取插件名称
             plugin_name = self.plugin_path.name
 
-            # 构建基本的 manifest 内容
-            manifest = {
-                "name": plugin_name,
-                "version": "1.0.0",
-                "description": f"{plugin_name} 插件",
-                "author": "Your Name",
-                "dependencies": {"plugins": [], "components": []},
-                "include": [],
-                "entry_point": "plugin.py",
-                "min_core_version": "1.0.0",
-            }
-
-            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=4), encoding="utf-8")
-            self.fixes_applied.append("创建 manifest.json 文件")
+            # 使用 ManifestManager 创建 manifest
+            manifest_manager.create(
+                name=plugin_name,
+                version="1.0.0",
+                description=f"{plugin_name} 插件",
+                author="Your Name",
+                template="basic",
+            )
+            manifest_manager.save()
+            
+            result.fixes_applied.append("创建 manifest.json 文件")
 
         except Exception as e:
-            self.fixes_failed.append(f"创建 manifest.json 失败: {e}")
+            result.fixes_failed.append(f"创建 manifest.json 失败: {e}")
 
-    def _add_register_decorator(self, file_path: Path, issue: ValidationIssue) -> None:
+    def _add_register_decorator(self, file_path: Path, issue: ValidationIssue, result: ValidationResult) -> None:
         """为插件类添加 @register_plugin 装饰器
 
         Args:
             file_path: plugin.py 文件路径
             issue: 验证问题
+            result: 验证结果
         """
         try:
             source = file_path.read_text(encoding="utf-8")
@@ -491,20 +474,21 @@ class AutoFixValidator(BaseValidator):
 
             if transformer.modified:
                 file_path.write_text(modified.code, encoding="utf-8")
-                self.fixes_applied.append("为插件类添加 @register_plugin 装饰器")
+                result.fixes_applied.append("为插件类添加 @register_plugin 装饰器")
             else:
-                self.fixes_failed.append("未能添加 @register_plugin 装饰器")
+                result.fixes_failed.append("未能添加 @register_plugin 装饰器")
 
         except Exception as e:
-            self.fixes_failed.append(f"添加 @register_plugin 装饰器失败: {e}")
+            result.fixes_failed.append(f"添加 @register_plugin 装饰器失败: {e}")
 
-    def _add_plugin_class_attribute(self, file_path: Path, attr_name: str, issue: ValidationIssue) -> None:
+    def _add_plugin_class_attribute(self, file_path: Path, attr_name: str, issue: ValidationIssue, result: ValidationResult) -> None:
         """为插件类添加必需的类属性
 
         Args:
             file_path: plugin.py 文件路径
             attr_name: 属性名
             issue: 验证问题
+            result: 验证结果
         """
         try:
             # 获取插件名称
@@ -514,10 +498,10 @@ class AutoFixValidator(BaseValidator):
             default_value = self._get_default_value_for_plugin_attribute(attr_name, plugin_name)
 
             # 添加类属性（复用已有方法）
-            self._add_class_attribute(file_path, attr_name, issue, class_name=None, default_value=default_value)
+            self._add_class_attribute(file_path, attr_name, issue, result, class_name=None, default_value=default_value)
 
         except Exception as e:
-            self.fixes_failed.append(f"添加插件类属性 {attr_name} 失败: {e}")
+            result.fixes_failed.append(f"添加插件类属性 {attr_name} 失败: {e}")
 
     def _get_default_value_for_plugin_attribute(self, attr_name: str, plugin_name: str) -> str:
         """获取插件类属性的默认值
@@ -540,7 +524,7 @@ class AutoFixValidator(BaseValidator):
         return defaults.get(attr_name, '""')
 
     def _fix_method_return_type(
-        self, file_path: Path, class_name: str, method_name: str, expected_type: str, issue: ValidationIssue
+        self, file_path: Path, class_name: str, method_name: str, expected_type: str, issue: ValidationIssue, result: ValidationResult
     ) -> None:
         """修复方法的返回类型注解
 
@@ -550,6 +534,7 @@ class AutoFixValidator(BaseValidator):
             method_name: 方法名
             expected_type: 预期的返回类型
             issue: 验证问题
+            result: 验证结果
         """
         try:
             source = file_path.read_text(encoding="utf-8")
@@ -560,14 +545,14 @@ class AutoFixValidator(BaseValidator):
 
             if transformer.modified:
                 file_path.write_text(modified.code, encoding="utf-8")
-                self.fixes_applied.append(
+                result.fixes_applied.append(
                     f"修复 {file_path.name} 中 {class_name}.{method_name} 的返回类型注解为 {expected_type}"
                 )
             else:
-                self.fixes_failed.append(f"未能修复方法 {class_name}.{method_name} 的返回类型")
+                result.fixes_failed.append(f"未能修复方法 {class_name}.{method_name} 的返回类型")
 
         except Exception as e:
-            self.fixes_failed.append(f"修复返回类型注解失败: {e}")
+            result.fixes_failed.append(f"修复返回类型注解失败: {e}")
 
     def _resolve_file_path(self, relative_path: str | None) -> Path | None:
         """解析相对文件路径为绝对路径

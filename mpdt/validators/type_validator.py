@@ -7,7 +7,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from mpdt.utils.config_manager import MPDTConfig
+from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
 
 from .base import BaseValidator, ValidationResult
 
@@ -21,7 +21,7 @@ class TypeValidator(BaseValidator):
     def __init__(self, plugin_path: Path):
         super().__init__(plugin_path)
         # 尝试找到 MoFox 主项目路径
-        self.MoFox_root = MPDTConfig().mofox_path
+        self.MoFox_root = get_or_init_mpdt_config().mofox_path
 
     def validate(self) -> ValidationResult:
         """执行类型检查"""

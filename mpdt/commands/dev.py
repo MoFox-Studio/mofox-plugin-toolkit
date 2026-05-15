@@ -10,7 +10,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 
-from mpdt.utils.config_manager import MPDTConfig, interactive_config
+from mpdt.utils.managers.config_manager import MPDTConfig, get_or_init_mpdt_config, interactive_config
 from mpdt.utils.plugin_parser import extract_plugin_name
 
 console = Console()
@@ -249,7 +249,7 @@ def dev_command(
         plugin_path = Path.cwd()
 
     # 加载配置
-    config = MPDTConfig()
+    config = get_or_init_mpdt_config()
 
     # 如果未配置，运行配置向导
     if not config.is_configured() and mofox_path is None:
