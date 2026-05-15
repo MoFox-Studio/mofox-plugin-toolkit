@@ -34,7 +34,13 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
         console.print(f"[bold green]MPDT v{__version__}[/bold green]")
 
 
-@cli.command()
+@cli.group()
+def plugin() -> None:
+    """插件开发工具"""
+    pass
+
+
+@plugin.command("init")
 @click.argument("plugin_name", required=False)
 @click.option("--template", "-t", type=click.Choice(["basic", "action", "tool", "collection", "router", "plus_command", "event_handler", "full", "adapter", "chatter"]),
               default="basic", help="插件模板类型")
@@ -46,7 +52,7 @@ def cli(ctx: click.Context, verbose: bool, no_color: bool) -> None:
 @click.option("--init-git/--no-init-git", default=None, help="是否初始化 Git 仓库")
 @click.option("--output", "-o", type=click.Path(), help="输出目录")
 @click.pass_context
-def init(ctx: click.Context, plugin_name: str | None, template: str,email: str|  None, author: str | None,
+def plugin_init(ctx: click.Context, plugin_name: str | None, template: str,email: str|  None, author: str | None,
          license: str, with_docs: bool, init_git: bool | None, output: str | None) -> None:
     """初始化新插件项目"""
     from mpdt.commands.init import init_plugin
@@ -68,7 +74,7 @@ def init(ctx: click.Context, plugin_name: str | None, template: str,email: str| 
         raise click.Abort()
 
 
-@cli.command()
+@plugin.command("generate")
 @click.argument("component_type", type=click.Choice(["action", "tool", "collection", "event", "adapter", "plus-command", "router", "chatter", "service", "config"]), required=False)
 @click.argument("component_name", required=False)
 @click.option("--description", "-d", help="组件描述")
@@ -76,7 +82,7 @@ def init(ctx: click.Context, plugin_name: str | None, template: str,email: str| 
 @click.option("--force", "-f", is_flag=True, help="覆盖已存在的文件")
 @click.option("--root", is_flag=True, help="在插件根目录生成组件文件，而不是 components/ 文件夹")
 @click.pass_context
-def generate(ctx: click.Context, component_type: str | None, component_name: str | None, description: str | None,
+def plugin_generate(ctx: click.Context, component_type: str | None, component_name: str | None, description: str | None,
              output: str | None, force: bool, root: bool) -> None:
     """生成插件组件(始终生成异步方法)
 
@@ -99,7 +105,7 @@ def generate(ctx: click.Context, component_type: str | None, component_name: str
         raise click.Abort()
 
 
-@cli.command()
+@plugin.command("check")
 @click.argument("path", type=click.Path(exists=True), required=False, default=".")
 @click.option("--level", "-l", type=click.Choice(["error", "warning", "info"]), default="warning",
               help="显示的最低级别")
@@ -113,7 +119,7 @@ def generate(ctx: click.Context, component_type: str | None, component_name: str
 @click.option("--no-type", is_flag=True, help="跳过类型检查")
 @click.option("--no-style", is_flag=True, help="跳过代码风格检查")
 @click.pass_context
-def check(ctx: click.Context, path: str, level: str, fix: bool, report: str, output: str | None,
+def plugin_check(ctx: click.Context, path: str, level: str, fix: bool, report: str, output: str | None,
           no_structure: bool, no_metadata: bool, no_component: bool, no_type: bool,
           no_style: bool) -> None:
     """对插件进行静态检查"""
@@ -138,14 +144,14 @@ def check(ctx: click.Context, path: str, level: str, fix: bool, report: str, out
         raise click.Abort()
 
 
-@cli.command()
+@plugin.command("build")
 @click.argument("plugin_path", type=click.Path(), required=False, default=".")
 @click.option("--output", "-o", type=click.Path(), default="dist", help="输出目录")
 @click.option("--with-docs", is_flag=True, help="包含文档")
 @click.option("--format", "fmt", type=click.Choice(["mfp", "zip"]), default="mfp", help="构建格式（mfp 为推荐格式）")
 @click.option("--bump", type=click.Choice(["major", "minor", "patch"]), help="自动升级版本号")
 @click.pass_context
-def build(ctx: click.Context, plugin_path: str, output: str, with_docs: bool, fmt: str, bump: str | None) -> None:
+def plugin_build(ctx: click.Context, plugin_path: str, output: str, with_docs: bool, fmt: str, bump: str | None) -> None:
     """构建并打包插件为 .mfp 文件
 
     PLUGIN_PATH 为插件根目录（含 manifest.json），默认为当前目录。
@@ -166,11 +172,11 @@ def build(ctx: click.Context, plugin_path: str, output: str, with_docs: bool, fm
         raise click.Abort()
 
 
-@cli.command()
+@plugin.command("dev")
 @click.option("--neo-mofox-path", type=click.Path(exists=True), help="Neo-MoFox 主程序路径")
 @click.option("--plugin-path", type=click.Path(exists=True), help="插件路径（默认当前目录）")
 @click.pass_context
-def dev(ctx: click.Context, neo_mofox_path: str | None, plugin_path: str | None) -> None:
+def plugin_dev(ctx: click.Context, neo_mofox_path: str | None, plugin_path: str | None) -> None:
     """启动开发模式，支持热重载"""
     from pathlib import Path
 
@@ -238,34 +244,44 @@ def config_show() -> None:
         raise click.Abort()
 
 
-@config.command("test")
-def config_test() -> None:
-    """测试配置是否有效"""
+@config.command("open")
+def config_open() -> None:
+    """打开配置文件"""
+    import os
+    import subprocess
+    from pathlib import Path
+
     from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
 
     try:
         config = get_or_init_mpdt_config()
+        config_path = config.config_path
 
-        if not config.is_configured():
-            console.print("[yellow]⚠️  未找到配置文件[/yellow]")
+        if not config_path.exists():
+            console.print("[yellow]⚠️  配置文件不存在[/yellow]")
             console.print("请运行 [cyan]mpdt config init[/cyan] 进行配置")
             return
 
-        console.print("[cyan]正在验证配置...[/cyan]\n")
-
-        valid, errors = config.validate()
-
-        if valid:
-            console.print("[bold green]✓ 配置有效！[/bold green]")
-            console.print(f"\nNeo-MoFox 路径: {config.mofox_path}")
+        # 尝试使用系统默认编辑器打开
+        if os.environ.get("EDITOR"):
+            subprocess.run([os.environ["EDITOR"], str(config_path)])
+        elif os.name == "posix":
+            # Linux/macOS
+            subprocess.run(["xdg-open", str(config_path)])
+        elif os.name == "nt":
+            # Windows
+            os.startfile(config_path)
         else:
-            console.print("[bold red]✗ 配置验证失败：[/bold red]")
-            for error in errors:
-                console.print(f"  - {error}")
-            console.print("\n请运行 [cyan]mpdt config init[/cyan] 重新配置")
+            # fallback: 只显示路径
+            console.print(f"[cyan]配置文件路径: {config_path}[/cyan]")
 
     except Exception as e:
-        console.print(f"[bold red]❌ 测试失败: {e}[/bold red]")
+        console.print(f"[bold red]❌ 打开失败: {e}[/bold red]")
+        # 显示配置文件路径作为后备方案
+        try:
+            console.print(f"[cyan]配置文件路径: {config.config_path}[/cyan]")
+        except:
+            pass
         raise click.Abort()
 
 
