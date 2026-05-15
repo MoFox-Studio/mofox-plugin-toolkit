@@ -24,10 +24,9 @@ from rich.table import Table
 
 from mpdt.utils.color_printer import (
     console,
+    get_fit_panel,
     print_empty_line,
     print_error,
-    print_fit_panel,
-    print_step,
     print_success,
     print_warning,
 )
@@ -174,81 +173,96 @@ def build_plugin(
         print_error(f"插件路径不是目录: {plugin_dir}")
         return
 
-    print_fit_panel(f"📦 构建插件: {plugin_dir.name}", "", border_style="blue")
+    # 创建动态面板
+    panel = get_fit_panel(f"📦 构建插件: {plugin_dir.name}", border_style="blue")
 
-    manifest_manager = ManifestManager(plugin_dir)
-    manifest = manifest_manager.load()
-    if manifest is None:
-        print_error(f"manifest.json 不存在或无法解析")
-        return
-
-    required = ["name", "version", "description", "author", "entry_point"]
-    for field in required:
-        if field not in manifest:
-            print_error(f"manifest.json 缺少必需字段: '{field}'")
+    with panel:
+        panel.update("正在读取 manifest.json...")
+        manifest_manager = ManifestManager(plugin_dir)
+        manifest = manifest_manager.load()
+        if manifest is None:
+            print_error(f"manifest.json 不存在或无法解析")
             return
 
-    plugin_name: str = manifest["name"]
-    plugin_version: str = manifest["version"]
+        required = ["name", "version", "description", "author", "entry_point"]
+        for field in required:
+            if field not in manifest:
+                print_error(f"manifest.json 缺少必需字段: '{field}'")
+                return
 
-    # ── 2. 版本升级（先写回文件，再使用新版本号进行打包） ────────────────────
-    if bump:
-        try:
-            new_version = _bump_version(plugin_version, bump)
-        except ValueError as e:
-            print_error(str(e))
+        plugin_name: str = manifest["name"]
+        plugin_version: str = manifest["version"]
+        panel.append(f"✓ 插件: {plugin_name} v{plugin_version}")
+
+        # ── 2. 版本升级（先写回文件，再使用新版本号进行打包） ────────────────────
+        if bump:
+            try:
+                new_version = _bump_version(plugin_version, bump)
+            except ValueError as e:
+                print_error(str(e))
+                return
+            panel.update(f"版本升级: {plugin_version} → {new_version}")
+            manifest["version"] = new_version
+            # 立即写回 manifest.json，确保后续打包使用新版本
+            manifest_manager.save(manifest)
+            plugin_version = new_version
+            panel.append(f"✓ 版本已更新")
+
+        # ── 3. 验证入口文件 ───────────────────────────────────────────────────────
+        entry_point = manifest.get("entry_point", "plugin.py")
+        entry_file = plugin_dir / entry_point
+        panel.update(f"验证入口文件: {entry_point}")
+        if not entry_file.exists():
+            print_warning(f"入口文件不存在: {entry_point}（仍将继续构建）")
+            panel.append(f"⚠ 入口文件不存在")
+        else:
+            panel.append(f"✓ 入口文件验证通过")
+
+        # ── 4. 收集文件 ───────────────────────────────────────────────────────────
+        panel.update("正在收集文件...")
+        files = _collect_files(plugin_dir, with_docs)
+
+        if not files:
+            print_warning("未找到任何需要打包的文件")
             return
-        print_step(f"版本升级: {plugin_version} → {new_version}")
-        manifest["version"] = new_version
-        # 立即写回 manifest.json，确保后续打包使用新版本
-        manifest_manager.save(manifest)
-        plugin_version = new_version
 
-    # ── 3. 验证入口文件 ───────────────────────────────────────────────────────
-    entry_point = manifest.get("entry_point", "plugin.py")
-    entry_file = plugin_dir / entry_point
-    if not entry_file.exists():
-        print_warning(f"入口文件不存在: {entry_point}（仍将继续构建）")
+        panel.append(f"✓ 收集到 {len(files)} 个文件")
 
-    # ── 4. 收集文件 ───────────────────────────────────────────────────────────
-    print_step("收集文件...")
-    files = _collect_files(plugin_dir, with_docs)
+        # ── 5. 确定输出路径 ───────────────────────────────────────────────────────
+        # output_dir 可以是绝对路径或相对于插件目录
+        out_path = Path(output_dir)
+        if not out_path.is_absolute():
+            out_path = plugin_dir / output_dir
 
-    if not files:
-        print_warning("未找到任何需要打包的文件")
-        return
+        out_path.mkdir(parents=True, exist_ok=True)
 
-    # ── 5. 确定输出路径 ───────────────────────────────────────────────────────
-    # output_dir 可以是绝对路径或相对于插件目录
-    out_path = Path(output_dir)
-    if not out_path.is_absolute():
-        out_path = plugin_dir / output_dir
+        suffix = ".mfp" if fmt == "mfp" else ".zip"
+        archive_name = f"{plugin_name}-{plugin_version}{suffix}"
+        archive_path = out_path / archive_name
 
-    out_path.mkdir(parents=True, exist_ok=True)
-
-    suffix = ".mfp" if fmt == "mfp" else ".zip"
-    archive_name = f"{plugin_name}-{plugin_version}{suffix}"
-    archive_path = out_path / archive_name
-
-    if archive_path.exists():
-        print_warning(f"目标文件已存在，将覆盖: {archive_path}")
-
-    # ── 6. 压缩打包 ───────────────────────────────────────────────────────────
-    print_step(f"正在写入 {suffix} 包...")
-    total_bytes = 0
-
-    try:
-        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for file_path in files:
-                arcname = file_path.relative_to(plugin_dir)
-                zf.write(file_path, arcname)
-                total_bytes += file_path.stat().st_size
-    except Exception as e:
-        print_error(f"打包失败: {e}")
-        # 清理不完整的文件
         if archive_path.exists():
-            archive_path.unlink()
-        return
+            print_warning(f"目标文件已存在，将覆盖: {archive_path}")
+            panel.append(f"⚠ 将覆盖现有文件")
+
+        # ── 6. 压缩打包 ───────────────────────────────────────────────────────────
+        panel.update(f"正在压缩打包为 {suffix}...")
+        total_bytes = 0
+
+        try:
+            with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for file_path in files:
+                    arcname = file_path.relative_to(plugin_dir)
+                    zf.write(file_path, arcname)
+                    total_bytes += file_path.stat().st_size
+            panel.append(f"✓ 打包完成")
+        except Exception as e:
+            print_error(f"打包失败: {e}")
+            # 清理不完整的文件
+            if archive_path.exists():
+                archive_path.unlink()
+            return
+
+        panel.update("✓ 构建完成")
 
     # ── 7. 摘要 ──────────────────────────────────────────────────────────────
     archive_size = archive_path.stat().st_size

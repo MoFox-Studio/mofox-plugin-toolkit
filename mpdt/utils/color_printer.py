@@ -2,9 +2,11 @@
 彩色输出工具
 """
 
+import time
 from typing import Any
 
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.style import Style
@@ -12,6 +14,109 @@ from rich.table import Table
 from rich.tree import Tree
 
 console = Console()
+
+
+class FitPanel:
+    """动态自适应面板
+    
+    支持动态更新内容的面板，可以用于实时显示进度信息。
+    """
+    
+    def __init__(
+        self, 
+        title: str, 
+        style: str = "green", 
+        rgb: tuple[int, int, int] | None = None, 
+        border_style: str | None = None,
+        delay: float = 0.3
+    ):
+        """初始化动态面板
+        
+        Args:
+            title: 面板标题
+            style: 面板样式（颜色名称）
+            rgb: RGB 颜色元组，优先级高于 style
+            border_style: 边框样式
+            delay: 每次更新后的延迟时间（秒），默认 0.3 秒，让用户能看清每一步进度
+        """
+        self.title = title
+        self.style = style
+        self.rgb = rgb
+        self.border_style = border_style
+        self.content = ""
+        self._live = None
+        self.delay = delay
+    
+    def start(self) -> None:
+        """启动实时更新"""
+        self._live = Live(self._create_panel(), console=console, refresh_per_second=4)
+        self._live.start()
+    
+    def update(self, content: str) -> None:
+        """更新面板内容
+        
+        Args:
+            content: 新的内容
+        """
+        self.content = content
+        if self._live:
+            self._live.update(self._create_panel())
+            if self.delay > 0:
+                time.sleep(self.delay)
+    
+    def append(self, content: str) -> None:
+        """追加内容
+        
+        Args:
+            content: 要追加的内容
+        """
+        if self.content:
+            self.content += "\n" + content
+        else:
+            self.content = content
+        if self._live:
+            self._live.update(self._create_panel())
+            if self.delay > 0:
+                time.sleep(self.delay)
+    
+    def stop(self) -> None:
+        """停止实时更新"""
+        if self._live:
+            self._live.stop()
+            self._live = None
+    
+    def _create_panel(self):
+        """创建面板对象
+        
+        Returns:
+            Panel 对象
+        """
+        if self.rgb:
+            hex_color = _rgb_to_hex(*self.rgb)
+            return Panel.fit(
+                self.content, 
+                title=self.title, 
+                style=hex_color, 
+                border_style=self.border_style or hex_color, 
+                highlight=False
+            )
+        else:
+            return Panel.fit(
+                self.content, 
+                title=self.title, 
+                style=self.style, 
+                border_style=self.border_style or self.style, 
+                highlight=False
+            )
+    
+    def __enter__(self):
+        """上下文管理器入口"""
+        self.start()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文管理器出口"""
+        self.stop()
 
 
 def _rgb_to_hex(r: int, g: int, b: int) -> str:
@@ -193,9 +298,9 @@ def print_panel(
     """
     if rgb:
         hex_color = _rgb_to_hex(*rgb)
-        console.print(Panel(content, title=title, style=hex_color, border_style=border_style or hex_color))
+        console.print(Panel(content, title=title, style=hex_color, border_style=border_style or hex_color, highlight=False), markup=False, highlight=False)
     else:
-        console.print(Panel(content, title=title, style=style, border_style=border_style or style))
+        console.print(Panel(content, title=title, style=style, border_style=border_style or style, highlight=False), markup=False, highlight=False)
 
 
 def print_fit_panel(
@@ -216,9 +321,41 @@ def print_fit_panel(
     """
     if rgb:
         hex_color = _rgb_to_hex(*rgb)
-        console.print(Panel.fit(content, title=title, style=hex_color, border_style=border_style or hex_color))
+        console.print(Panel.fit(content, title=title, style=hex_color, border_style=border_style or hex_color, highlight=False), markup=False, highlight=False)
     else:
-        console.print(Panel.fit(content, title=title, style=style, border_style=border_style or style))
+        console.print(Panel.fit(content, title=title, style=style, border_style=border_style or style, highlight=False), markup=False, highlight=False)
+
+
+def get_fit_panel(
+    title: str,
+    style: str = "green",
+    rgb: tuple[int, int, int] | None = None,
+    border_style: str | None = None,
+    delay: float = 0.3
+) -> FitPanel:
+    """获取动态自适应面板实例
+    
+    Args:
+        title: 面板标题
+        style: 面板样式（颜色名称）
+        rgb: RGB 颜色元组，优先级高于 style
+        border_style: 边框样式
+        delay: 每次更新后的延迟时间（秒），默认 0.3 秒，设置为 0 禁用延迟
+        
+    Returns:
+        FitPanel 实例
+        
+    Example:
+        >>> panel = get_fit_panel("进度", border_style="blue")
+        >>> with panel:
+        ...     panel.update("正在处理...")
+        ...     # 做一些工作
+        ...     panel.update("处理完成")
+        >>> 
+        >>> # 禁用延迟以获得最快速度
+        >>> panel = get_fit_panel("快速进度", delay=0)
+    """
+    return FitPanel(title, style, rgb, border_style, delay)
 
 
 def print_table(

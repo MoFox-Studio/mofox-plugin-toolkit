@@ -3,17 +3,18 @@
 """
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rich.panel import Panel
 from rich.table import Table
 
 from mpdt.utils.color_printer import (
     console,
+    get_fit_panel,
     print_colored,
     print_divider,
     print_empty_line,
     print_error,
-    print_fit_panel,
     print_info,
     print_success,
     print_warning,
@@ -34,6 +35,9 @@ from mpdt.checkers.fixers import (
     MethodFixer,
     StyleFixer,
 )
+
+if TYPE_CHECKING:
+    from mpdt.utils.color_printer import FitPanel
 
 
 def check_plugin(
@@ -74,108 +78,117 @@ def check_plugin(
         print_error(f"插件路径不是目录: {plugin_path}")
         return
 
-    print_fit_panel(f"🔍 检查插件: {path.name}", "", border_style="blue")
-
+    # 创建动态面板
+    panel = get_fit_panel(f"🔍 检查插件: {path.name}", border_style="blue")
+    
     # 收集所有验证结果
     all_results: list[ValidationResult] = []
 
-    # 结构验证
-    if not skip_structure:
-        print_info("正在检查插件结构...")
-        validator = StructureValidator(path)
+    with panel:
+        # 结构验证
+        if not skip_structure:
+            panel.update("正在检查插件结构...")
+            validator = StructureValidator(path)
+            result = validator.validate()
+            all_results.append(result)
+            _print_validation_summary(result, panel)
+
+        # 元数据验证
+        if not skip_metadata:
+            panel.update("正在检查插件元数据...")
+            validator = MetadataValidator(path)
+            result = validator.validate()
+            all_results.append(result)
+            _print_validation_summary(result, panel)
+
+        # 组件验证
+        if not skip_component:
+            panel.update("正在检查组件元数据...")
+            validator = ComponentValidator(path)
+            result = validator.validate()
+            all_results.append(result)
+            _print_validation_summary(result, panel)
+
+        # 配置验证
+        panel.update("正在检查配置文件...")
+        validator = ConfigValidator(path)
         result = validator.validate()
         all_results.append(result)
-        _print_validation_summary(result)
+        _print_validation_summary(result, panel)
 
-    # 元数据验证
-    if not skip_metadata:
-        print_info("正在检查插件元数据...")
-        validator = MetadataValidator(path)
-        result = validator.validate()
-        all_results.append(result)
-        _print_validation_summary(result)
+        # 类型检查
+        if not skip_type:
+            panel.update("正在进行类型检查...")
+            validator = TypeValidator(path)
+            result = validator.validate()
+            all_results.append(result)
+            _print_validation_summary(result, panel)
 
-    # 组件验证
-    if not skip_component:
-        print_info("正在检查组件元数据...")
-        validator = ComponentValidator(path)
-        result = validator.validate()
-        all_results.append(result)
-        _print_validation_summary(result)
+        # 代码风格检查
+        if not skip_style:
+            panel.update("正在检查代码风格...")
+            validator = StyleValidator(path)
+            result = validator.validate()
+            all_results.append(result)
+            _print_validation_summary(result, panel)
 
-    # 配置验证
-    print_info("正在检查配置文件...")
-    validator = ConfigValidator(path)
-    result = validator.validate()
-    all_results.append(result)
-    _print_validation_summary(result)
-
-    # 类型检查
-    if not skip_type:
-        print_info("正在进行类型检查...")
-        validator = TypeValidator(path)
-        result = validator.validate()
-        all_results.append(result)
-        _print_validation_summary(result)
-
-    # 代码风格检查
-    if not skip_style:
-        print_info("正在检查代码风格...")
-        validator = StyleValidator(path)
-        result = validator.validate()
-        all_results.append(result)
-        _print_validation_summary(result)
-
-    # 自动修复（如果启用）
-    fix_result = None
-    if auto_fix:
-        print_info("正在应用自动修复...")
-        
-        # 收集所有问题
-        all_issues = []
-        for result in all_results:
-            all_issues.extend(result.issues)
-        
-        if not all_issues:
-            print_info("  ℹ 未发现需要修复的问题")
-        else:
-            # 创建修复器列表
-            fixers = [
-                ManifestFixer(path),
-                DecoratorFixer(path),
-                AttributeFixer(path),
-                MethodFixer(path),
-                StyleFixer(path),
-            ]
+        # 自动修复（如果启用）
+        fix_result = None
+        if auto_fix:
+            panel.update("正在应用自动修复...")
             
-            # 汇总所有修复结果
-            fix_result = FixResult(fixer_name="AutoFix")
-            
-            for fixer in fixers:
-                # 过滤出该修复器可以处理的问题
-                fixable_issues = [issue for issue in all_issues if fixer.can_fix(issue)]
-                
-                if fixable_issues:
-                    result = fixer.fix(fixable_issues)
-                    fix_result.fixes_applied.extend(result.fixes_applied)
-                    fix_result.fixes_failed.extend(result.fixes_failed)
-                    fix_result.fixed_issues.extend(result.fixed_issues)
-            
-            # 从原始结果中移除已修复的问题
-            fixed_issue_ids = {id(issue) for issue in fix_result.fixed_issues}
+            # 收集所有问题
+            all_issues = []
             for result in all_results:
-                result.issues = [issue for issue in result.issues if id(issue) not in fixed_issue_ids]
-                result._update_counts()
+                all_issues.extend(result.issues)
             
-            # 显示修复摘要
-            if fix_result.fixes_applied:
-                print_success(f"  ✓ 成功修复 {len(fix_result.fixes_applied)} 个问题")
-            
-            if fix_result.fixes_failed:
-                print_warning(f"  ⚠ {len(fix_result.fixes_failed)} 个问题修复失败")
-            
-            if not fix_result.fixes_applied and not fix_result.fixes_failed:
-                print_info("  ℹ 未发现可自动修复的问题")
+            if not all_issues:
+                msg = "  ℹ 未发现需要修复的问题"
+                panel.append(msg)
+            else:
+                # 创建修复器列表
+                fixers = [
+                    ManifestFixer(path),
+                    DecoratorFixer(path),
+                    AttributeFixer(path),
+                    MethodFixer(path),
+                    StyleFixer(path),
+                ]
+                
+                # 汇总所有修复结果
+                fix_result = FixResult(fixer_name="AutoFix")
+                
+                for fixer in fixers:
+                    # 过滤出该修复器可以处理的问题
+                    fixable_issues = [issue for issue in all_issues if fixer.can_fix(issue)]
+                    
+                    if fixable_issues:
+                        result = fixer.fix(fixable_issues)
+                        fix_result.fixes_applied.extend(result.fixes_applied)
+                        fix_result.fixes_failed.extend(result.fixes_failed)
+                        fix_result.fixed_issues.extend(result.fixed_issues)
+                
+                # 从原始结果中移除已修复的问题
+                fixed_issue_ids = {id(issue) for issue in fix_result.fixed_issues}
+                for result in all_results:
+                    result.issues = [issue for issue in result.issues if id(issue) not in fixed_issue_ids]
+                    result._update_counts()
+                
+                # 显示修复摘要
+                if fix_result.fixes_applied:
+                    msg = f"  ✓ 成功修复 {len(fix_result.fixes_applied)} 个问题"
+                    panel.append(msg)
+                
+                if fix_result.fixes_failed:
+                    msg = f"  ⚠ {len(fix_result.fixes_failed)} 个问题修复失败"
+                    panel.append(msg)
+                
+                if not fix_result.fixes_applied and not fix_result.fixes_failed:
+                    msg = "  ℹ 未发现可自动修复的问题"
+                    panel.append(msg)
+        
+        panel.update("✓ 检查完成")
+
 
     # 生成总体报告
     _print_overall_report(all_results, level, fix_result if auto_fix else None)
@@ -185,16 +198,26 @@ def check_plugin(
         _save_report(all_results, output_path, report_format, fix_result if auto_fix else None)
 
 
-def _print_validation_summary(result: ValidationResult) -> None:
+def _print_validation_summary(result: ValidationResult, panel: "FitPanel | None" = None) -> None:
     """打印验证摘要
 
     Args:
         result: 验证结果
+        panel: 可选的动态面板，用于追加内容
     """
     if result.success:
-        print_success(f"  ✓ {result.validator_name}: 通过")
+        message = f"  ✓ {result.validator_name}: 通过"
     else:
-        print_error(f"  ✗ {result.validator_name}: 发现 {result.error_count} 个错误")
+        message = f"  ✗ {result.validator_name}: 发现 {result.error_count} 个错误"
+    
+    if panel:
+        panel.append(message)
+    else:
+        # 仅在没有面板时才打印到控制台
+        if result.success:
+            print_success(message)
+        else:
+            print_error(message)
 
 
 def _print_issue(issue) -> None:

@@ -12,9 +12,9 @@ from rich.panel import Panel
 
 from mpdt.utils.color_printer import (
     console,
+    get_fit_panel,
     print_colored,
     print_error,
-    print_fit_panel,
     print_info,
     print_success,
     print_warning,
@@ -40,25 +40,30 @@ class DevServer:
 
     def start(self):
         """启动开发模式（同步方法）"""
+        panel = get_fit_panel("🚀 Neo-MoFox Plugin Dev Server", border_style="cyan")
+        
         try:
-            # 1. 解析插件名称
-            self._parse_plugin_info()
+            with panel:
+                # 1. 解析插件名称
+                panel.update("正在解析插件信息...")
+                self._parse_plugin_info(panel)
 
-            # 2. 注入目标开发插件
-            self._inject_target_plugin()
+                # 2. 注入目标开发插件
+                panel.update("正在注入目标插件...")
+                self._inject_target_plugin(panel)
 
-            # 4. 注入 DevBridge 插件（包含配置）
-            self._inject_bridge_plugin()
+                # 4. 注入 DevBridge 插件（包含配置）
+                panel.update("正在注入开发模式插件...")
+                self._inject_bridge_plugin(panel)
 
-            # 5. 启动主程序
-            self._start_main_process()
+                # 5. 启动主程序
+                panel.update("正在启动主程序...")
+                self._start_main_process(panel)
 
-            print_success("✨ 开发模式已启动！")
-            print_colored("主程序窗口中会显示文件监控和重载信息", dim=True)
-            print_colored("DevBridge 插件会在主程序退出时自动清理\n", dim=True)
-
-            # 启动完成，直接退出，让插件自己管理生命周期
-            print_success("开发服务器启动完成，此窗口将关闭")
+                panel.update("✓ 开发模式启动完成")
+                panel.append("")
+                panel.append("主程序窗口中会显示文件监控和重载信息")
+                panel.append("DevBridge 插件会在主程序退出时自动清理")
 
         except Exception as e:
             print_error(f"{e}")
@@ -67,15 +72,10 @@ class DevServer:
 
 
 
-    def _parse_plugin_info(self):
+    def _parse_plugin_info(self, panel):
         """解析插件信息"""
-        print_fit_panel(
-            f"🚀 Neo-MoFox Plugin Dev Server\n\n"
-            f"📂 目录: {self.plugin_path.name}\n"
-            f"📍 路径: {self.plugin_path}",
-            "",
-            rgb=(0, 255, 255)
-        )
+        panel.append(f"📂 目录: {self.plugin_path.name}")
+        panel.append(f"📍 路径: {self.plugin_path}")
 
         # 提取插件名称
         self.plugin_name = extract_plugin_name(self.plugin_path)
@@ -89,9 +89,9 @@ class DevServer:
             print_colored("```")
             raise ValueError("无法解析插件名称")
 
-        print_success(f"插件名: {self.plugin_name}")
+        panel.append(f"✓ 插件名: {self.plugin_name}")
 
-    def _inject_target_plugin(self):
+    def _inject_target_plugin(self, panel):
         """将目标插件复制到 mofox 的 plugins 目录"""
         assert self.plugin_name is not None, "plugin_name 未初始化"
         plugins_dir = self.mofox_path / "plugins"
@@ -99,10 +99,8 @@ class DevServer:
 
         # 检查插件是否已经在 plugins 目录下
         if self.plugin_path.parent.resolve() == plugins_dir.resolve():
-            print_colored("📦 插件已在 plugins 目录下，跳过复制", dim=True)
+            panel.append("ℹ 插件已在 plugins 目录下，跳过复制")
             return
-
-        print_colored("📦 注入目标插件...", color="cyan")
 
         # 如果已存在，先删除
         if target_dir.exists():
@@ -111,12 +109,10 @@ class DevServer:
         # 复制插件
         shutil.copytree(self.plugin_path, target_dir)
 
-        print_success(f"目标插件已注入: {target_dir}")
+        panel.append(f"✓ 目标插件已注入: {target_dir}")
 
-    def _inject_bridge_plugin(self):
+    def _inject_bridge_plugin(self, panel):
         """注入 DevBridge 插件到主程序，并修改配置常量"""
-        print_colored("🔗 注入开发模式插件...", color="cyan")
-
         # DevBridge 插件源路径
         bridge_source = Path(__file__).parent.parent / "dev" / "bridge_plugin"
 
@@ -136,9 +132,9 @@ class DevServer:
         # 动态修改 dev_config.py 中的常量
         self._update_dev_config(bridge_target)
 
-        print_success(f"DevBridge 插件已注入: {bridge_target}")
-        print_colored(f"  目标插件: {self.plugin_name}", dim=True)
-        print_colored(f"  监控路径: {self.plugin_path}", dim=True)
+        panel.append(f"✓ DevBridge 插件已注入")
+        panel.append(f"  目标插件: {self.plugin_name}")
+        panel.append(f"  监控路径: {self.plugin_path}")
 
     def _update_dev_config(self, bridge_target: Path):
         """更新开发插件的配置文件"""
@@ -173,13 +169,11 @@ DISCOVERY_PORT: int = 12318
         with open(config_file, "w", encoding="utf-8") as f:
             f.write(config_content)
 
-        print_colored("  配置已写入 dev_config.py", dim=True)
 
 
-
-    def _start_main_process(self):
+    def _start_main_process(self, panel):
         """启动主程序"""
-        print_colored(f"🚀 启动主程序: {self.mofox_path / 'bot.py'}", color="cyan")
+        panel.append(f"🚀 启动路径: {self.mofox_path / 'main.py'}")
 
         try:
             import os
@@ -193,6 +187,7 @@ DISCOVERY_PORT: int = 12318
                 self.process = subprocess.Popen(
                     cmd, creationflags=subprocess.CREATE_NEW_CONSOLE, encoding="utf-8", errors="ignore"
                 )
+                panel.append("✓ 主程序已启动（新窗口）")
             else:
                 # Linux/Mac
                 shell_cmd = f"cd {self.mofox_path} && uv run bot.py"
@@ -230,11 +225,11 @@ DISCOVERY_PORT: int = 12318
                             encoding="utf-8",
                             errors="ignore",
                         )
-                        print_success("主程序已启动（后台）")
+                        panel.append("✓ 主程序已启动（后台）")
                         return
 
                 self.process = subprocess.Popen(cmd, encoding="utf-8", errors="ignore")
-            print_success("主程序已启动（新窗口）")
+                panel.append("✓ 主程序已启动（新窗口）")
         except Exception as e:
             raise RuntimeError(f"启动主程序失败: {e}")
 

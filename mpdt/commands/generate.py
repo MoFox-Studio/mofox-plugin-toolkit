@@ -14,6 +14,7 @@ from mpdt.utils.color_printer import (
     print_colored,
     print_empty_line,
     print_error,
+    print_panel,
     print_step,
     print_success,
     print_warning,
@@ -163,11 +164,12 @@ def generate_component(
     print_colored(f"  📄 {component_file.relative_to(work_dir)}")
 
     print_empty_line()
-    print_colored("下一步:", color="cyan", bold=True)
-    print_colored(f"  1. 编辑 {component_file.name} 实现具体逻辑")
-    print_colored("  2. 运行 mpdt check 检查代码")
-    print_colored("  3. 运行 mpdt test 测试功能")
-
+    content = f"""
+    下一步:
+    1. 在 {component_file.relative_to(work_dir)} 中实现组件逻辑
+    2. 运行 mpdt plugin check  检查代码
+    """
+    print_panel("📝 下一步", content, style="cyan")
 
 # =============================================================================
 # 交互式界面
@@ -196,8 +198,8 @@ def _interactive_generate() -> dict[str, Any]:
             ],
         ),
         component_name=questionary.text(
-            "组件名称 (使用下划线命名):",
-            validate=lambda x: validate_component_name(x) or "组件名称格式无效",
+            "组件名称 (使用 snake_case: 小写字母、数字、下划线，以字母开头):",
+            validate=lambda x: validate_component_name(x) or "组件名称格式无效！必须使用小写字母、数字、下划线，以字母开头，例如: my_action",
         ),
         description=questionary.text(
             "组件描述 (可选):",
@@ -480,16 +482,16 @@ class ComponentImportTransformer(cst.CSTTransformer):
     def leave_Module(  # noqa: N802
         self, original_node: cst.Module, updated_node: cst.Module
     ) -> cst.Module:
-        """在模块级别添加导入语句"""
+        """在模块级别添加导入语句（使用相对导入）"""
         if self.import_added:
             return updated_node
 
-        # 根据存放位置构建导入语句
+        # 根据存放位置构建相对导入语句
         if self.use_components_folder:
             dir_name = COMPONENT_DIR_MAP.get(self.component_type, f"{self.component_type}s")
-            import_path = f"{self.plugin_name}.components.{dir_name}.{self.component_name}"
+            import_path = f".components.{dir_name}.{self.component_name}"
         else:
-            import_path = f"{self.plugin_name}.{self.component_name}"
+            import_path = f".{self.component_name}"
 
         import_statement = cst.parse_statement(f"from {import_path} import {self.class_name}")
 

@@ -18,7 +18,6 @@ from typing import Any
 import questionary
 
 from mpdt.utils.color_printer import (
-    console,
     print_colored,
     print_empty_line,
     print_error,
@@ -137,9 +136,9 @@ def init_plugin(
     # 打印下一步指引
     next_steps = f"""
 1. cd {plugin_name}
-2. mpdt generate action MyAction  # 创建 Action 组件
-3. mpdt dev                        # 启动开发模式
-4. mpdt check                      # 运行检查
+2. mpdt plugin generate action MyAction  # 创建 Action 组件
+3. mpdt plugin dev                  # 启动开发模式
+4. mpdt plugin check                # 运行检查
 """
     print_panel("📝 下一步", next_steps, style="cyan")
 
@@ -158,8 +157,8 @@ def _interactive_init() -> dict[str, Any]:
 
     answers = questionary.form(
         plugin_name=questionary.text(
-            "插件名称 (使用下划线命名):",
-            validate=lambda x: validate_plugin_name(x) or "插件名称格式无效",
+            "插件名称 (使用 snake_case: 小写字母、数字、下划线，以字母开头):",
+            validate=lambda x: validate_plugin_name(x) or "插件名称格式无效！必须使用小写字母、数字、下划线，以字母开头，例如: my_plugin",
         ),
         description=questionary.text(
             "插件描述:",
@@ -295,7 +294,7 @@ def _generate_plugin_file(plugin_name: str, template: str) -> str:
     """生成 plugin.py 文件内容（适配 Neo-MoFox 架构）"""
 
     # 根据模板类型生成导入语句和组件类列表
-    imports, component_list = _get_component_imports_and_list(plugin_name, template)
+    imports, component_list = _get_component_imports_and_list(template)
 
     return f'''"""
 {plugin_name} 插件主类
@@ -330,12 +329,12 @@ class {_to_pascal_case(plugin_name)}Plugin(BasePlugin):
 '''
 
 
-def _get_component_imports_and_list(plugin_name: str, template: str) -> tuple[str, str]:
+def _get_component_imports_and_list(template: str) -> tuple[str, str]:
     """
     根据模板类型获取组件导入语句和组件类列表（适配 Neo-MoFox 架构）
+    使用相对导入，不依赖插件名称
 
     Args:
-        plugin_name: 插件名称
         template: 模板类型
 
     Returns:
@@ -395,7 +394,7 @@ def _get_component_imports_and_list(plugin_name: str, template: str) -> tuple[st
     if not components:
         return "", ""
 
-    # 生成导入语句
+    # 生成导入语句（使用相对导入）
     import_lines = []
     for (
         comp_type,
@@ -403,7 +402,7 @@ def _get_component_imports_and_list(plugin_name: str, template: str) -> tuple[st
         class_name,
         folder,
     ) in components:
-        import_lines.append(f"from {plugin_name}.components.{folder}.{module_name} import {class_name}")
+        import_lines.append(f"from .components.{folder}.{module_name} import {class_name}")
 
     imports = "\n" + "\n".join(import_lines) + "\n" if import_lines else ""
 
