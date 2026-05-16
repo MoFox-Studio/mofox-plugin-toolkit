@@ -118,10 +118,12 @@ def plugin_generate(ctx: click.Context, component_type: str | None, component_na
 @click.option("--no-metadata", is_flag=True, help="跳过元数据检查")
 @click.option("--no-component", is_flag=True, help="跳过组件检查")
 @click.option("--no-type", is_flag=True, help="跳过类型检查")
+@click.option("--no-import", is_flag=True, help="跳过导入检查")
+@click.option("--no-config", is_flag=True, help="跳过配置检查")
 @click.option("--no-style", is_flag=True, help="跳过代码风格检查")
 @click.pass_context
 def plugin_check(ctx: click.Context, path: str, level: str, fix: bool, report: str, output: str | None,
-          no_structure: bool, no_metadata: bool, no_component: bool, no_type: bool,
+          no_structure: bool, no_metadata: bool, no_component: bool, no_type: bool,no_import: bool, no_config: bool,
           no_style: bool) -> None:
     """对插件进行静态检查"""
     from mpdt.commands.check import check_plugin
@@ -138,6 +140,8 @@ def plugin_check(ctx: click.Context, path: str, level: str, fix: bool, report: s
             skip_component=no_component,
             skip_type=no_type,
             skip_style=no_style,
+            skip_import=no_import,
+            skip_config=no_config,
         )
     except Exception as e:
         print_error(f"检查失败: {e}")

@@ -23,6 +23,7 @@ from mpdt.checkers import FixResult, ValidationLevel, ValidationResult
 from mpdt.checkers.validators import (
     ComponentValidator,
     ConfigValidator,
+    ImportValidator,
     MetadataValidator,
     StructureValidator,
     StyleValidator,
@@ -31,6 +32,7 @@ from mpdt.checkers.validators import (
 from mpdt.checkers.fixers import (
     AttributeFixer,
     DecoratorFixer,
+    ImportFixer,
     ManifestFixer,
     MethodFixer,
     StyleFixer,
@@ -51,6 +53,8 @@ def check_plugin(
     skip_component: bool = False,
     skip_type: bool = False,
     skip_style: bool = False,
+    skip_import: bool = False,
+    skip_config: bool = False,
 ) -> None:
     """
     检查插件
@@ -66,7 +70,7 @@ def check_plugin(
         skip_component: 跳过组件检查
         skip_type: 跳过类型检查
         skip_style: 跳过代码风格检查
-        skip_security: 跳过安全检查
+        skip_import: 跳过导入规范检查
     """
     path = Path(plugin_path).resolve()
 
@@ -85,6 +89,7 @@ def check_plugin(
     all_results: list[ValidationResult] = []
 
     with panel:
+
         # 结构验证
         if not skip_structure:
             panel.update("正在检查插件结构...")
@@ -108,13 +113,22 @@ def check_plugin(
             result = validator.validate()
             all_results.append(result)
             _print_validation_summary(result, panel)
+        # 导入规范检查
+
+        if not skip_import:
+            panel.update("正在检查导入规范...")
+            validator = ImportValidator(path)
+            result = validator.validate()
+            all_results.append(result)
+            _print_validation_summary(result, panel)
 
         # 配置验证
-        panel.update("正在检查配置文件...")
-        validator = ConfigValidator(path)
-        result = validator.validate()
-        all_results.append(result)
-        _print_validation_summary(result, panel)
+        if not skip_config:
+            panel.update("正在检查配置文件...")
+            validator = ConfigValidator(path)
+            result = validator.validate()
+            all_results.append(result)
+            _print_validation_summary(result, panel)
 
         # 类型检查
         if not skip_type:
@@ -153,6 +167,7 @@ def check_plugin(
                     AttributeFixer(path),
                     MethodFixer(path),
                     StyleFixer(path),
+                    ImportFixer(path),
                 ]
                 
                 # 汇总所有修复结果
