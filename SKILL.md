@@ -1,153 +1,272 @@
 ---
 name: mpdt-plugin-development
-description: "使用 MPDT (MoFox Plugin Dev Toolkit) 创建、开发和构建 Neo-MoFox 插件的完整工作流。适用场景：初始化新插件、生成组件、检查插件质量、构建打包、启动开发模式。关键词：mpdt、Neo-MoFox 插件、插件开发、组件生成、插件检查、插件构建、热重载开发。"
+description: "使用 MPDT (MoFox Plugin Dev Toolkit) 创建、开发和构建 Neo-MoFox 插件。支持插件初始化、组件生成、质量检查、版本管理、构建打包、开发调试、市场发布、配置管理。关键词：mpdt、Neo-MoFox 插件、插件开发、组件生成、插件检查、插件构建、热重载开发、插件市场。"
 ---
 
-# MPDT 插件开发工作流
+# MPDT 插件开发工具命令手册
 
-这个 Skill 提供使用 MPDT 工具进行 Neo-MoFox 插件开发的标准化流程。
+这个 Skill 提供 MPDT 工具的所有命令详细说明。
 
 ## 何时使用此 Skill
 
 当用户提到以下需求时，应使用此 Skill：
 
-- "创建一个 Neo-MoFox 插件"
-- "用 mpdt 初始化插件"
-- "生成一个 action/tool/chatter 组件"
-- "检查插件是否符合规范"
+- "创建/初始化 Neo-MoFox 插件"
+- "生成组件（action/tool/chatter/adapter/router/service/config等）"
+- "检查插件规范"
+- "升级插件版本"
 - "构建/打包插件"
-- "启动插件开发模式"
-- "给我的插件添加新组件"
+- "启动开发模式/热重载"
+- "发布插件到市场"
+- "搜索/查看市场插件"
+- "配置 MPDT 工具"
 
-## 前置条件检查
+## 前置条件
 
-在开始之前，确认：
+- **MPDT 已安装**：运行 `mpdt --version` 验证
+- **Python 环境**：Python >= 3.11
+- **工作目录**：确认当前目录位置
 
-1. **MPDT 已安装**：在终端运行 `mpdt --version` 验证
-2. **Python 环境**：Python >= 3.11
-3. **工作目录**：确认当前目录位置
-4. **配置状态**：运行 `mpdt config show` 查看配置（如有需要）
+---
 
-## 标准工作流
+# 命令分组
 
-### 工作流 1：创建新插件（完整流程）
+## 一、Plugin 插件开发命令组
 
-```
-初始化 → 生成组件 → 检查质量 → 构建打包
-```
+### 1. `mpdt plugin init` - 初始化新插件
 
-#### 步骤 1：初始化插件
+初始化一个新的插件项目，支持多种模板类型。
 
+**命令格式**：
 ```bash
-mpdt init [插件名称] \
-  --template [模板类型] \
-  --author "作者名" \
-  --email "邮箱" \
-  --license GPL-v3.0 \
-  --output [输出目录]
+mpdt plugin init [PLUGIN_NAME] [选项]
 ```
 
-**模板类型选择**：
-- `basic` - 最小插件（仅 manifest + plugin.py）
-- `action` - 包含 Action 组件示例
-- `tool` - 包含 Tool 组件示例
-- `chatter` - 包含 Chatter 组件（对话逻辑核心）
-- `adapter` - 包含 Adapter 组件（平台适配器）
-- `collection` - 包含 Collection 组件（工具集合）
-- `router` - 包含 Router 组件（HTTP 路由）
-- `event_handler` - 包含 EventHandler 组件
-- `plus_command` - 包含增强命令组件
-- `full` - 包含所有组件类型示例
+**位置参数**：
+- `PLUGIN_NAME`（可选）：插件名称，不提供则进入交互式模式
 
-**交互式模式**：
+**选项**：
+- `--template, -t <TYPE>`：模板类型（默认：basic）
+  - `basic` - 最小插件（仅 manifest + plugin.py）
+  - `action` - 包含 Action 组件示例
+  - `tool` - 包含 Tool 组件示例
+  - `chatter` - 包含 Chatter 组件
+  - `adapter` - 包含 Adapter 组件
+  - `collection` - 包含 Collection 组件
+  - `router` - 包含 Router 组件（HTTP 路由）
+  - `plus_command` - 包含增强命令组件
+  - `event_handler` - 包含 EventHandler 组件
+  - `full` - 包含所有组件类型示例
+- `--author, -a <NAME>`：作者名称
+- `--email, -e <EMAIL>`：作者电子邮箱
+- `--license, -l <TYPE>`：开源协议（默认：GPL-v3.0）
+  - `GPL-v3.0`
+  - `MIT`
+  - `Apache-2.0`
+  - `BSD-3-Clause`
+- `--with-docs`：创建文档文件
+- `--init-git/--no-init-git`：是否初始化 Git 仓库
+- `--output, -o <PATH>`：输出目录
+
+**示例**：
 ```bash
-mpdt init  # 不带参数进入问答模式
+# 交互式模式
+mpdt plugin init
+
+# 指定参数
+mpdt plugin init my_plugin --template tool --author "张三" --email "zhangsan@example.com"
+
+# 完整参数
+mpdt plugin init weather_plugin \
+  --template action \
+  --author "李四" \
+  --email "lisi@example.com" \
+  --license MIT \
+  --with-docs \
+  --init-git \
+  --output ./plugins
 ```
 
-#### 步骤 2：生成额外组件（可选）
+---
 
-如果需要添加更多组件：
+### 2. `mpdt plugin generate` - 生成插件组件
 
+在现有插件中生成新组件，始终生成异步方法。
+
+**命令格式**：
 ```bash
-cd [插件目录]
-mpdt generate [组件类型] [组件名称] \
-  --description "组件描述" \
-  --root  # 如果要在根目录而非 components/ 下生成
+mpdt plugin generate [COMPONENT_TYPE] [COMPONENT_NAME] [选项]
 ```
 
-**组件类型**：
-- `action` - LLM 工具调用的主动操作（如发送消息、禁言）
-- `tool` - LLM 可查询的工具（如计算器、翻译）
-- `chatter` - 对话智能核心
-- `adapter` - 平台通信适配器
-- `collection` - 嵌套的 Action/Tool 集合
-- `event` - 事件订阅处理器
-- `plus-command` - 命令处理器（支持参数解析）
-- `router` - FastAPI HTTP 路由
-- `service` - 跨插件服务接口
-- `config` - 配置定义
+**位置参数**：
+- `COMPONENT_TYPE`（可选）：组件类型
+  - `action` - LLM 工具调用的主动操作
+  - `tool` - LLM 可查询的工具
+  - `chatter` - 对话智能核心
+  - `adapter` - 平台通信适配器
+  - `collection` - Action/Tool 集合
+  - `event` - 事件订阅处理器
+  - `plus-command` - 命令处理器
+  - `router` - FastAPI HTTP 路由
+  - `service` - 跨插件服务接口
+  - `config` - 配置定义
+- `COMPONENT_NAME`（可选）：组件名称
 
-**交互式生成**：
+**选项**：
+- `--description, -d <TEXT>`：组件描述
+- `--output, -o <PATH>`：插件根目录路径（默认为当前目录）
+- `--force, -f`：覆盖已存在的文件
+- `--root`：在插件根目录生成组件文件，而不是 components/ 文件夹
+
+**示例**：
 ```bash
-mpdt generate  # 不带参数进入问答模式
+# 交互式模式
+mpdt plugin generate
+
+# 在 components/ 文件夹下生成
+mpdt plugin generate action send_message --description "发送消息到群聊"
+
+# 在根目录生成
+mpdt plugin generate chatter my_chatter --root --description "主对话逻辑"
+
+# 指定插件路径
+mpdt plugin generate tool calculator --output ./my_plugin --description "计算器工具"
 ```
 
-#### 步骤 3：质量检查
+---
 
-在提交或构建前，必须运行检查：
+### 3. `mpdt plugin check` - 插件静态检查
 
+对插件进行全面的静态代码检查，支持自动修复。
+
+**命令格式**：
 ```bash
-mpdt check [插件路径] \
-  --level warning \
-  --report console \
-  --fix  # 自动修复可修复的问题
+mpdt plugin check [PATH] [选项]
 ```
 
-**检查级别**：
-- `error` - 仅显示错误
-- `warning` - 显示警告和错误（推荐）
-- `info` - 显示所有信息
+**位置参数**：
+- `PATH`（可选）：插件路径（默认：当前目录）
 
-**报告格式**：
-- `console` - 终端彩色输出
-- `markdown` - Markdown 报告文件
-- `json` - JSON 格式（便于集成）
+**选项**：
+- `--level, -l <LEVEL>`：显示的最低级别（默认：warning）
+  - `error` - 仅显示错误
+  - `warning` - 显示警告和错误
+  - `info` - 显示所有信息
+- `--fix`：自动修复可修复的问题
+- `--report <FORMAT>`：输出报告格式（默认：console）
+  - `console` - 终端彩色输出
+  - `markdown` - Markdown 报告文件
+  - `json` - JSON 格式
+- `--output, -o <PATH>`：报告输出路径
+- `--no-structure`：跳过结构检查
+- `--no-metadata`：跳过元数据检查
+- `--no-component`：跳过组件检查
+- `--no-type`：跳过类型检查
+- `--no-style`：跳过代码风格检查
 
-**跳过特定检查**（仅在必要时）：
+**示例**：
 ```bash
-mpdt check --no-type --no-style  # 跳过类型和风格检查
+# 基本检查
+mpdt plugin check
+
+# 检查并自动修复
+mpdt plugin check --fix
+
+# 仅显示错误级别
+mpdt plugin check --level error
+
+# 生成 Markdown 报告
+mpdt plugin check --report markdown --output ./report.md
+
+# 跳过类型和风格检查
+mpdt plugin check --no-type --no-style
+
+# 检查指定路径
+mpdt plugin check ./my_plugin --level warning --fix
 ```
 
-#### 步骤 4：构建打包
+---
 
-开发完成后构建为分发包：
+### 4. `mpdt plugin bump` - 提升插件版本号
 
+提升插件的版本号（基于语义化版本控制）。
+
+**命令格式**：
 ```bash
-mpdt build [插件路径] \
-  --output dist \
-  --format mfp \
-  --bump patch \
-  --with-docs
+mpdt plugin bump [PATH] [选项]
 ```
 
-**格式选择**：
-- `mfp` - MoFox Plugin 格式（推荐，官方标准）
-- `zip` - 标准 ZIP 压缩包
+**位置参数**：
+- `PATH`（可选）：插件根目录（默认：当前目录）
 
-**版本升级**：
-- `major` - 主版本（1.0.0 -> 2.0.0）
-- `minor` - 次版本（1.0.0 -> 1.1.0）
-- `patch` - 补丁版本（1.0.0 -> 1.0.1）
+**选项**：
+- `--type, -t <TYPE>`：版本升级类型（默认：patch）
+  - `major` - 主版本号 (1.0.0 -> 2.0.0)
+  - `minor` - 次版本号 (1.0.0 -> 1.1.0)
+  - `patch` - 修订号 (1.0.0 -> 1.0.1)
 
-### 工作流 2：开发调试（热重载）
-
-适合快速迭代开发：
-
+**示例**：
 ```bash
-mpdt dev \
-  --neo-mofox-path [Neo-MoFox主程序路径] \
-  --plugin-path [插件路径]
+# 升级 patch 版本
+mpdt plugin bump
+
+# 升级 minor 版本
+mpdt plugin bump --type minor
+
+# 升级 major 版本
+mpdt plugin bump ./my_plugin --type major
 ```
+
+---
+
+### 5. `mpdt plugin build` - 构建并打包插件
+
+将插件构建为 .mfp 或 .zip 分发包。
+
+**命令格式**：
+```bash
+mpdt plugin build [PATH] [选项]
+```
+
+**位置参数**：
+- `PATH`（可选）：插件根目录（默认：当前目录）
+
+**选项**：
+- `--output, -o <PATH>`：输出目录（默认：dist）
+- `--with-docs`：包含文档
+- `--format <FORMAT>`：构建格式（默认：mfp）
+  - `mfp` - MoFox Plugin 格式（推荐）
+  - `zip` - 标准 ZIP 压缩包
+
+**示例**：
+```bash
+# 基本构建
+mpdt plugin build
+
+# 包含文档
+mpdt plugin build --with-docs
+
+# 指定输出目录和格式
+mpdt plugin build --output ./release --format mfp
+
+# 构建指定插件
+mpdt plugin build ./my_plugin --with-docs --output ./dist
+```
+
+---
+
+### 6. `mpdt plugin dev` - 启动开发模式
+
+启动开发模式，支持文件修改自动重载插件。
+
+**命令格式**：
+```bash
+mpdt plugin dev [选项]
+```
+
+**选项**：
+- `--neo-mofox-path <PATH>`：Neo-MoFox 主程序路径
+- `--path <PATH>`：插件路径（默认：当前目录）
 
 **开发模式特性**：
 - 文件修改自动检测
@@ -155,24 +274,308 @@ mpdt dev \
 - 实时日志输出
 - 无需手动重启 Neo-MoFox
 
-**首次使用配置**：
+**示例**：
 ```bash
-mpdt config init  # 配置 Neo-MoFox 路径和开发选项
+# 使用配置文件中的 Neo-MoFox 路径
+mpdt plugin dev
+
+# 指定路径
+mpdt plugin dev --neo-mofox-path /path/to/Neo-MoFox --path ./my_plugin
 ```
 
-## 参数化输入模式
+---
 
-当用户提供参数时，直接使用；否则进入交互式问答。
+## 二、Market 插件市场命令组
 
-### 示例对话 1：用户提供完整参数
+### 7. `mpdt market publish` - 一键发布插件到市场
 
+完整流程：构建 -> GitHub 仓库 -> Release -> 市场注册。
 
-**执行**：
+**命令格式**：
 ```bash
-mpdt init my_translator --template tool --license GPL-v3.0
+mpdt market publish [PLUGIN_PATH] [选项]
 ```
 
-### 示例对话 2：参数不完整
+**位置参数**：
+- `PLUGIN_PATH`（可选）：插件路径（默认：当前目录）
+
+**选项**：
+- `--token <TOKEN>`：市场访问令牌
+- `--github-token <TOKEN>`：GitHub Personal Access Token
+- `--owner <NAME>`：GitHub 用户或组织名
+- `--repo <NAME>`：GitHub 仓库名（默认使用插件 ID）
+- `--private`：创建私有仓库
+- `--output <PATH>`：输出目录（默认：dist）
+- `--with-docs`：包含文档
+- `--release-notes <TEXT>`：Release 说明
+- `--skip-push`：跳过 Git 推送
+- `--save-github-token/--no-save-github-token`：是否保存 GitHub Token
+
+**示例**：
+```bash
+# 基本发布（使用配置文件中的 token）
+mpdt market publish
+
+# 指定所有参数
+mpdt market publish \
+  --github-token ghp_xxx \
+  --owner myusername \
+  --repo my-plugin \
+  --with-docs \
+  --release-notes "首次发布" \
+  --save-github-token
+
+# 发布到私有仓库
+mpdt market publish --private --owner myorg
+```
+
+---
+
+### 8. `mpdt market search` - 搜索公开插件
+
+在插件市场中搜索公开插件。
+
+**命令格式**：
+```bash
+mpdt market search [QUERY] [选项]
+```
+
+**位置参数**：
+- `QUERY`（可选）：搜索关键词
+
+**选项**：
+- `--category <NAME>`：分类过滤
+- `--tag <NAME>`：标签过滤
+- `--limit <NUM>`：返回数量（默认：20）
+
+**示例**：
+```bash
+# 搜索所有插件
+mpdt market search
+
+# 按关键词搜索
+mpdt market search "weather"
+
+# 按分类和标签过滤
+mpdt market search --category "工具" --tag "API"
+
+# 限制返回数量
+mpdt market search "翻译" --limit 10
+```
+
+---
+
+### 9. `mpdt market info` - 查看公开插件详情
+
+查看指定插件的详细信息。
+
+**命令格式**：
+```bash
+mpdt market info <PLUGIN_ID>
+```
+
+**位置参数**：
+- `PLUGIN_ID`（必需）：插件 ID
+
+**示例**：
+```bash
+mpdt market info my_awesome_plugin
+```
+
+---
+
+### 10. `mpdt market package-update` - 打包并发布插件新版本
+
+为已在市场注册的插件打包并发布新版本。
+
+**命令格式**：
+```bash
+mpdt market package-update [PLUGIN_PATH] [选项]
+```
+
+**位置参数**：
+- `PLUGIN_PATH`（可选）：插件路径（默认：当前目录）
+
+**选项**：
+- `--token <TOKEN>`：市场访问令牌
+- `--github-token <TOKEN>`：GitHub Personal Access Token
+- `--owner <NAME>`：GitHub 用户或组织名
+- `--repo <NAME>`：GitHub 仓库名（默认使用插件 ID）
+- `--with-docs`：包含文档
+- `--release-notes <TEXT>`：Release 说明
+- `--skip-push`：跳过 Git 推送
+- `--save-github-token/--no-save-github-token`：是否保存 GitHub Token
+
+**前置检查**：
+- 插件是否已在市场注册
+- 仓库是否存在且有权限
+- 版本是否已存在
+
+**示例**：
+```bash
+# 基本更新
+mpdt market package-update
+
+# 指定参数
+mpdt market package-update \
+  --github-token ghp_xxx \
+  --owner myusername \
+  --with-docs \
+  --release-notes "修复了若干 bug"
+```
+
+---
+
+## 三、Config 配置管理命令组
+
+### 11. `mpdt config init` - 交互式配置向导
+
+通过交互式问答配置 MPDT 工具。
+
+**命令格式**：
+```bash
+mpdt config init
+```
+
+**配置项**：
+- Neo-MoFox 主程序路径
+- 市场地址
+- GitHub Token
+- 自动重载选项
+- 重载延迟时间
+
+**示例**：
+```bash
+mpdt config init
+```
+
+---
+
+### 12. `mpdt config show` - 显示当前配置
+
+以表格形式显示当前的 MPDT 配置。
+
+**命令格式**：
+```bash
+mpdt config show
+```
+
+**示例**：
+```bash
+mpdt config show
+```
+
+---
+
+### 13. `mpdt config open` - 打开配置文件
+
+使用系统默认编辑器打开配置文件。
+
+**命令格式**：
+```bash
+mpdt config open
+```
+
+**示例**：
+```bash
+mpdt config open
+```
+
+---
+
+### 14. `mpdt config set-mofox` - 设置 Neo-MoFox 路径
+
+设置 Neo-MoFox 主程序的路径。
+
+**命令格式**：
+```bash
+mpdt config set-mofox <PATH>
+```
+
+**位置参数**：
+- `PATH`（必需）：Neo-MoFox 主程序路径
+
+**示例**：
+```bash
+mpdt config set-mofox /home/user/Neo-MoFox
+```
+
+---
+
+### 15. `mpdt config set-github-token` - 设置 GitHub Token
+
+设置用于插件市场发布的 GitHub Personal Access Token。
+
+**命令格式**：
+```bash
+mpdt config set-github-token [选项]
+```
+
+**选项**：
+- `--token <TOKEN>`：GitHub Personal Access Token（会提示安全输入）
+
+**示例**：
+```bash
+# 交互式输入（推荐，隐藏输入）
+mpdt config set-github-token
+
+# 直接指定 token（不推荐，会显示在历史记录中）
+mpdt config set-github-token --token ghp_xxxxxxxxxxxx
+```
+
+---
+
+### 16. `mpdt config clear-github-token` - 清除 GitHub Token
+
+清除已保存的 GitHub Token。
+
+**命令格式**：
+```bash
+mpdt config clear-github-token
+```
+
+**示例**：
+```bash
+mpdt config clear-github-token
+```
+
+---
+
+### 17. `mpdt config set-market-url` - 设置市场地址
+
+设置插件市场的镜像源地址。
+
+**命令格式**：
+```bash
+mpdt config set-market-url <URL>
+```
+
+**位置参数**：
+- `URL`（必需）：市场地址
+
+**示例**：
+```bash
+mpdt config set-market-url https://market.example.com
+```
+
+---
+
+## 使用建议
+
+### 参数化输入模式
+
+当用户提供参数时，直接使用；否则进入交互式问答或提示用户提供必要参数。
+
+**示例 1：用户提供完整参数**
+
+**用户**："创建一个名为 my_translator 的插件，使用 tool 模板"
+
+**AI 执行**：
+```bash
+mpdt plugin init my_translator --template tool
+```
+
+**示例 2：参数不完整**
 
 **用户**："帮我生成一个 action 组件"
 
@@ -184,19 +587,32 @@ mpdt init my_translator --template tool --license GPL-v3.0
 然后执行：
 ```bash
 cd [插件目录]
-mpdt generate action [组件名] --description "[描述]"
+mpdt plugin generate action [组件名] --description "[描述]"
 ```
 
-### 示例对话 3：完全交互式
+**示例 3：完全交互式**
 
 **用户**："我想创建一个新插件"
 
-**AI 行动**：
+**AI 执行**：
 ```bash
-mpdt init  # 进入交互式向导
+mpdt plugin init  # 进入交互式向导
 ```
 
-## 错误处理策略
+---
+
+## 常用命令组合参考
+
+以下是常见的命令组合，仅供参考：
+
+1. **新插件开发**：`init` → `generate` → `check` → `build`
+2. **版本更新发布**：`bump` → `build` → `market package-update`
+3. **快速开发调试**：`init` → `dev`
+4. **首次发布**：`check` → `build` → `market publish`
+
+---
+
+## 错误处理
 
 ### 场景 1：检查失败
 
@@ -320,74 +736,6 @@ pip install -e .  # 在 mofox-plugin-toolkit 目录下
 - Windows: `%APPDATA%\mpdt\config.json`
 
 **查看配置**：`mpdt config show`
-
-## 工作流执行顺序
-
-### 新插件开发（标准流程）
-
-```
-1. mpdt config init           ← 首次配置（可选）
-2. mpdt init [名称]            ← 创建插件骨架
-3. mpdt generate [组件]        ← 添加组件（重复多次）
-4. mpdt check --fix           ← 质量检查
-5. mpdt dev                   ← 开发调试（迭代阶段）
-6. mpdt check                 ← 最终检查
-7. mpdt build --bump patch    ← 构建打包
-```
-
-### 快速原型开发
-
-```
-1. mpdt init [名称] --template full  ← 使用完整模板
-2. mpdt dev                         ← 直接进入开发模式
-3. 边改边测试
-4. mpdt check --fix                 ← 修复问题
-5. mpdt build                       ← 打包
-```
-
-### 添加组件到现有插件
-
-```
-1. cd [插件目录]
-2. mpdt generate [组件类型] [组件名]
-3. mpdt check --fix
-4. mpdt build --bump minor
-```
-
-## 输出确认
-
-每次执行命令后，确认：
-
-1. **成功标志**：查看 ✓ 或 "成功" 字样
-2. **输出位置**：记录生成的文件路径
-3. **下一步提示**：MPDT 通常会提示下一步操作
-
-示例输出：
-```
-✓ 插件初始化成功: ./my_plugin
-  ├── manifest.json
-  ├── plugin.py
-  └── components/
-
-📝 下一步:
-  1. cd my_plugin
-  2. mpdt generate [组件类型]
-  3. mpdt dev
-```
-
-## 安全注意事项
-
-1. **路径校验**：仅在安全目录内执行操作
-2. **覆盖确认**：使用 `--force` 前确认无误
-3. **配置敏感信息**：不要在配置中存储密钥
-4. **许可证合规**：遵守 GPL-3.0 要求（本仓库规范）
-
-## 扩展阅读
-
-- Neo-MoFox 插件开发文档
-- MPDT GitHub 仓库：mofox-plugin-toolkit
-- 组件架构说明：Neo-MoFox/docs/
-- GPL-3.0 许可证：https://www.gnu.org/licenses/gpl-3.0.html
 
 ---
 

@@ -103,6 +103,16 @@ def market_publish(
         version = manifest_mgr.get_version()
         print_success(f"插件: {plugin_id} v{version}")
         
+        # 验证分类和标签
+        print_info("正在验证分类和标签...")
+        valid, errors = manifest_mgr.validate_categories_and_tags()
+        if not valid:
+            print_error("Manifest 验证失败:")
+            for error in errors:
+                print_error(f"  - {error}")
+            return
+        print_success("分类和标签验证通过")
+        
         # 2. 构建插件包
         print_info("正在构建插件包...")
         package = build_plugin(
@@ -437,6 +447,16 @@ def market_package_new_version(
         plugin_id = manifest_mgr.get_plugin_id()
         version = manifest_mgr.get_version()
         print_success(f"插件: {plugin_id} v{version}")
+        
+        # 验证分类和标签
+        print_info("正在验证分类和标签...")
+        valid, errors = manifest_mgr.validate_categories_and_tags()
+        if not valid:
+            print_error("Manifest 验证失败:")
+            for error in errors:
+                print_error(f"  - {error}")
+            return
+        print_success("分类和标签验证通过")
         
         # 2. 处理 GitHub Token
         resolved_github_token = _resolve_github_token(github_token)

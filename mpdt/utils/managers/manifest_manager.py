@@ -697,6 +697,53 @@ class ManifestManager:
                 tags.append(tag)
         return tags
 
+    def validate_categories_and_tags(self) -> tuple[bool, list[str]]:
+        """验证分类和标签的有效性
+        
+        Returns:
+            (是否有效, 错误信息列表)
+        """
+        manifest = self.load()
+        if not manifest:
+            return False, ["无法加载 manifest.json"]
+        
+        errors = []
+        
+        # 检查 categories 字段
+        categories = manifest.get("categories")
+        if not categories:
+            errors.append("manifest.json 缺少 'categories' 字段或字段为空")
+        elif not isinstance(categories, list):
+            errors.append("'categories' 字段必须是列表")
+        else:
+            # 检查每个分类是否在允许的范围内
+            invalid_categories = [c for c in categories if c not in ALLOWED_CATEGORIES]
+            if invalid_categories:
+                errors.append(
+                    f"包含无效的分类: {', '.join(invalid_categories)}. "
+                    f"允许的分类: {', '.join(ALLOWED_CATEGORIES)}"
+                )
+        
+        # 检查 tags 字段
+        tags = manifest.get("tags")
+        if tags is None:
+            errors.append("manifest.json 缺少 'tags' 字段")
+        elif not isinstance(tags, list):
+            errors.append("'tags' 字段必须是列表")
+        elif len(tags) == 0:
+            errors.append("'tags' 字段不能为空，请至少添加一个标签")
+        else:
+            # 检查标签是否为字符串
+            non_string_tags = [t for t in tags if not isinstance(t, str)]
+            if non_string_tags:
+                errors.append("'tags' 列表中包含非字符串元素")
+            # 检查是否有空标签
+            empty_tags = [t for t in tags if isinstance(t, str) and not t.strip()]
+            if empty_tags:
+                errors.append("'tags' 列表中包含空字符串")
+        
+        return len(errors) == 0, errors
+
     def set_categories(self, categories: list[str]) -> None:
         """设置分类
         

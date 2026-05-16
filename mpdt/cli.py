@@ -305,7 +305,7 @@ def market_info_cmd(plugin_id: str) -> None:
         raise click.Abort()
 
 
-@market.command("package-new-version")
+@market.command("package-update")
 @click.argument("plugin_path", type=click.Path(), required=False, default=".")
 @click.option("--token", help="市场访问令牌")
 @click.option("--github-token", help="GitHub Personal Access Token")
