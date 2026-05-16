@@ -487,6 +487,17 @@ class ManifestManager:
         
         return version
 
+    def load_readme_markdown(self) -> str:
+        """读取插件根目录 README.md 内容。"""
+        readme_file = self.plugin_path / "README.md"
+        if not readme_file.exists():
+            return ""
+
+        try:
+            return readme_file.read_text(encoding="utf-8").strip()
+        except OSError as e:
+            raise OSError(f"读取 README.md 失败: {e}") from e
+
     def build_market_plugin_payload(
         self, repository_url: str | None = None
     ) -> dict[str, Any]:
@@ -524,6 +535,10 @@ class ManifestManager:
             author = str(manifest.get("author", "mock-author")).strip()
             maintainer_list = [author or "mock-author"]
 
+        readme_markdown = self.load_readme_markdown() or str(
+            manifest.get("readme_markdown") or ""
+        )
+
         return {
             "plugin_id": plugin_id,
             "display_name": str(manifest.get("display_name") or plugin_id),
@@ -539,6 +554,7 @@ class ManifestManager:
             "categories": list(manifest.get("categories") or []),
             "tags": list(manifest.get("tags") or []),
             "maintainers": maintainer_list,
+            "readme_markdown": readme_markdown,
         }
 
     def build_market_version_payload(
