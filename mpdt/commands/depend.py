@@ -186,23 +186,11 @@ def depend_add(
                             print_error(f"下载失败: HTTP {response.status}")
                             return
                         
-                        # 保存到临时文件
-                        import tempfile
-                        with tempfile.NamedTemporaryFile(suffix=".mfp", delete=False) as tmp_file:
-                            tmp_file.write(await response.read())
-                            tmp_path = Path(tmp_file.name)
+                        # 直接保存插件包到 plugins 目录
+                        plugin_file = plugins_dir / f"{dependency_name}.mfp"
+                        plugin_file.write_bytes(await response.read())
                         
-                        # 解压到插件目录
-                        import zipfile
-                        target_dir = plugins_dir / dependency_name
-                        target_dir.mkdir(parents=True, exist_ok=True)
-                        
-                        with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
-                            zip_ref.extractall(target_dir)
-                        
-                        tmp_path.unlink()  # 删除临时文件
-                        
-                        print_success(f"插件已下载到: {target_dir}")
+                        print_success(f"插件包已下载到: {plugin_file}")
                 
             except MarketError as e:
                 print_error(f"获取插件安装信息失败: {e}")

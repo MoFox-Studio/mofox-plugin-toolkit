@@ -5,11 +5,13 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 import aiohttp
 
 from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
+from mpdt.utils.color_printer import print_error
 
 
 class MarketError(RuntimeError):
@@ -49,16 +51,15 @@ class MarketManager:
             GitHub Token
             
         Raises:
-            MarketError: 如果未配置 GitHub Token
+            RuntimeError: 如果未配置 GitHub Token
         """
         config = get_or_init_mpdt_config()
         token = config.github_token
         
         if not token:
-            raise MarketError(
-                "未找到 GitHub Token，请运行 'mpdt config edit github.token <your_token>' 进行配置"
-            )
-        
+            print_error("未找到 GitHub Token，请运行 'mpdt config edit github.token <your_token>' 进行配置")
+            sys.exit(1)
+
         return token
 
     async def health(self) -> Any:
