@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import hashlib
-import re
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -181,40 +180,6 @@ class PackageManager:
         
         return files
     
-    def bump_version(self, version: str, bump: Literal["major", "minor", "patch"]) -> str:
-        """按规则升级版本号（语义化版本 major.minor.patch）
-        
-        Args:
-            version: 当前版本字符串，例如 "1.2.3"
-            bump: 升级类型
-            
-        Returns:
-            升级后的版本字符串
-            
-        Raises:
-            ValueError: 版本格式不合法
-        """
-        match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(.*)", version.strip())
-        if not match:
-            raise ValueError(f"版本号格式不合法: '{version}'，应为 major.minor.patch")
-        
-        major = int(match.group(1))
-        minor = int(match.group(2))
-        patch = int(match.group(3))
-        suffix = match.group(4)
-        
-        if bump == "major":
-            major += 1
-            minor = 0
-            patch = 0
-        elif bump == "minor":
-            minor += 1
-            patch = 0
-        elif bump == "patch":
-            patch += 1
-        
-        return f"{major}.{minor}.{patch}{suffix}"
-    
     def calculate_sha256(self, file_path: Path) -> str:
         """计算文件的 SHA256 校验和
         
@@ -235,7 +200,6 @@ class PackageManager:
         output_dir: Path | str = "dist",
         with_docs: bool = False,
         fmt: Literal["mfp", "zip"] = "mfp",
-        bump: Literal["major", "minor", "patch"] | None = None,
     ) -> PackageResult:
         """构建插件打包
         
@@ -243,7 +207,6 @@ class PackageManager:
             output_dir: 输出目录
             with_docs: 是否包含文档文件
             fmt: 输出格式（mfp 或 zip）
-            bump: 版本升级类型（可选）
             
         Returns:
             PackageResult: 打包结果
@@ -273,12 +236,6 @@ class PackageManager:
         
         plugin_name: str = manifest["name"]
         plugin_version: str = manifest["version"]
-        
-        # 版本升级（如果指定）
-        if bump:
-            plugin_version = self.bump_version(plugin_version, bump)
-            manifest["version"] = plugin_version
-            self.manifest_manager.save(manifest)
         
         # 验证入口文件
         entry_point = manifest.get("entry_point", "plugin.py")

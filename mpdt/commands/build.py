@@ -36,7 +36,6 @@ def build_plugin(
     output_dir: str = "dist",
     with_docs: bool = False,
     fmt: Literal["mfp", "zip"] = "mfp",
-    bump: Literal["major", "minor", "patch"] | None = None,
 ) -> PackageResult | None:
     """构建并打包插件为 .mfp / .zip 文件
 
@@ -45,8 +44,6 @@ def build_plugin(
         output_dir:  输出目录，默认 dist/
         with_docs:   是否将文档文件打入包中
         fmt:         输出格式，"mfp"（推荐） 或 "zip"
-        bump:        自动升级版本，"major" / "minor" / "patch" / None
-                     （升级后会立即写回 manifest.json，打包时使用新版本号）
                      
     Returns:
         PackageResult: 打包结果对象，包含路径、校验和等信息，失败返回 None
@@ -79,7 +76,6 @@ def build_plugin(
                 output_dir=output_dir,
                 with_docs=with_docs,
                 fmt=fmt,
-                bump=bump,
             )
             
             panel.append(f"✓ 打包完成: {result.package_name}")

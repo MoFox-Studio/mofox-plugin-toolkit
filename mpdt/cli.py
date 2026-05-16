@@ -142,14 +142,39 @@ def plugin_check(ctx: click.Context, path: str, level: str, fix: bool, report: s
         raise click.Abort()
 
 
+@plugin.command("bump")
+@click.argument("path", type=click.Path(), required=False, default=".")
+@click.option("--type", "-t", "bump_type", type=click.Choice(["major", "minor", "patch"]), default="patch", help="版本升级类型")
+@click.pass_context
+def plugin_bump(ctx: click.Context, path: str, bump_type: str) -> None:
+    """提升插件版本号
+
+    PLUGIN_PATH 为插件根目录（含 manifest.json），默认为当前目录。
+    
+    版本升级类型：
+    - major: 主版本号 (1.0.0 -> 2.0.0)
+    - minor: 次版本号 (1.0.0 -> 1.1.0)  
+    - patch: 修订号 (1.0.0 -> 1.0.1)
+    """
+    from mpdt.commands.bump import bump_plugin_version
+
+    try:
+        bump_plugin_version(
+            plugin_path=path,
+            bump_type=bump_type,
+        )
+    except Exception as e:
+        print_error(f"版本升级失败: {e}")
+        raise click.Abort()
+
+
 @plugin.command("build")
-@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.argument("path", type=click.Path(), required=False, default=".")
 @click.option("--output", "-o", type=click.Path(), default="dist", help="输出目录")
 @click.option("--with-docs", is_flag=True, help="包含文档")
 @click.option("--format", "fmt", type=click.Choice(["mfp", "zip"]), default="mfp", help="构建格式（mfp 为推荐格式）")
-@click.option("--bump", type=click.Choice(["major", "minor", "patch"]), help="自动升级版本号")
 @click.pass_context
-def plugin_build(ctx: click.Context, plugin_path: str, output: str, with_docs: bool, fmt: str, bump: str | None) -> None:
+def plugin_build(ctx: click.Context, path: str, output: str, with_docs: bool, fmt: str) -> None:
     """构建并打包插件为 .mfp 文件
 
     PLUGIN_PATH 为插件根目录（含 manifest.json），默认为当前目录。
@@ -158,11 +183,10 @@ def plugin_build(ctx: click.Context, plugin_path: str, output: str, with_docs: b
 
     try:
         build_plugin(
-            plugin_path=plugin_path,
+            plugin_path=path,
             output_dir=output,
             with_docs=with_docs,
             fmt=fmt,
-            bump=bump,
         )
     except Exception as e:
         print_error(f"构建失败: {e}")
@@ -171,9 +195,9 @@ def plugin_build(ctx: click.Context, plugin_path: str, output: str, with_docs: b
 
 @plugin.command("dev")
 @click.option("--neo-mofox-path", type=click.Path(exists=True), help="Neo-MoFox 主程序路径")
-@click.option("--plugin-path", type=click.Path(exists=True), help="插件路径（默认当前目录）")
+@click.option("--path", type=click.Path(exists=True), help="插件路径（默认当前目录）")
 @click.pass_context
-def plugin_dev(ctx: click.Context, neo_mofox_path: str | None, plugin_path: str | None) -> None:
+def plugin_dev(ctx: click.Context, neo_mofox_path: str | None, path: str | None) -> None:
     """启动开发模式，支持热重载"""
     from pathlib import Path
 
@@ -181,7 +205,7 @@ def plugin_dev(ctx: click.Context, neo_mofox_path: str | None, plugin_path: str 
 
     try:
         dev_command(
-            plugin_path=Path(plugin_path) if plugin_path else None,
+            plugin_path=Path(path) if path else None,
             mofox_path=Path(neo_mofox_path) if neo_mofox_path else None
         )
     except Exception as e:
@@ -278,6 +302,55 @@ def market_info_cmd(plugin_id: str) -> None:
         market_info(plugin_id=plugin_id)
     except Exception as e:
         print_error(f"查询失败: {e}")
+        raise click.Abort()
+
+
+@market.command("package-new-version")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--token", help="市场访问令牌")
+@click.option("--github-token", help="GitHub Personal Access Token")
+@click.option("--owner", help="GitHub 用户或组织名")
+@click.option("--repo", help="GitHub 仓库名（默认使用插件 ID）")
+@click.option("--with-docs", is_flag=True, help="包含文档")
+@click.option("--release-notes", help="Release 说明")
+@click.option("--skip-push", is_flag=True, help="跳过 Git 推送")
+@click.option("--save-github-token/--no-save-github-token", default=None, help="是否保存 GitHub Token")
+def market_package_new_version_cmd(
+    plugin_path: str,
+    token: str | None,
+    github_token: str | None,
+    owner: str | None,
+    repo: str | None,
+    with_docs: bool,
+    release_notes: str | None,
+    skip_push: bool,
+    save_github_token: bool | None,
+) -> None:
+    """打包并发布插件的新版本
+    
+    前置检查：
+    - 插件是否已在市场注册
+    - 仓库是否存在且有权限
+    - 版本是否已存在
+    
+    通过后：构建 -> Release -> 市场提交
+    """
+    from mpdt.commands.market import market_package_new_version
+
+    try:
+        market_package_new_version(
+            plugin_path=plugin_path,
+            token=token,
+            github_token=github_token,
+            owner=owner,
+            repo=repo,
+            with_docs=with_docs,
+            release_notes=release_notes,
+            skip_push=skip_push,
+            save_token=save_github_token,
+        )
+    except Exception as e:
+        print_error(f"打包失败: {e}")
         raise click.Abort()
 
 

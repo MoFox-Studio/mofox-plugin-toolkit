@@ -6,7 +6,7 @@ GitHub 管理器
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast, overload
 
 import aiohttp
 
@@ -43,6 +43,172 @@ class GitHubManager:
         """
         return await self._request("GET", f"{self._base_url}/user")
 
+    async def check_permissions(
+        self,
+        owner: str,
+        repo: str,
+        need_push: bool = True,
+        need_release: bool = True,
+    ) -> dict[str, Any]:
+        """统一权限检查
+        
+        在开始 GitHub 操作前检查所有需要的权限：
+        - 仓库访问权限
+        - Push 权限（如果需要）
+        - Release 管理权限（如果需要）
+        - 创建仓库的权限（如果仓库不存在）
+        
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            need_push: 是否需要 push 权限
+            need_release: 是否需要 release 权限
+            
+        Returns:
+            权限检查结果字典，包含：
+            - repo_exists: 仓库是否存在
+            - repo_info: 仓库信息（如果存在）
+            - is_user_repo: 是否是用户仓库（而非组织仓库）
+            
+        Raises:
+            GitHubError: 权限不足或权限检查失败
+        """
+        user = await self.get_current_user()
+        username = user.get("login", "")
+        is_user_repo = owner.lower() == username.lower()
+        
+        # 1. 检查仓库是否存在
+        repo_info = await self.get_repo(owner, repo)
+        
+        if repo_info:
+            # 仓库存在 - 检查权限
+            permissions = repo_info.get("permissions")
+            
+            # 检查 push 权限
+            if need_push:
+                has_push = (
+                    permissions is not None
+                    and (permissions.get("push") or permissions.get("admin"))
+                )
+                if not has_push:
+                    raise GitHubError(
+                        f"仓库 {owner}/{repo} 已存在但当前用户没有写入权限。"
+                        "请确保你有该仓库的 push 权限，或使用不同的仓库名称。"
+                    )
+            
+            # 检查 release 权限（通过尝试列出 releases 来验证）
+            if need_release:
+                try:
+                    await self._request(
+                        "GET",
+                        f"{self._base_url}/repos/{owner}/{repo}/releases",
+                        params={"per_page": "1"},
+                    )
+                except GitHubError as e:
+                    if "HTTP_403" in str(e):
+                        raise GitHubError(
+                            f"没有仓库 {owner}/{repo} 的 Release 管理权限。"
+                            "请检查 GitHub Token 是否有足够的权限。"
+                        )
+                    # 其他错误可以忽略（如 404 表示没有 releases，但这是正常的）
+            
+            return {
+                "repo_exists": True,
+                "repo_info": repo_info,
+                "is_user_repo": is_user_repo,
+            }
+        else:
+            # 仓库不存在 - 检查是否有创建权限
+            if not is_user_repo:
+                # 组织仓库 - 检查组织成员身份和权限
+                try:
+                    await self._request(
+                        "GET",
+                        f"{self._base_url}/orgs/{owner}/members/{username}"
+                    )
+                except GitHubError as e:
+                    if "HTTP_404" in str(e):
+                        raise GitHubError(
+                            f"组织 {owner} 不存在，或你不是该组织的成员。"
+                            "请检查组织名称是否正确。"
+                        )
+                    raise
+                
+                # 检查在组织中创建仓库的权限（通过检查用户在组织中的角色）
+                try:
+                    result = await self._request(
+                        "GET",
+                        f"{self._base_url}/orgs/{owner}/memberships/{username}",
+                        return_headers=True,
+                    )
+                    membership = cast(tuple[dict[str, Any], dict[str, str]], result)[0]
+                    role = membership.get("role")
+                    # admin 可以创建仓库，member 需要组织设置允许
+                    if role != "admin":
+                        # 获取组织设置
+                        result2 = await self._request(
+                            "GET",
+                            f"{self._base_url}/orgs/{owner}",
+                            return_headers=True,
+                        )
+                        org_info = cast(tuple[dict[str, Any], dict[str, str]], result2)[0]
+                        members_can_create = org_info.get("members_can_create_repositories", False)
+                        if not members_can_create:
+                            raise GitHubError(
+                                f"你没有在组织 {owner} 中创建仓库的权限。"
+                                "请联系组织管理员授予权限。"
+                            )
+                except GitHubError as e:
+                    if "HTTP_403" in str(e) or "HTTP_404" in str(e):
+                        raise GitHubError(
+                            f"无法验证在组织 {owner} 中创建仓库的权限。"
+                            "请确保你有足够的权限。"
+                        )
+                    raise
+            
+            # 用户仓库或已验证组织权限 - 检查 token 是否有创建仓库的权限
+            # 通过解析 token 的 scopes（从响应头获取）
+            try:
+                # 获取 token 的 scopes 信息
+                result = await self._request(
+                    "GET",
+                    f"{self._base_url}/user",
+                    expect_json=True,
+                    return_headers=True,
+                )
+                response_headers = cast(tuple[dict[str, Any], dict[str, str]], result)[1]
+                
+                # 解析 X-OAuth-Scopes 头
+                scopes_header = response_headers.get("X-OAuth-Scopes", "")
+                scopes = [s.strip() for s in scopes_header.split(",") if s.strip()]
+                
+                # 检查是否有仓库相关权限
+                has_repo_permission = any(
+                    scope in scopes
+                    for scope in ["repo", "public_repo"]
+                )
+                
+                if not has_repo_permission:
+                    raise GitHubError(
+                        f"GitHub Token 没有创建仓库的权限。"
+                        f"当前 scopes: {', '.join(scopes) or '(无)'}"
+                        f"请确保 Token 有 'repo' 或 'public_repo' 权限。"
+                    )
+            except GitHubError:
+                # 如果是我们自己抛出的权限错误，直接传递
+                raise
+            except Exception as e:
+                # 其他异常（如网络错误），提供友好提示
+                raise GitHubError(
+                    f"无法验证 GitHub Token 权限: {e}"
+                )
+            
+            return {
+                "repo_exists": False,
+                "repo_info": None,
+                "is_user_repo": is_user_repo,
+            }
+
     async def get_repo(self, owner: str, repo: str) -> dict[str, Any] | None:
         """获取仓库信息
         
@@ -66,22 +232,29 @@ class GitHubManager:
         repo: str,
         description: str = "",
         private: bool = False,
+        is_user_repo: bool | None = None,
     ) -> dict[str, Any]:
         """创建仓库
+        
+        注意：调用此方法前应先调用 check_permissions 验证权限。
         
         Args:
             owner: 仓库所有者（用户名或组织名）
             repo: 仓库名称
             description: 仓库描述
             private: 是否为私有仓库
+            is_user_repo: 是否是用户仓库（可选，如不提供则自动判断）
             
         Returns:
             创建的仓库信息
             
         Raises:
-            GitHubError: 创建仓库失败（如权限不足、组织不存在等）
+            GitHubError: 创建仓库失败
         """
-        user = await self.get_current_user()
+        if is_user_repo is None:
+            user = await self.get_current_user()
+            is_user_repo = owner.lower() == str(user.get("login", "")).lower()
+        
         payload = {
             "name": repo,
             "description": description,
@@ -89,61 +262,21 @@ class GitHubManager:
             "auto_init": False,
         }
 
-        # 判断是用户仓库还是组织仓库
-        is_user_repo = owner.lower() == str(user.get("login", "")).lower()
-        
-        if is_user_repo:
-            url = f"{self._base_url}/user/repos"
-        else:
-            # 组织仓库 - 先检查用户是否有权限
-            await self._check_org_membership(owner)
-            url = f"{self._base_url}/orgs/{owner}/repos"
+        url = (
+            f"{self._base_url}/user/repos"
+            if is_user_repo
+            else f"{self._base_url}/orgs/{owner}/repos"
+        )
 
         try:
             return await self._request("POST", url, json=payload)
         except GitHubError as e:
-            # 提供更友好的错误消息
-            if "HTTP_403" in str(e):
-                if is_user_repo:
-                    raise GitHubError(
-                        f"创建仓库失败：权限不足。请检查 GitHub Token 是否有 'repo' 或 'public_repo' 权限。"
-                    )
-                else:
-                    raise GitHubError(
-                        f"创建仓库失败：你没有在组织 {owner} 中创建仓库的权限。"
-                        "请联系组织管理员授予权限。"
-                    )
-            elif "HTTP_422" in str(e):
+            if "HTTP_422" in str(e):
                 raise GitHubError(
                     f"创建仓库失败：仓库名称 {repo} 可能已被使用或无效。"
                 )
-            # 其他错误直接抛出
             raise
     
-    async def _check_org_membership(self, org: str) -> None:
-        """检查当前用户是否是组织成员
-        
-        Args:
-            org: 组织名称
-            
-        Raises:
-            GitHubError: 如果不是组织成员或组织不存在
-        """
-        try:
-            user = await self.get_current_user()
-            username = user.get("login")
-            await self._request(
-                "GET",
-                f"{self._base_url}/orgs/{org}/members/{username}"
-            )
-        except GitHubError as e:
-            if "HTTP_404" in str(e):
-                raise GitHubError(
-                    f"组织 {org} 不存在，或你不是该组织的成员。"
-                    "请检查组织名称是否正确。"
-                )
-            raise
-
     async def ensure_repo(
         self,
         owner: str,
@@ -152,6 +285,9 @@ class GitHubManager:
         private: bool = False,
     ) -> dict[str, Any]:
         """确保仓库存在，不存在则创建
+        
+        注意：调用此方法前应先调用 check_permissions 验证权限，
+        并将结果传入 permission_check_result 参数以避免重复检查。
         
         Args:
             owner: 仓库所有者
@@ -163,34 +299,12 @@ class GitHubManager:
             仓库信息
             
         Raises:
-            GitHubError: 仓库存在但没有写入权限
+            GitHubError: 创建仓库失败
         """
         existing = await self.get_repo(owner, repo)
         if existing:
-            # 检查仓库权限
-            if not self._has_push_permission(existing):
-                raise GitHubError(
-                    f"仓库 {owner}/{repo} 已存在但当前用户没有写入权限。"
-                    "请确保你有该仓库的 push 权限，或使用不同的仓库名称。"
-                )
             return existing
         return await self.create_repo(owner, repo, description, private)
-    
-    def _has_push_permission(self, repo: dict[str, Any]) -> bool:
-        """检查是否有仓库的 push 权限
-        
-        Args:
-            repo: 仓库信息字典
-            
-        Returns:
-            是否有 push 权限
-        """
-        permissions = repo.get("permissions")
-        if permissions is None:
-            # 如果没有 permissions 字段，说明没有权限信息
-            return False
-        # 需要 push 或 admin 权限
-        return bool(permissions.get("push") or permissions.get("admin"))
 
     async def get_release_by_tag(
         self, owner: str, repo: str, tag: str
@@ -308,6 +422,7 @@ class GitHubManager:
             "POST", upload_url, params=params, data=data, headers=headers
         )
 
+    @overload
     async def _request(
         self,
         method: str,
@@ -318,7 +433,37 @@ class GitHubManager:
         data: bytes | None = None,
         headers: dict[str, str] | None = None,
         expect_json: bool = True,
+        return_headers: bool = False,
     ) -> dict[str, Any]:
+        ...
+
+    @overload
+    async def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
+        data: bytes | None = None,
+        headers: dict[str, str] | None = None,
+        expect_json: bool = True,
+        return_headers: bool = True,
+    ) -> tuple[dict[str, Any], dict[str, str]]:
+        ...
+
+    async def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
+        data: bytes | None = None,
+        headers: dict[str, str] | None = None,
+        expect_json: bool = True,
+        return_headers: bool = False,
+    ) -> dict[str, Any] | tuple[dict[str, Any], dict[str, str]]:
         """发送 GitHub API 请求
         
         Args:
@@ -329,9 +474,10 @@ class GitHubManager:
             data: 二进制数据
             headers: 额外的请求头
             expect_json: 是否期望 JSON 响应
+            return_headers: 是否返回响应头
             
         Returns:
-            响应数据
+            响应数据，如果 return_headers=True 则返回 (响应数据, 响应头) 元组
             
         Raises:
             GitHubError: API 请求失败
@@ -350,8 +496,12 @@ class GitHubManager:
             async with session.request(
                 method, url, json=json, params=params, data=data
             ) as response:
+                # 保存响应头
+                response_headers = dict(response.headers)
+                
                 if response.status == 204 and not expect_json:
-                    return {}
+                    result = {}
+                    return (result, response_headers) if return_headers else result
 
                 try:
                     payload = await response.json(content_type=None)
@@ -369,4 +519,4 @@ class GitHubManager:
                 if not isinstance(payload, dict):
                     raise GitHubError("无效的 GitHub 响应格式")
 
-                return payload
+                return (payload, response_headers) if return_headers else payload
