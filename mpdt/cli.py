@@ -354,6 +354,59 @@ def market_package_new_version_cmd(
         raise click.Abort()
 
 
+@market.command("delete")
+@click.argument("plugin_id")
+@click.option("--token", help="市场访问令牌")
+def market_delete_cmd(plugin_id: str, token: str | None) -> None:
+    """删除插件
+    
+    ⚠️  警告：删除插件是不可逆的操作！
+    
+    前置检查：
+    - 检查插件是否存在
+    - 检查是否有删除权限（owner/maintainer）
+    
+    需要用户二次确认
+    """
+    from mpdt.commands.market import market_delete_plugin
+
+    try:
+        market_delete_plugin(plugin_id=plugin_id, token=token)
+    except Exception as e:
+        print_error(f"删除失败: {e}")
+        raise click.Abort()
+
+
+@market.command("yank")
+@click.argument("plugin_id")
+@click.argument("version")
+@click.option("--reason", "-r", help="废弃原因")
+@click.option("--token", help="市场访问令牌")
+def market_yank_cmd(
+    plugin_id: str, version: str, reason: str | None, token: str | None
+) -> None:
+    """废弃插件版本
+    
+    废弃后，用户将无法再安装此版本，但已安装的不受影响。
+    
+    前置检查：
+    - 检查插件是否存在
+    - 检查版本是否存在
+    - 检查是否有废弃权限（owner/maintainer）
+    
+    需要用户二次确认
+    """
+    from mpdt.commands.market import market_yank_version
+
+    try:
+        market_yank_version(
+            plugin_id=plugin_id, version=version, reason=reason, token=token
+        )
+    except Exception as e:
+        print_error(f"废弃失败: {e}")
+        raise click.Abort()
+
+
 @cli.group()
 def config() -> None:
     """配置管理"""

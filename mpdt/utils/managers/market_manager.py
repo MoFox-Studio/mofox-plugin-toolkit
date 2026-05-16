@@ -156,6 +156,47 @@ class MarketManager:
             json={"reason": reason},
         )
 
+    async def yank_my_plugin_version(
+        self, plugin_id: str, version: str, reason: str | None = None
+    ) -> Any:
+        """作为插件owner/maintainer撤回插件的某个版本
+        
+        API: POST /api/v1/me/plugins/{plugin_id}/versions/{version}/yank
+        
+        Args:
+            plugin_id: 插件唯一标识符
+            version: 要撤回的版本号
+            reason: 撤回原因说明（可选）
+            
+        Returns:
+            dict: 撤回后的版本信息 (PluginVersion schema)，is_yanked 字段为 true
+        """
+        payload = {"reason": reason} if reason else None
+        return await self._request(
+            "POST",
+            f"/api/v1/me/plugins/{plugin_id}/versions/{version}/yank",
+            json=payload,
+        )
+
+    async def delete_my_plugin(self, plugin_id: str) -> Any:
+        """作为插件owner/maintainer删除插件
+        
+        API: DELETE /api/v1/me/plugins/{plugin_id}
+        
+        Args:
+            plugin_id: 插件唯一标识符
+            
+        Returns:
+            dict: 空响应（HTTP 204）
+            
+        Raises:
+            MarketError: 无权限或插件不存在
+        """
+        return await self._request(
+            "DELETE",
+            f"/api/v1/me/plugins/{plugin_id}",
+        )
+
     async def get_plugin_status(self, plugin_id: str) -> Any:
         """获取插件的发布和同步状态
         

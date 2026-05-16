@@ -683,3 +683,215 @@ def market_package_new_version(
         print_info(f"下载地址: {asset_url}")
     
     _run_async(run())
+
+
+def market_delete_plugin(
+    plugin_id: str,
+    token: str | None = None,
+) -> None:
+    """删除插件
+    
+    前置检查：
+    1. 检查插件是否存在
+    2. 检查是否有删除权限（owner/maintainer）
+    
+    需要用户二次确认
+    """
+    
+    async def run() -> None:
+        # 初始化客户端
+        market = MarketManager(token)
+        
+        # 检查 1: 插件是否存在
+        print_info("正在检查插件是否存在...")
+        try:
+            plugin_detail = await market.get_plugin_detail(plugin_id)
+            print_success(f"✓ 找到插件: {plugin_detail.get('display_name', plugin_id)}")
+        except MarketError as e:
+            print_error(f"✗ 插件 {plugin_id} 不存在或无法访问")
+            print_info(f"错误详情: {e}")
+            return
+        
+        # 显示插件信息
+        from rich.table import Table
+        table = Table(title=f"插件信息")
+        table.add_column("字段", style="cyan")
+        table.add_column("值", style="white")
+        
+        table.add_row("插件 ID", str(plugin_detail.get("plugin_id", "")))
+        table.add_row("显示名称", str(plugin_detail.get("display_name", "")))
+        table.add_row("状态", str(plugin_detail.get("status", "")))
+        table.add_row("所有者", str(plugin_detail.get("owner_login", "")))
+        table.add_row("下载次数", str(plugin_detail.get("downloads_count", 0)))
+        table.add_row("版本数", str(plugin_detail.get("latest_version", "N/A")))
+        
+        console.print(table)
+        
+        # 检查 2: 权限检查（尝试获取治理快照）
+        print_info("正在检查删除权限...")
+        try:
+            from mpdt.utils.managers.github_manager import GitHubManager
+            
+            # 尝试获取我的插件信息（需要权限）
+            # 注意：这个API endpoint需要认证
+            snapshot = await market._request(
+                "GET",
+                f"/api/v1/me/plugins/{plugin_id}",
+            )
+            print_success("✓ 您有权限删除此插件")
+        except MarketError as e:
+            print_error(f"✗ 您没有权限删除此插件")
+            print_info("只有插件的 owner 或 maintainer 可以删除插件")
+            return
+        
+        # 二次确认
+        print_warning("\n⚠️  警告：删除插件是不可逆的操作！")
+        print_warning("删除后，插件的所有版本、评论、评分等数据都将被移除")
+        
+        try:
+            from rich.prompt import Confirm
+            
+            # 第一次确认
+            if not Confirm.ask(f"\n确定要删除插件 '{plugin_detail.get('display_name', plugin_id)}' 吗？", default=False):
+                print_info("操作已取消")
+                return
+            
+            # 第二次确认（需要输入插件ID）
+            from rich.prompt import Prompt
+            confirmation_id = Prompt.ask(f"\n请输入插件 ID '{plugin_id}' 以确认删除")
+            
+            if confirmation_id != plugin_id:
+                print_error("插件 ID 不匹配，操作已取消")
+                return
+        except Exception:
+            print_error("确认失败，操作已取消")
+            return
+        
+        # 执行删除
+        print_info(f"\n正在删除插件 {plugin_id}...")
+        try:
+            await market.delete_my_plugin(plugin_id)
+            print_success(f"\n✓ 插件 {plugin_id} 已成功删除")
+        except MarketError as e:
+            print_error(f"✗ 删除失败: {e}")
+            return
+    
+    _run_async(run())
+
+
+def market_yank_version(
+    plugin_id: str,
+    version: str,
+    reason: str | None = None,
+    token: str | None = None,
+) -> None:
+    """废弃插件版本
+    
+    前置检查：
+    1. 检查插件是否存在
+    2. 检查版本是否存在
+    3. 检查是否有废弃权限（owner/maintainer）
+    
+    需要用户二次确认
+    """
+    
+    async def run() -> None:
+        # 初始化客户端
+        market = MarketManager(token)
+        
+        # 检查 1: 插件是否存在
+        print_info("正在检查插件是否存在...")
+        try:
+            plugin_detail = await market.get_plugin_detail(plugin_id)
+            print_success(f"✓ 找到插件: {plugin_detail.get('display_name', plugin_id)}")
+        except MarketError as e:
+            print_error(f"✗ 插件 {plugin_id} 不存在或无法访问")
+            print_info(f"错误详情: {e}")
+            return
+        
+        # 检查 2: 版本是否存在
+        print_info(f"正在检查版本 {version} 是否存在...")
+        try:
+            version_detail = await market.get_version(plugin_id, version)
+            print_success(f"✓ 找到版本: {version}")
+            
+            # 检查版本是否已经被废弃
+            if version_detail.get("is_yanked", False):
+                print_warning(f"⚠️  版本 {version} 已经被废弃")
+                from rich.prompt import Confirm
+                if not Confirm.ask("是否继续更新废弃原因？", default=False):
+                    print_info("操作已取消")
+                    return
+        except MarketError as e:
+            print_error(f"✗ 版本 {version} 不存在")
+            print_info(f"错误详情: {e}")
+            return
+        
+        # 显示版本信息
+        from rich.table import Table
+        table = Table(title=f"版本信息")
+        table.add_column("字段", style="cyan")
+        table.add_column("值", style="white")
+        
+        table.add_row("插件 ID", str(version_detail.get("plugin_id", "")))
+        table.add_row("版本号", str(version_detail.get("version", "")))
+        table.add_row("状态", str(version_detail.get("status", "")))
+        table.add_row("是否预发布", "是" if version_detail.get("is_prerelease", False) else "否")
+        table.add_row("是否已废弃", "是" if version_detail.get("is_yanked", False) else "否")
+        table.add_row("下载次数", str(version_detail.get("download_count", 0)))
+        table.add_row("发布时间", str(version_detail.get("published_at", "N/A")))
+        
+        console.print(table)
+        
+        # 检查 3: 权限检查
+        print_info("正在检查废弃权限...")
+        try:
+            # 尝试获取我的插件信息（需要权限）
+            snapshot = await market._request(
+                "GET",
+                f"/api/v1/me/plugins/{plugin_id}",
+            )
+            print_success("✓ 您有权限废弃此版本")
+        except MarketError as e:
+            print_error(f"✗ 您没有权限废弃此版本")
+            print_info("只有插件的 owner 或 maintainer 可以废弃版本")
+            return
+        
+        # 如果没有提供原因，询问用户
+        yank_reason = reason
+        if not yank_reason:
+            try:
+                from rich.prompt import Prompt
+                yank_reason = Prompt.ask("\n请输入废弃原因（可选，直接回车跳过）")
+                if not yank_reason.strip():
+                    yank_reason = None
+            except Exception:
+                pass
+        
+        # 二次确认
+        print_warning("\n⚠️  注意：废弃版本后，用户将无法再安装此版本")
+        if yank_reason:
+            print_info(f"废弃原因: {yank_reason}")
+        
+        try:
+            from rich.prompt import Confirm
+            
+            if not Confirm.ask(f"\n确定要废弃版本 '{version}' 吗？", default=False):
+                print_info("操作已取消")
+                return
+        except Exception:
+            print_error("确认失败，操作已取消")
+            return
+        
+        # 执行废弃
+        print_info(f"\n正在废弃版本 {plugin_id}@{version}...")
+        try:
+            result = await market.yank_my_plugin_version(plugin_id, version, yank_reason)
+            print_success(f"\n✓ 版本 {version} 已成功废弃")
+            if yank_reason:
+                print_info(f"废弃原因: {yank_reason}")
+        except MarketError as e:
+            print_error(f"✗ 废弃失败: {e}")
+            return
+    
+    _run_async(run())
