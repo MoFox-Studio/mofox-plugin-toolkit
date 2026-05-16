@@ -299,7 +299,7 @@ def depend_search(
                     for plugin in plugins:
                         plugin_id = plugin.get("plugin_id", "")
                         name = plugin.get("display_name", "")
-                        version = plugin.get("latest_version", {}).get("version", "N/A")
+                        version = plugin.get("latest_version", "N/A")
                         summary = plugin.get("summary", "")
                         link = f"https://market.mofox-sama.com/plugins/{plugin_id}"
                         
@@ -473,6 +473,7 @@ def depend_remove(
         plugin_path: 插件根目录
         dependency: 依赖名称
         dep_type: 依赖类型（plugin/python/auto）
+        clean: 是否删除相关文件（默认 True）
     """
     plugin_dir = Path(plugin_path).resolve()
     manifest_mgr = ManifestManager(plugin_dir)
@@ -494,18 +495,80 @@ def depend_remove(
         )
         actual_dep_type = "plugin" if is_plugin else "python"
     
+
     # 移除依赖
     if actual_dep_type == "plugin":
         if manifest_mgr.remove_plugin_dependency(dependency):
             print_success(f"已从 manifest 移除插件依赖: {dependency}")
-            print_warning("注意: 插件文件未自动删除，请手动清理")
+
+            # 无条件删除插件文件
+            config = get_or_init_mpdt_config()
+            if config.mofox_path and config.mofox_path.exists():
+                plugins_dir = config.mofox_path / "plugins"
+                if plugins_dir.exists():
+                    import shutil
+
+                    # 尝试删除 .mfp 文件
+                    mfp_file = plugins_dir / f"{dependency}.mfp"
+                    if mfp_file.exists():
+                        mfp_file.unlink()
+                        print_success(f"已删除插件包: {mfp_file}")
+
+                    # 尝试删除插件目录
+                    plugin_folder = plugins_dir / dependency
+                    if plugin_folder.exists() and plugin_folder.is_dir():
+                        shutil.rmtree(plugin_folder)
+                        print_success(f"已删除插件目录: {plugin_folder}")
+
+                    # 如果两者都不存在
+                    if not mfp_file.exists() and not plugin_folder.exists():
+                        print_info(f"未找到插件文件: {dependency}")
+                else:
+                    print_warning(f"插件目录不存在: {plugins_dir}")
+            else:
+                print_warning("未配置 Neo-MoFox 路径，跳过插件文件删除")
         else:
             print_error(f"插件依赖不存在: {dependency}")
-    
+
     elif actual_dep_type == "python":
         if manifest_mgr.remove_python_dependency(dependency):
             print_success(f"已从 manifest 移除 Python 包依赖: {dependency}")
-            print_warning("注意: 包未自动卸载，请手动执行 uv pip uninstall")
+
+            # 无条件卸载 Python 包
+            config = get_or_init_mpdt_config()
+            if config.mofox_path and config.mofox_path.exists():
+                venv_path = config.mofox_path / ".venv"
+                if venv_path.exists():
+                    print_info(f"正在卸载 Python 包: {dependency}")
+
+                    import subprocess
+                    try:
+                        result = subprocess.run(
+                            [
+                                "uv", "pip", "uninstall",
+                                "--python", str(venv_path / "bin" / "python"),
+                                dependency,
+                                "-y"  # 自动确认
+                            ],
+                            cwd=config.mofox_path,
+                            capture_output=True,
+                            text=True,
+                            check=False
+                        )
+
+                        if result.returncode == 0:
+                            print_success(f"Python 包已卸载: {dependency}")
+                        else:
+                            print_warning(f"卸载失败: {result.stderr}")
+
+                    except FileNotFoundError:
+                        print_error("未找到 uv 命令，请先安装: pip install uv")
+                    except Exception as e:
+                        print_error(f"执行卸载命令失败: {e}")
+                else:
+                    print_warning(f"虚拟环境不存在: {venv_path}")
+            else:
+                print_warning("未配置 Neo-MoFox 路径，跳过包卸载")
         else:
             print_error(f"Python 包依赖不存在: {dependency}")
 

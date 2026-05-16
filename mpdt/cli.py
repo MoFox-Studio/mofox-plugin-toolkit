@@ -77,15 +77,17 @@ def plugin_init(ctx: click.Context, plugin_name: str | None, template: str,email
 @plugin.command("generate")
 @click.argument("component_type", type=click.Choice(["action", "tool", "collection", "event", "adapter", "plus-command", "router", "chatter", "service", "config"]), required=False)
 @click.argument("component_name", required=False)
+@click.argument("path", type=click.Path(), required=False, default=".")
 @click.option("--description", "-d", help="组件描述")
-@click.option("--output", "-o", type=click.Path(), help="插件根目录路径（默认为当前目录）")
 @click.option("--force", "-f", is_flag=True, help="覆盖已存在的文件")
 @click.option("--root", is_flag=True, help="在插件根目录生成组件文件，而不是 components/ 文件夹")
 @click.pass_context
-def plugin_generate(ctx: click.Context, component_type: str | None, component_name: str | None, description: str | None,
-             output: str | None, force: bool, root: bool) -> None:
+def plugin_generate(ctx: click.Context, component_type: str | None, component_name: str | None, path: str,
+             description: str | None, force: bool, root: bool) -> None:
     """生成插件组件(始终生成异步方法)
 
+    PATH 为插件根目录路径，默认为当前目录。
+    
     如果不提供参数，将进入交互式问答模式
     """
     from mpdt.commands.generate import generate_component
@@ -95,7 +97,7 @@ def plugin_generate(ctx: click.Context, component_type: str | None, component_na
             component_type=component_type,
             component_name=component_name,
             description=description,
-            output_dir=output,
+            output_dir=path,
             force=force,
             use_components_folder=not root,
         )
@@ -194,11 +196,14 @@ def plugin_build(ctx: click.Context, path: str, output: str, with_docs: bool, fm
 
 
 @plugin.command("dev")
+@click.argument("path", type=click.Path(exists=True), required=False)
 @click.option("--neo-mofox-path", type=click.Path(exists=True), help="Neo-MoFox 主程序路径")
-@click.option("--path", type=click.Path(exists=True), help="插件路径（默认当前目录）")
 @click.pass_context
-def plugin_dev(ctx: click.Context, neo_mofox_path: str | None, path: str | None) -> None:
-    """启动开发模式，支持热重载"""
+def plugin_dev(ctx: click.Context, path: str | None, neo_mofox_path: str | None) -> None:
+    """启动开发模式，支持热重载
+    
+    PATH 为插件路径，默认为当前目录。
+    """
     from pathlib import Path
 
     from mpdt.commands.dev import dev_command
@@ -456,14 +461,21 @@ def config_open() -> None:
             print_info("请运行 mpdt config init 进行配置")
             return
 
-        # 尝试使用系统默认编辑器打开
-        if os.environ.get("EDITOR"):
+        # 优先级：
+        # 1. 配置文件中的 editor.command
+        # 2. 环境变量 EDITOR
+        # 3. 系统默认编辑器
+        if config.editor_command:
+            # 使用配置的编辑器命令
+            subprocess.run([config.editor_command, str(config_path)])
+        elif os.environ.get("EDITOR"):
+            # 使用环境变量 EDITOR
             subprocess.run([os.environ["EDITOR"], str(config_path)])
         elif os.name == "posix":
-            # Linux/macOS
+            # Linux/macOS - 使用系统默认编辑器
             subprocess.run(["xdg-open", str(config_path)])
         elif os.name == "nt":
-            # Windows
+            # Windows - 使用系统默认编辑器
             os.startfile(config_path)
         else:
             # fallback: 只显示路径
@@ -483,8 +495,7 @@ def config_open() -> None:
 @click.argument("key", required=False)
 @click.argument("value", required=False)
 @click.option("--unset", is_flag=True, help="删除配置项")
-@click.option("--list", "list_all", is_flag=True, help="列出所有配置")
-def config_edit(key: str | None, value: str | None, unset: bool, list_all: bool) -> None:
+def config_edit(key: str | None, value: str | None, unset: bool) -> None:
     """编辑配置项（类似 git config）
     
     支持的配置键：
@@ -492,12 +503,14 @@ def config_edit(key: str | None, value: str | None, unset: bool, list_all: bool)
       - github.token: GitHub Personal Access Token
       - market.url: 插件市场地址
       - pypi.index_url: PyPI 镜像源地址
+      - editor.command: 编辑器命令（code/pycharm/subl/vim 等）
       - dev.auto_reload: 自动重载（true/false）
       - dev.reload_delay: 重载延迟（秒）
     
     示例：
       mpdt config edit mofox.path /path/to/mofox
       mpdt config edit github.token ghp_xxxxx
+      mpdt config edit editor.command code
       mpdt config edit --unset github.token
       mpdt config edit --list
     """
@@ -507,27 +520,6 @@ def config_edit(key: str | None, value: str | None, unset: bool, list_all: bool)
 
     try:
         config = get_or_init_mpdt_config()
-
-        # 列出所有配置
-        if list_all:
-            all_configs = config.list_all_configs()
-            if not all_configs:
-                print_warning("没有配置项")
-                print_info("请运行 mpdt config init 或 mpdt config edit <key> <value> 进行配置")
-                return
-
-            table = Table(title="MPDT 配置")
-            table.add_column("配置键", style="cyan")
-            table.add_column("配置值", style="green")
-
-            for k, v in sorted(all_configs.items()):
-                # 隐藏敏感信息
-                if "token" in k.lower() and v:
-                    v = "***" + v[-4:] if len(v) > 4 else "***"
-                table.add_row(k, v)
-
-            console.print(table)
-            return
 
         # 检查参数
         if not key:
@@ -589,7 +581,7 @@ def depend() -> None:
 
 @depend.command("add")
 @click.argument("dependency")
-@click.option("--path", type=click.Path(), default=".", help="插件根目录（默认当前目录）")
+@click.argument("path", type=click.Path(), required=False, default=".")
 @click.option("--type", "dep_type", type=click.Choice(["auto", "plugin", "python"]), default="auto", 
               help="依赖类型（auto=自动判断，plugin=插件，python=Python包）")
 def depend_add_cmd(
@@ -599,9 +591,11 @@ def depend_add_cmd(
 ) -> None:
     """添加依赖到插件
     
+    PATH 为插件根目录，默认为当前目录。
+    
     示例：
       mpdt depend add 'requests>=2.28.0'
-      mpdt depend add 'some-plugin>=1.0.0' --type plugin
+      mpdt depend add 'some-plugin>=1.0.0' . --type plugin
       mpdt depend add 'aiohttp~=3.8'
     """
     from mpdt.commands.depend import depend_add
@@ -660,15 +654,17 @@ def depend_info_cmd(dependency: str, dep_type: str) -> None:
 
 @depend.command("remove")
 @click.argument("dependency")
-@click.option("--path", type=click.Path(), default=".", help="插件根目录（默认当前目录）")
+@click.argument("path", type=click.Path(), required=False, default=".")
 @click.option("--type", "dep_type", type=click.Choice(["auto", "plugin", "python"]), default="auto",
               help="依赖类型（auto=自动判断）")
 def depend_remove_cmd(dependency: str, path: str, dep_type: str) -> None:
     """从插件中移除依赖
     
+    PATH 为插件根目录，默认为当前目录。
+    
     示例：
       mpdt depend remove requests
-      mpdt depend remove some-plugin --type plugin
+      mpdt depend remove some-plugin . --type plugin
     """
     from mpdt.commands.depend import depend_remove
 
@@ -680,15 +676,17 @@ def depend_remove_cmd(dependency: str, path: str, dep_type: str) -> None:
 
 
 @depend.command("list")
-@click.option("--path", type=click.Path(), default=".", help="插件根目录（默认当前目录）")
+@click.argument("path", type=click.Path(), required=False, default=".")
 @click.option("--type", "dep_type", type=click.Choice(["all", "plugin", "python"]), default="all",
               help="依赖类型（all=全部，plugin=仅插件，python=仅Python包）")
 def depend_list_cmd(path: str, dep_type: str) -> None:
     """列出插件的所有依赖
     
+    PATH 为插件根目录，默认为当前目录。
+    
     示例：
       mpdt depend list
-      mpdt depend list --type python
+      mpdt depend list . --type python
     """
     from mpdt.commands.depend import depend_list
 

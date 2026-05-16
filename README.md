@@ -172,8 +172,8 @@ mpdt dev
 # 指定主程序路径
 mpdt dev --neo-mofox-path /path/to/neo-mofox
 
-# 指定插件路径
-mpdt dev --plugin-path /path/to/plugin
+# 指定插件路径（作为参数）
+mpdt dev /path/to/plugin
 
 # 首次运行会提示配置
 # 之后会自动：
@@ -314,7 +314,7 @@ mpdt init [PLUGIN_NAME] [OPTIONS]
 生成插件组件代码，始终生成异步方法，支持交互式和命令行两种模式。
 
 ```bash
-mpdt generate [COMPONENT_TYPE] [COMPONENT_NAME] [OPTIONS]
+mpdt generate [COMPONENT_TYPE] [COMPONENT_NAME] [PATH] [OPTIONS]
 
 组件类型:
   action          Action 组件 - 执行具体操作
@@ -328,16 +328,19 @@ mpdt generate [COMPONENT_TYPE] [COMPONENT_NAME] [OPTIONS]
   service         Service 组件 - 服务类
   config          Config 组件 - 配置类
 
+位置参数:
+  PATH                      插件根目录路径（默认为当前目录）
+
 选项:
   -d, --description TEXT    组件描述信息
-  -o, --output PATH        输出目录（默认自动选择对应组件目录）
   -f, --force              覆盖已存在的文件
+  --root                   在插件根目录生成组件文件，而不是 components/ 文件夹
 
 示例:
   mpdt generate                                  # 交互式生成
   mpdt generate action SendMsg -d "发送消息"    # 命令行生成
   mpdt generate tool Formatter --force           # 强制覆盖
-  mpdt generate service DataService              # 生成服务类
+  mpdt generate service DataService ./my_plugin  # 在指定插件中生成服务类
 ```
 
 **注意**：不提供参数时将进入交互式问答模式，更易于使用。
@@ -408,11 +411,13 @@ mpdt build [PLUGIN_PATH] [OPTIONS]
 启动带热重载的开发模式，实时监控文件变化并自动重载插件。
 
 ```bash
-mpdt dev [OPTIONS]
+mpdt dev [PATH] [OPTIONS]
+
+位置参数:
+  PATH                     插件路径（默认当前目录）
 
 选项:
   --neo-mofox-path PATH    Neo-MoFox 主程序路径
-  --plugin-path PATH       插件路径（默认当前目录）
 
 功能特性:
   - 🔄 自动检测文件变化并热重载
@@ -435,6 +440,7 @@ mpdt dev [OPTIONS]
 
 示例:
   mpdt dev                                      # 在插件目录中运行
+  mpdt dev /path/to/plugin                      # 指定插件路径
   mpdt dev --neo-mofox-path /path/to/neo-mofox  # 指定主程序路径
 ```
 

@@ -89,6 +89,20 @@ class MPDTConfig:
         if "dev" not in self._config:
             self._config["dev"] = {}
         self._config["dev"]["reload_delay"] = value
+    
+
+    @property
+    def editor_command(self) -> str | None:
+        """获取编辑器命令"""
+        editor_command = self._config.get("editor", {}).get("command")
+        return str(editor_command) if editor_command else None
+
+    @editor_command.setter
+    def editor_command(self, value: str) -> None:
+        """设置编辑器命令"""
+        if "editor" not in self._config:
+            self._config["editor"] = {}
+        self._config["editor"]["command"] = value
 
     @property
     def github_token(self) -> str | None:
@@ -295,11 +309,11 @@ def interactive_config() -> MPDTConfig:
     from rich.panel import Panel
     from rich.prompt import Confirm, Prompt
 
-    from mpdt.utils.color_printer import console, print_fit_panel, print_success
+    from mpdt.utils.color_printer import console, print_colored, print_success
 
     config = MPDTConfig()
 
-    print_fit_panel("MPDT 配置向导\n\n让我们配置 Neo-MoFox 主程序的路径和 GitHub Token", "", rgb=(0, 255, 255))
+    print_colored(f"MPDT 配置向导\n\n让我们配置 Neo-MoFox 主程序的路径和 GitHub Token", rgb=(0, 255, 255))
 
     # 配置 Neo-MoFox 路径
     mofox_path_str = Prompt.ask(
@@ -326,6 +340,17 @@ def interactive_config() -> MPDTConfig:
             print_success("GitHub Token 已保存")
         else:
             console.print("[yellow]未设置 GitHub Token，稍后可使用 'mpdt config edit github.token <token>' 命令设置[/yellow]")
+
+        # 配置 editor.command（可选）
+        console.print("\n[cyan]编辑器命令用于 'mpdt config open' 命令打开文件[/cyan]")
+        console.print("[dim]如果不确定，可以跳过此步骤，默认为系统默认编辑器[/dim]")
+        editor_command = Prompt.ask(
+            "[bold]请输入编辑器命令[/bold]",
+            default=""
+        )
+        if editor_command and editor_command.strip():
+            config.editor_command = editor_command.strip()
+            print_success(f"编辑器命令已设置: {config.editor_command}")
 
     # 保存配置
     config.save()

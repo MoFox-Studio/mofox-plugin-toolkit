@@ -95,7 +95,7 @@ mpdt plugin init weather_plugin \
 
 **命令格式**：
 ```bash
-mpdt plugin generate [COMPONENT_TYPE] [COMPONENT_NAME] [选项]
+mpdt plugin generate [COMPONENT_TYPE] [COMPONENT_NAME] [PATH] [选项]
 ```
 
 **位置参数**：
@@ -111,10 +111,10 @@ mpdt plugin generate [COMPONENT_TYPE] [COMPONENT_NAME] [选项]
   - `service` - 跨插件服务接口
   - `config` - 配置定义
 - `COMPONENT_NAME`（可选）：组件名称
+- `PATH`（可选）：插件根目录路径（默认为当前目录）
 
 **选项**：
 - `--description, -d <TEXT>`：组件描述
-- `--output, -o <PATH>`：插件根目录路径（默认为当前目录）
 - `--force, -f`：覆盖已存在的文件
 - `--root`：在插件根目录生成组件文件，而不是 components/ 文件夹
 
@@ -130,7 +130,7 @@ mpdt plugin generate action send_message --description "发送消息到群聊"
 mpdt plugin generate chatter my_chatter --root --description "主对话逻辑"
 
 # 指定插件路径
-mpdt plugin generate tool calculator --output ./my_plugin --description "计算器工具"
+mpdt plugin generate tool calculator ./my_plugin --description "计算器工具"
 ```
 
 ---
@@ -261,12 +261,14 @@ mpdt plugin build ./my_plugin --with-docs --output ./dist
 
 **命令格式**：
 ```bash
-mpdt plugin dev [选项]
+mpdt plugin dev [PATH] [选项]
 ```
+
+**位置参数**：
+- `PATH`（可选）：插件路径（默认：当前目录）
 
 **选项**：
 - `--neo-mofox-path <PATH>`：Neo-MoFox 主程序路径
-- `--path <PATH>`：插件路径（默认：当前目录）
 
 **开发模式特性**：
 - 文件修改自动检测
@@ -280,7 +282,7 @@ mpdt plugin dev [选项]
 mpdt plugin dev
 
 # 指定路径
-mpdt plugin dev --neo-mofox-path /path/to/Neo-MoFox --path ./my_plugin
+mpdt plugin dev ./my_plugin --neo-mofox-path /path/to/Neo-MoFox
 ```
 
 ---
@@ -480,82 +482,208 @@ mpdt config open
 ```bash
 mpdt config open
 ```
-
 ---
 
-### 14. `mpdt config set-mofox` - 设置 Neo-MoFox 路径
+### 18. `mpdt config edit` - 编辑配置项
 
-设置 Neo-MoFox 主程序的路径。
+类似 git config 的方式编辑配置项。
 
 **命令格式**：
 ```bash
-mpdt config set-mofox <PATH>
+mpdt config edit [KEY] [VALUE] [选项]
 ```
 
 **位置参数**：
-- `PATH`（必需）：Neo-MoFox 主程序路径
-
-**示例**：
-```bash
-mpdt config set-mofox /home/user/Neo-MoFox
-```
-
----
-
-### 15. `mpdt config set-github-token` - 设置 GitHub Token
-
-设置用于插件市场发布的 GitHub Personal Access Token。
-
-**命令格式**：
-```bash
-mpdt config set-github-token [选项]
-```
+- `KEY`（可选）：配置键
+- `VALUE`（可选）：配置值
 
 **选项**：
-- `--token <TOKEN>`：GitHub Personal Access Token（会提示安全输入）
+- `--unset`：删除配置项
+
+**支持的配置键**：
+- `mofox.path` - Neo-MoFox 主程序路径
+- `github.token` - GitHub Personal Access Token
+- `market.url` - 插件市场地址
+- `pypi.index_url` - PyPI 镜像源地址
+- `editor.command` - 编辑器命令（code/pycharm/subl/vim 等）
+- `dev.auto_reload` - 自动重载（true/false）
+- `dev.reload_delay` - 重载延迟（秒）
 
 **示例**：
 ```bash
-# 交互式输入（推荐，隐藏输入）
-mpdt config set-github-token
+# 设置配置
+mpdt config edit mofox.path /path/to/mofox
+mpdt config edit github.token ghp_xxxxx
+mpdt config edit editor.command code
 
-# 直接指定 token（不推荐，会显示在历史记录中）
-mpdt config set-github-token --token ghp_xxxxxxxxxxxx
+# 查看配置
+mpdt config edit github.token
+
+# 删除配置
+mpdt config edit --unset github.token
 ```
 
 ---
 
-### 16. `mpdt config clear-github-token` - 清除 GitHub Token
+## 四、Depend 依赖管理命令组
 
-清除已保存的 GitHub Token。
+### 19. `mpdt depend add` - 添加依赖
 
-**命令格式**：
-```bash
-mpdt config clear-github-token
-```
-
-**示例**：
-```bash
-mpdt config clear-github-token
-```
-
----
-
-### 17. `mpdt config set-market-url` - 设置市场地址
-
-设置插件市场的镜像源地址。
+添加插件或 Python 包依赖到插件。
 
 **命令格式**：
 ```bash
-mpdt config set-market-url <URL>
+mpdt depend add <DEPENDENCY> [选项]
 ```
 
 **位置参数**：
-- `URL`（必需）：市场地址
+- `DEPENDENCY`（必需）：依赖包名称和版本约束
+
+**选项**：
+- `--path <PATH>`：插件根目录（默认：当前目录）
+- `--type <TYPE>`：依赖类型（默认：auto）
+  - `auto` - 自动判断
+  - `plugin` - Neo-MoFox 插件
+  - `python` - Python 包
 
 **示例**：
 ```bash
-mpdt config set-market-url https://market.example.com
+# 添加 Python 包
+mpdt depend add 'requests>=2.28.0'
+mpdt depend add 'aiohttp~=3.8'
+
+# 添加插件依赖
+mpdt depend add 'some-plugin>=1.0.0' --type plugin
+
+# 指定插件路径
+mpdt depend add 'httpx>=0.24.0' --path ./my_plugin
+```
+
+---
+
+### 20. `mpdt depend search` - 搜索依赖
+
+在插件市场或 PyPI 中搜索可用的依赖包。
+
+**命令格式**：
+```bash
+mpdt depend search <QUERY> [选项]
+```
+
+**位置参数**：
+- `QUERY`（必需）：搜索关键词
+
+**选项**：
+- `--type <TYPE>`：搜索类型（默认：all）
+  - `all` - 全部
+  - `plugin` - 仅插件
+  - `python` - 仅 Python 包
+- `--limit <NUM>`：返回结果数量（默认：20）
+
+**示例**：
+```bash
+# 搜索所有相关包
+mpdt depend search requests
+
+# 仅搜索插件
+mpdt depend search utility --type plugin
+
+# 限制结果数量
+mpdt depend search http --limit 10
+```
+
+---
+
+### 21. `mpdt depend info` - 查看依赖信息
+
+查看依赖包的详细信息和可用版本。
+
+**命令格式**：
+```bash
+mpdt depend info <DEPENDENCY> [选项]
+```
+
+**位置参数**：
+- `DEPENDENCY`（必需）：依赖包名称
+
+**选项**：
+- `--type <TYPE>`：依赖类型（默认：auto）
+  - `auto` - 自动判断
+  - `plugin` - Neo-MoFox 插件
+  - `python` - Python 包
+
+**示例**：
+```bash
+# 查看 Python 包信息
+mpdt depend info requests
+
+# 查看插件信息
+mpdt depend info some-plugin --type plugin
+```
+
+---
+
+### 22. `mpdt depend remove` - 移除依赖
+
+从插件中移除依赖。
+
+**命令格式**：
+```bash
+mpdt depend remove <DEPENDENCY> [PATH] [选项]
+```
+
+**位置参数**：
+- `DEPENDENCY`（必需）：依赖包名称
+- `PATH`（可选）：插件根目录（默认：当前目录）
+
+**选项**：
+- `--type <TYPE>`：依赖类型（默认：auto）
+  - `auto` - 自动判断
+  - `plugin` - Neo-MoFox 插件
+  - `python` - Python 包
+
+**示例**：
+```bash
+# 移除 Python 包
+mpdt depend remove requests
+
+# 移除插件依赖
+mpdt depend remove some-plugin . --type plugin
+
+# 指定插件路径
+mpdt depend remove httpx ./my_plugin
+```
+
+---
+
+### 23. `mpdt depend list` - 列出所有依赖
+
+列出插件的所有依赖。
+
+**命令格式**：
+```bash
+mpdt depend list [PATH] [选项]
+```
+
+**位置参数**：
+- `PATH`（可选）：插件根目录（默认：当前目录）
+
+**选项**：
+- `--type <TYPE>`：依赖类型（默认：all）
+  - `all` - 全部
+  - `plugin` - 仅插件
+  - `python` - 仅 Python 包
+
+**示例**：
+```bash
+# 列出所有依赖
+mpdt depend list
+
+# 仅列出 Python 包
+mpdt depend list . --type python
+
+# 列出指定插件的依赖
+mpdt depend list ./my_plugin
 ```
 
 ---
