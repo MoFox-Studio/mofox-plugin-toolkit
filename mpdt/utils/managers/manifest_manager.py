@@ -697,6 +697,53 @@ class ManifestManager:
                 tags.append(tag)
         return tags
 
+    def validate_categories_and_tags(self) -> tuple[bool, list[str]]:
+        """验证分类和标签的有效性
+        
+        Returns:
+            (是否有效, 错误信息列表)
+        """
+        manifest = self.load()
+        if not manifest:
+            return False, ["无法加载 manifest.json"]
+        
+        errors = []
+        
+        # 检查 categories 字段
+        categories = manifest.get("categories")
+        if not categories:
+            errors.append("manifest.json 缺少 'categories' 字段或字段为空")
+        elif not isinstance(categories, list):
+            errors.append("'categories' 字段必须是列表")
+        else:
+            # 检查每个分类是否在允许的范围内
+            invalid_categories = [c for c in categories if c not in ALLOWED_CATEGORIES]
+            if invalid_categories:
+                errors.append(
+                    f"包含无效的分类: {', '.join(invalid_categories)}. "
+                    f"允许的分类: {', '.join(ALLOWED_CATEGORIES)}"
+                )
+        
+        # 检查 tags 字段
+        tags = manifest.get("tags")
+        if tags is None:
+            errors.append("manifest.json 缺少 'tags' 字段")
+        elif not isinstance(tags, list):
+            errors.append("'tags' 字段必须是列表")
+        elif len(tags) == 0:
+            errors.append("'tags' 字段不能为空，请至少添加一个标签")
+        else:
+            # 检查标签是否为字符串
+            non_string_tags = [t for t in tags if not isinstance(t, str)]
+            if non_string_tags:
+                errors.append("'tags' 列表中包含非字符串元素")
+            # 检查是否有空标签
+            empty_tags = [t for t in tags if isinstance(t, str) and not t.strip()]
+            if empty_tags:
+                errors.append("'tags' 列表中包含空字符串")
+        
+        return len(errors) == 0, errors
+
     def set_categories(self, categories: list[str]) -> None:
         """设置分类
         
@@ -726,3 +773,176 @@ class ManifestManager:
         manifest.pop("tag", None)
         manifest["tags"] = tags
         self.save(manifest)
+
+    # ========== 依赖管理相关功能 ==========
+
+    def add_plugin_dependency(self, dependency_spec: str) -> bool:
+        """添加插件依赖
+        
+        Args:
+            dependency_spec: 插件依赖规范（如 "plugin_name" 或 "plugin_name>=1.0.0"）
+            
+        Returns:
+            是否成功添加（False 表示已存在）
+        """
+        manifest = self.load()
+        if manifest is None:
+            raise ValueError("无法加载 manifest.json")
+        
+        dependencies = manifest.get("dependencies", {"plugins": [], "components": []})
+        if "plugins" not in dependencies:
+            dependencies["plugins"] = []
+        
+        # 提取插件名（用于检查重复）
+        plugin_name = self._parse_dependency_name(dependency_spec)
+        
+        # 检查是否已存在该插件（忽略版本约束）
+        for existing_spec in dependencies["plugins"]:
+            existing_name = self._parse_dependency_name(existing_spec)
+            if existing_name.lower() == plugin_name.lower():
+                return False
+        
+        dependencies["plugins"].append(dependency_spec)
+        manifest["dependencies"] = dependencies
+        self.save(manifest)
+        return True
+
+    def remove_plugin_dependency(self, plugin_name: str) -> bool:
+        """移除插件依赖
+        
+        Args:
+            plugin_name: 插件名称（不含版本约束）
+            
+        Returns:
+            是否成功移除（False 表示不存在）
+        """
+        manifest = self.load()
+        if manifest is None:
+            raise ValueError("无法加载 manifest.json")
+        
+        dependencies = manifest.get("dependencies", {"plugins": [], "components": []})
+        if "plugins" not in dependencies:
+            return False
+        
+        # 查找匹配的依赖
+        plugin_name_lower = plugin_name.lower()
+        for i, spec in enumerate(dependencies["plugins"]):
+            spec_name = self._parse_dependency_name(spec)
+            if spec_name.lower() == plugin_name_lower:
+                dependencies["plugins"].pop(i)
+                manifest["dependencies"] = dependencies
+                self.save(manifest)
+                return True
+        
+        return False
+
+    def get_plugin_dependencies(self) -> list[str]:
+        """获取所有插件依赖
+        
+        Returns:
+            插件 ID 列表
+        """
+        manifest = self.load()
+        if manifest is None:
+            return []
+        
+        dependencies = manifest.get("dependencies", {"plugins": [], "components": []})
+        return dependencies.get("plugins", [])
+
+    def add_python_dependency(self, package_spec: str) -> bool:
+        """添加 Python 包依赖
+        
+        Args:
+            package_spec: 包规范（如 "requests>=2.28.0"）
+            
+        Returns:
+            是否成功添加（False 表示已存在）
+        """
+        manifest = self.load()
+        if manifest is None:
+            raise ValueError("无法加载 manifest.json")
+        
+        if "python_dependencies" not in manifest:
+            manifest["python_dependencies"] = []
+        
+        # 提取包名（不含版本）用于检查重复
+        package_name = package_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()
+        
+        # 检查是否已存在该包
+        for existing_spec in manifest["python_dependencies"]:
+            existing_name = existing_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()
+            if existing_name.lower() == package_name.lower():
+                return False
+        
+        manifest["python_dependencies"].append(package_spec)
+        self.save(manifest)
+        return True
+
+    def remove_python_dependency(self, package_name: str) -> bool:
+        """移除 Python 包依赖
+        
+        Args:
+            package_name: 包名（不含版本说明符）
+            
+        Returns:
+            是否成功移除（False 表示不存在）
+        """
+        manifest = self.load()
+        if manifest is None:
+            raise ValueError("无法加载 manifest.json")
+        
+        if "python_dependencies" not in manifest:
+            return False
+        
+        # 查找匹配的依赖
+        package_name_lower = package_name.lower()
+        for i, spec in enumerate(manifest["python_dependencies"]):
+            spec_name = spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()
+            if spec_name.lower() == package_name_lower:
+                manifest["python_dependencies"].pop(i)
+                self.save(manifest)
+                return True
+        
+        return False
+
+    def get_python_dependencies(self) -> list[str]:
+        """获取所有 Python 包依赖
+        
+        Returns:
+            包规范列表
+        """
+        manifest = self.load()
+        if manifest is None:
+            return []
+        
+        return manifest.get("python_dependencies", [])
+    
+    @staticmethod
+    def _parse_dependency_name(dependency_spec: str) -> str:
+        """从依赖规范中提取依赖名称
+        
+        支持标准包管理器格式：
+        - plugin_name
+        - plugin_name>=1.0.0
+        - plugin_name==1.0.0
+        - plugin_name~=1.0
+        
+        Args:
+            dependency_spec: 依赖规范
+            
+        Returns:
+            依赖名称
+        """
+        spec = str(dependency_spec or "").strip()
+        if not spec:
+            return ""
+        
+        # 按版本操作符分割（从长到短匹配，避免 >= 被 > 截断）
+        for op in ["===", "==", "!=", "~=", ">=", "<=", ">", "<"]:
+            if op in spec:
+                name, _, _ = spec.partition(op)
+                return name.strip()
+        
+        # 如果没有版本约束，返回完整名称
+        return spec
+

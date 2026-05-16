@@ -221,8 +221,6 @@ def market() -> None:
 
 @market.command("publish")
 @click.argument("plugin_path", type=click.Path(), required=False, default=".")
-@click.option("--token", help="市场访问令牌")
-@click.option("--github-token", help="GitHub Personal Access Token")
 @click.option("--owner", help="GitHub 用户或组织名")
 @click.option("--repo", help="GitHub 仓库名（默认使用插件 ID）")
 @click.option("--private", is_flag=True, help="创建私有仓库")
@@ -230,11 +228,8 @@ def market() -> None:
 @click.option("--with-docs", is_flag=True, help="包含文档")
 @click.option("--release-notes", help="Release 说明")
 @click.option("--skip-push", is_flag=True, help="跳过 Git 推送")
-@click.option("--save-github-token/--no-save-github-token", default=None, help="是否保存 GitHub Token")
 def market_publish_cmd(
     plugin_path: str,
-    token: str | None,
-    github_token: str | None,
     owner: str | None,
     repo: str | None,
     private: bool,
@@ -242,7 +237,6 @@ def market_publish_cmd(
     with_docs: bool,
     release_notes: str | None,
     skip_push: bool,
-    save_github_token: bool | None,
 ) -> None:
     """一键发布插件到市场
     
@@ -253,8 +247,6 @@ def market_publish_cmd(
     try:
         market_publish(
             plugin_path=plugin_path,
-            token=token,
-            github_token=github_token,
             owner=owner,
             repo=repo,
             private=private,
@@ -262,7 +254,6 @@ def market_publish_cmd(
             with_docs=with_docs,
             release_notes=release_notes,
             skip_push=skip_push,
-            save_token=save_github_token,
         )
     except Exception as e:
         print_error(f"发布失败: {e}")
@@ -307,24 +298,18 @@ def market_info_cmd(plugin_id: str) -> None:
 
 @market.command("package-update")
 @click.argument("plugin_path", type=click.Path(), required=False, default=".")
-@click.option("--token", help="市场访问令牌")
-@click.option("--github-token", help="GitHub Personal Access Token")
 @click.option("--owner", help="GitHub 用户或组织名")
 @click.option("--repo", help="GitHub 仓库名（默认使用插件 ID）")
 @click.option("--with-docs", is_flag=True, help="包含文档")
 @click.option("--release-notes", help="Release 说明")
 @click.option("--skip-push", is_flag=True, help="跳过 Git 推送")
-@click.option("--save-github-token/--no-save-github-token", default=None, help="是否保存 GitHub Token")
 def market_package_new_version_cmd(
     plugin_path: str,
-    token: str | None,
-    github_token: str | None,
     owner: str | None,
     repo: str | None,
     with_docs: bool,
     release_notes: str | None,
     skip_push: bool,
-    save_github_token: bool | None,
 ) -> None:
     """打包并发布插件的新版本
     
@@ -340,14 +325,11 @@ def market_package_new_version_cmd(
     try:
         market_package_new_version(
             plugin_path=plugin_path,
-            token=token,
-            github_token=github_token,
             owner=owner,
             repo=repo,
             with_docs=with_docs,
             release_notes=release_notes,
             skip_push=skip_push,
-            save_token=save_github_token,
         )
     except Exception as e:
         print_error(f"打包失败: {e}")
@@ -356,8 +338,7 @@ def market_package_new_version_cmd(
 
 @market.command("delete")
 @click.argument("plugin_id")
-@click.option("--token", help="市场访问令牌")
-def market_delete_cmd(plugin_id: str, token: str | None) -> None:
+def market_delete_cmd(plugin_id: str) -> None:
     """删除插件
     
     ⚠️  警告：删除插件是不可逆的操作！
@@ -371,7 +352,7 @@ def market_delete_cmd(plugin_id: str, token: str | None) -> None:
     from mpdt.commands.market import market_delete_plugin
 
     try:
-        market_delete_plugin(plugin_id=plugin_id, token=token)
+        market_delete_plugin(plugin_id=plugin_id)
     except Exception as e:
         print_error(f"删除失败: {e}")
         raise click.Abort()
@@ -381,9 +362,8 @@ def market_delete_cmd(plugin_id: str, token: str | None) -> None:
 @click.argument("plugin_id")
 @click.argument("version")
 @click.option("--reason", "-r", help="废弃原因")
-@click.option("--token", help="市场访问令牌")
 def market_yank_cmd(
-    plugin_id: str, version: str, reason: str | None, token: str | None
+    plugin_id: str, version: str, reason: str | None
 ) -> None:
     """废弃插件版本
     
@@ -400,7 +380,7 @@ def market_yank_cmd(
 
     try:
         market_yank_version(
-            plugin_id=plugin_id, version=version, reason=reason, token=token
+            plugin_id=plugin_id, version=version, reason=reason
         )
     except Exception as e:
         print_error(f"废弃失败: {e}")

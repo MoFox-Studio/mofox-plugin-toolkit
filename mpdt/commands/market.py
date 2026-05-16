@@ -20,30 +20,20 @@ from mpdt.utils.managers.manifest_manager import ManifestManager
 from mpdt.utils.managers.market_manager import MarketError, MarketManager
 
 
-def _resolve_github_token(token_arg: str | None) -> str:
-    """解析 GitHub Token
+def _resolve_github_token() -> str:
+    """从配置文件解析 GitHub Token
     
-    Args:
-        token_arg: 命令行传入的 token
-        
     Returns:
         GitHub Token
         
     Raises:
         SystemExit: 如果无法获取 token
     """
-    # 优先级：命令行参数>配置文件
-    token = (
-        token_arg
-        or get_or_init_mpdt_config().github_token
-    )
+    token = get_or_init_mpdt_config().github_token
     
     if not token:
         print_error("未找到 GitHub Token")
-        print_info("请通过以下方式之一提供 GitHub Token：")
-        print_info("  1. 使用 --github-token 参数")
-        print_info("  2. 设置环境变量 GITHUB_TOKEN")
-        print_info("  3. 运行 'mpdt config set-github-token' 保存到配置文件")
+        print_info("请运行 'mpdt config edit github.token <your_token>' 进行配置")
         print_warning("提示：GitHub Token 需要有仓库创建和 Release 写入权限")
         sys.exit(1)
     
@@ -64,8 +54,6 @@ def _run_async(coro):
 
 def market_publish(
     plugin_path: str = ".",
-    token: str | None = None,
-    github_token: str | None = None,
     owner: str | None = None,
     repo: str | None = None,
     private: bool = False,
@@ -73,7 +61,6 @@ def market_publish(
     with_docs: bool = False,
     release_notes: str | None = None,
     skip_push: bool = False,
-    save_token: bool | None = None,
 ) -> None:
     """一键发布插件到市场
     
@@ -126,26 +113,8 @@ def market_publish(
             return
         print_success(f"插件包已构建: {package.package_path.name}")
         
-        # 3. 处理 GitHub Token
-        resolved_github_token = _resolve_github_token(github_token)
-        
-        # 保存 token（如果需要）
-        if github_token and save_token is True:
-            config = get_or_init_mpdt_config()
-            config.github_token = github_token
-            config.save()
-            print_success("GitHub Token 已保存到配置文件")
-        elif github_token and save_token is None:
-            # 询问是否保存
-            try:
-                from rich.prompt import Confirm
-                if Confirm.ask("是否保存 GitHub Token 到配置文件以便下次使用？", default=False):
-                    config = get_or_init_mpdt_config()
-                    config.github_token = github_token
-                    config.save()
-                    print_success("GitHub Token 已保存")
-            except Exception:
-                pass
+        # 3. 获取 GitHub Token
+        resolved_github_token = _resolve_github_token()
         
         # 4. 初始化 GitHub 客户端
         github = GitHubManager(resolved_github_token)
@@ -287,7 +256,7 @@ def market_publish(
         asset_url = asset.get("browser_download_url") or manifest_mgr.build_default_asset_url(package.package_path.name)
         
         # 10. 注册/更新市场插件
-        market = MarketManager(token or resolved_github_token)
+        market = MarketManager()
         
         print_info("正在检查插件注册状态...")
         
@@ -358,7 +327,7 @@ def market_search(
     """搜索市场中的公开插件并显示结果"""
     
     async def run() -> None:
-        market = MarketManager(None)
+        market = MarketManager()
         result = await market.search_plugins(query, category, tag, limit)
         
         # API 返回 PluginListResponse: {"items": [...], "total": N}
@@ -391,7 +360,7 @@ def market_info(plugin_id: str) -> None:
     """查看插件的详细信息"""
     
     async def run() -> None:
-        market = MarketManager(None)
+        market = MarketManager()
         result = await market.get_plugin_detail(plugin_id)
         
         table = Table(title=f"插件详情: {plugin_id}")
@@ -410,14 +379,11 @@ def market_info(plugin_id: str) -> None:
 
 def market_package_new_version(
     plugin_path: str = ".",
-    token: str | None = None,
-    github_token: str | None = None,
     owner: str | None = None,
     repo: str | None = None,
     with_docs: bool = False,
     release_notes: str | None = None,
     skip_push: bool = False,
-    save_token: bool | None = None,
 ) -> None:
     """打包并发布插件的新版本
     
@@ -458,29 +424,11 @@ def market_package_new_version(
             return
         print_success("分类和标签验证通过")
         
-        # 2. 处理 GitHub Token
-        resolved_github_token = _resolve_github_token(github_token)
-        
-        # 保存 token（如果需要）
-        if github_token and save_token is True:
-            config = get_or_init_mpdt_config()
-            config.github_token = github_token
-            config.save()
-            print_success("GitHub Token 已保存到配置文件")
-        elif github_token and save_token is None:
-            # 询问是否保存
-            try:
-                from rich.prompt import Confirm
-                if Confirm.ask("是否保存 GitHub Token 到配置文件以便下次使用？", default=False):
-                    config = get_or_init_mpdt_config()
-                    config.github_token = github_token
-                    config.save()
-                    print_success("GitHub Token 已保存")
-            except Exception:
-                pass
+        # 2. 获取 GitHub Token
+        resolved_github_token = _resolve_github_token()
         
         # 3. 初始化客户端
-        market = MarketManager(token or resolved_github_token)
+        market = MarketManager()
         github = GitHubManager(resolved_github_token)
         user = await github.get_current_user()
         resolved_owner = owner or manifest.get("github_owner") or user["login"]
@@ -687,7 +635,6 @@ def market_package_new_version(
 
 def market_delete_plugin(
     plugin_id: str,
-    token: str | None = None,
 ) -> None:
     """删除插件
     
@@ -700,7 +647,7 @@ def market_delete_plugin(
     
     async def run() -> None:
         # 初始化客户端
-        market = MarketManager(token)
+        market = MarketManager()
         
         # 检查 1: 插件是否存在
         print_info("正在检查插件是否存在...")
@@ -783,7 +730,6 @@ def market_yank_version(
     plugin_id: str,
     version: str,
     reason: str | None = None,
-    token: str | None = None,
 ) -> None:
     """废弃插件版本
     
@@ -797,7 +743,7 @@ def market_yank_version(
     
     async def run() -> None:
         # 初始化客户端
-        market = MarketManager(token)
+        market = MarketManager()
         
         # 检查 1: 插件是否存在
         print_info("正在检查插件是否存在...")

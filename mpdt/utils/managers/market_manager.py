@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import aiohttp
@@ -26,18 +25,14 @@ class MarketManager:
     - 兼容性查询和安装信息获取
     """
 
-    # 默认配置
-    DEFAULT_AUTHOR_TOKEN = "tAZUljLMi7xldea5LjXYMjpfFhuKcZcmLx7xQDPT0OzJg6KQdqxVwBE3QkVblia1"
-
-    def __init__(self, token: str | None = None, timeout: int = 30):
+    def __init__(self, timeout: int = 30):
         """初始化市场管理器
         
         Args:
-            token: 访问令牌，不提供则使用环境变量或默认值
             timeout: 请求超时时间（秒）
         """
         self.base_url = self._resolve_url()
-        self.token = self._resolve_token(token)
+        self.token = self._resolve_token()
         self.timeout = timeout
 
     @classmethod
@@ -47,12 +42,24 @@ class MarketManager:
         return config.market_url
 
     @classmethod
-    def _resolve_token(cls, token: str | None) -> str:
-        """解析访问令牌"""
-        return (
-            token
-            or cls.DEFAULT_AUTHOR_TOKEN
-        )
+    def _resolve_token(cls) -> str:
+        """从配置文件解析 GitHub Token，同时用于市场和 GitHub 操作
+        
+        Returns:
+            GitHub Token
+            
+        Raises:
+            MarketError: 如果未配置 GitHub Token
+        """
+        config = get_or_init_mpdt_config()
+        token = config.github_token
+        
+        if not token:
+            raise MarketError(
+                "未找到 GitHub Token，请运行 'mpdt config edit github.token <your_token>' 进行配置"
+            )
+        
+        return token
 
     async def health(self) -> Any:
         """检查市场服务进程健康状态
