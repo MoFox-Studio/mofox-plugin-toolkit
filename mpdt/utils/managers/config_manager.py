@@ -14,6 +14,9 @@ _global_config: "MPDTConfig | None" = None
 # 默认市场 URL
 DEFAULT_MARKET_URL = "http://39.96.71.162/"
 
+# 默认 PyPI 源
+DEFAULT_PYPI_INDEX_URL = "https://pypi.org"
+
 
 class MPDTConfig:
     """MPDT 配置管理器"""
@@ -120,6 +123,21 @@ class MPDTConfig:
         if "market" not in self._config:
             self._config["market"] = {}
         self._config["market"]["url"] = url.rstrip("/")
+
+    @property
+    def pypi_index_url(self) -> str:
+        """获取 PyPI 索引 URL（镜像源）"""
+        url = self._config.get("pypi", {}).get("index_url")
+        if url:
+            return str(url).rstrip("/")
+        return DEFAULT_PYPI_INDEX_URL.rstrip("/")
+
+    @pypi_index_url.setter
+    def pypi_index_url(self, url: str) -> None:
+        """设置 PyPI 索引 URL（镜像源）"""
+        if "pypi" not in self._config:
+            self._config["pypi"] = {}
+        self._config["pypi"]["index_url"] = url.rstrip("/")
 
     def validate(self) -> tuple[bool, list[str]]:
         """验证配置

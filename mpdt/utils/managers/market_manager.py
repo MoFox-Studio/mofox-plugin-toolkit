@@ -233,6 +233,25 @@ class MarketManager:
             "GET", f"/api/v1/plugins/{plugin_id}/versions", authenticated=False
         )
 
+    async def get_version(self, plugin_id: str, version: str) -> Any:
+        """获取插件的指定版本详情
+        
+        API: GET /api/v1/plugins/{plugin_id}/versions/{version}
+        
+        Args:
+            plugin_id: 插件唯一标识符
+            version: 版本号（如 "1.0.0"）
+            
+        Returns:
+            dict: 版本信息 (PluginVersion schema)，包含下载链接等详细信息
+            
+        Raises:
+            MarketError: 版本不存在或获取失败
+        """
+        return await self._request(
+            "GET", f"/api/v1/plugins/{plugin_id}/versions/{version}", authenticated=False
+        )
+
     async def get_recommended_version(
         self,
         plugin_id: str,

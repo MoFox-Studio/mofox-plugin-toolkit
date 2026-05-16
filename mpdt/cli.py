@@ -533,6 +533,150 @@ def config_set_market_url(url: str) -> None:
         raise click.Abort()
 
 
+@config.command("set-pypi-index")
+@click.argument("url")
+def config_set_pypi_index(url: str) -> None:
+    """设置 PyPI 镜像源地址"""
+    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
+
+    try:
+        if not url or not url.strip():
+            print_error("PyPI 镜像源地址不能为空")
+            raise click.Abort()
+
+        config = get_or_init_mpdt_config()
+        config.pypi_index_url = url.strip()
+        config.save()
+
+        print_success(f"PyPI 镜像源已设置: {config.pypi_index_url}")
+        print_info("常用镜像源：")
+        print_info("  - 清华：https://pypi.tuna.tsinghua.edu.cn")
+        print_info("  - 阿里云：https://mirrors.aliyun.com/pypi")
+        print_info("  - 腾讯云：https://mirrors.cloud.tencent.com/pypi")
+
+    except Exception as e:
+        print_error(f"设置失败: {e}")
+        raise click.Abort()
+
+
+@cli.group()
+def depend() -> None:
+    """依赖管理工具"""
+    pass
+
+
+@depend.command("add")
+@click.argument("dependency")
+@click.option("--path", type=click.Path(), default=".", help="插件根目录（默认当前目录）")
+@click.option("--type", "dep_type", type=click.Choice(["auto", "plugin", "python"]), default="auto", 
+              help="依赖类型（auto=自动判断，plugin=插件，python=Python包）")
+def depend_add_cmd(
+    dependency: str,
+    path: str,
+    dep_type: str,
+) -> None:
+    """添加依赖到插件
+    
+    示例：
+      mpdt depend add 'requests>=2.28.0'
+      mpdt depend add 'some-plugin>=1.0.0' --type plugin
+      mpdt depend add 'aiohttp~=3.8'
+    """
+    from mpdt.commands.depend import depend_add
+
+    try:
+        depend_add(
+            plugin_path=path,
+            dependency=dependency,
+            dep_type=dep_type,
+        )
+    except Exception as e:
+        print_error(f"添加依赖失败: {e}")
+        raise click.Abort()
+
+
+@depend.command("search")
+@click.argument("query")
+@click.option("--type", "dep_type", type=click.Choice(["all", "plugin", "python"]), default="all",
+              help="搜索类型（all=全部，plugin=仅插件，python=仅Python包）")
+@click.option("--limit", type=int, default=20, help="返回结果数量")
+def depend_search_cmd(query: str, dep_type: str, limit: int) -> None:
+    """搜索插件或 Python 包
+    
+    示例：
+      mpdt depend search requests
+      mpdt depend search utility --type plugin
+    """
+    from mpdt.commands.depend import depend_search
+
+    try:
+        depend_search(query=query, dep_type=dep_type, limit=limit)
+    except Exception as e:
+        print_error(f"搜索失败: {e}")
+        raise click.Abort()
+
+
+@depend.command("info")
+@click.argument("dependency")
+@click.option("--type", "dep_type", type=click.Choice(["auto", "plugin", "python"]), default="auto",
+              help="依赖类型（auto=自动判断）")
+def depend_info_cmd(dependency: str, dep_type: str) -> None:
+    """查看依赖的详细信息和可用版本
+    
+    示例：
+      mpdt depend info requests
+      mpdt depend info some-plugin --type plugin
+    """
+    from mpdt.commands.depend import depend_info
+
+    try:
+        depend_info(dependency=dependency, dep_type=dep_type)
+    except Exception as e:
+        print_error(f"获取信息失败: {e}")
+        raise click.Abort()
+
+
+@depend.command("remove")
+@click.argument("dependency")
+@click.option("--path", type=click.Path(), default=".", help="插件根目录（默认当前目录）")
+@click.option("--type", "dep_type", type=click.Choice(["auto", "plugin", "python"]), default="auto",
+              help="依赖类型（auto=自动判断）")
+def depend_remove_cmd(dependency: str, path: str, dep_type: str) -> None:
+    """从插件中移除依赖
+    
+    示例：
+      mpdt depend remove requests
+      mpdt depend remove some-plugin --type plugin
+    """
+    from mpdt.commands.depend import depend_remove
+
+    try:
+        depend_remove(plugin_path=path, dependency=dependency, dep_type=dep_type)
+    except Exception as e:
+        print_error(f"移除依赖失败: {e}")
+        raise click.Abort()
+
+
+@depend.command("list")
+@click.option("--path", type=click.Path(), default=".", help="插件根目录（默认当前目录）")
+@click.option("--type", "dep_type", type=click.Choice(["all", "plugin", "python"]), default="all",
+              help="依赖类型（all=全部，plugin=仅插件，python=仅Python包）")
+def depend_list_cmd(path: str, dep_type: str) -> None:
+    """列出插件的所有依赖
+    
+    示例：
+      mpdt depend list
+      mpdt depend list --type python
+    """
+    from mpdt.commands.depend import depend_list
+
+    try:
+        depend_list(plugin_path=path, dep_type=dep_type)
+    except Exception as e:
+        print_error(f"列出依赖失败: {e}")
+        raise click.Abort()
+
+
 def main() -> None:
     """主入口函数"""
     cli(obj={})
