@@ -153,9 +153,35 @@ def market_publish(
             need_push=True,
             need_release=True,
         )
-        if permission_result["repo_exists"]:
+        
+        # 检查权限检查是否成功
+        if not permission_result:
+            print_error("权限检查失败：无法连接到 GitHub 或发生未知错误")
+            return
+        
+        # 检查具体的权限
+        if permission_result.get("repo_exists"):
+            # 仓库存在，检查权限
+            if not permission_result.get("can_push"):
+                print_error(f"仓库 {resolved_owner}/{resolved_repo} 已存在但当前用户没有写入权限")
+                print_info("请确保你有该仓库的 push 权限，或使用不同的仓库名称")
+                return
+            if not permission_result.get("can_create_release"):
+                print_error(f"没有仓库 {resolved_owner}/{resolved_repo} 的 Release 管理权限")
+                print_info("请检查 GitHub Token 是否有足够的权限")
+                return
             print_success("权限检查通过：仓库已存在且有足够的权限")
         else:
+            # 仓库不存在，检查创建权限
+            if not permission_result.get("can_create_repo"):
+                is_user_repo = permission_result.get("is_user_repo", True)
+                if not is_user_repo:
+                    print_error(f"无法在组织 {resolved_owner} 中创建仓库")
+                    print_info("请确保你是组织成员并有创建仓库的权限")
+                else:
+                    print_error("GitHub Token 没有创建仓库的权限")
+                    print_info("请确保 Token 有 'repo' 或 'public_repo' 权限")
+                return
             print_success("权限检查通过：可以创建新仓库")
         
         # 6. 确保 GitHub 仓库存在
@@ -167,7 +193,6 @@ def market_publish(
                 manifest.get("summary") or manifest.get("description") or f"{plugin_id} 插件"
             ),
             private=private,
-            permission_check_result=permission_result,
         )
         repo_url = repository["html_url"]
         clone_url = repository["clone_url"]
@@ -196,22 +221,28 @@ def market_publish(
             print_info("正在推送到 GitHub...")
             branch = git_mgr.get_current_branch() or "main"
             
-            # 使用带 token 的 URL 推送
+            # 保存原始 remote URL
+            original_url = git_mgr.get_remote_url("origin")
+            
+            # 临时更新 origin 为带 token 的 URL
             push_url = GitManager.build_github_push_url(
                 resolved_owner, resolved_repo, resolved_github_token
             )
-            git_mgr.set_remote(push_url, "origin_temp")
+            git_mgr.set_remote(push_url, "origin")
             
-            success, msg = git_mgr.push("origin_temp", branch)
+            # 推送分支并设置上游跟踪
+            success, msg = git_mgr.push("origin", branch, set_upstream=True)
             if not success:
                 print_warning(f"推送分支失败: {msg}")
             
-            success, msg = git_mgr.push_tag(tag, "origin_temp")
+            # 推送标签
+            success, msg = git_mgr.push_tag(tag, "origin")
             if not success:
                 print_warning(f"推送标签失败: {msg}")
             
-            # 恢复原始远程 URL
-            git_mgr.set_remote(clone_url)
+            # 恢复原始 remote URL
+            if original_url:
+                git_mgr.set_remote(original_url, "origin")
             
             print_success("代码已推送")
         else:
@@ -459,16 +490,21 @@ def market_package_new_version(
             need_release=True,
         )
         
-        if not permission_result["repo_exists"]:
+        # 检查权限检查是否成功
+        if not permission_result:
+            print_error("✗ 权限检查失败：无法连接到 GitHub 或发生未知错误")
+            return
+        
+        if not permission_result.get("repo_exists"):
             print_error(f"✗ 仓库 {resolved_owner}/{resolved_repo} 不存在")
             print_info("请先使用 'mpdt market publish' 创建仓库")
             return
         
-        if not permission_result["can_push"]:
+        if not permission_result.get("can_push"):
             print_error(f"✗ 没有仓库 {resolved_owner}/{resolved_repo} 的推送权限")
             return
         
-        if not permission_result["can_create_release"]:
+        if not permission_result.get("can_create_release"):
             print_error(f"✗ 没有仓库 {resolved_owner}/{resolved_repo} 的 Release 创建权限")
             return
         
@@ -550,23 +586,32 @@ def market_package_new_version(
             print_info("正在推送到 GitHub...")
             branch = git_mgr.get_current_branch() or "main"
             
-            # 使用带 token 的 URL 推送
+            # 保存原始 remote URL
+            original_url = git_mgr.get_remote_url("origin")
+            
+            # 临时更新 origin 为带 token 的 URL
             push_url = GitManager.build_github_push_url(
                 resolved_owner, resolved_repo, resolved_github_token
             )
-            git_mgr.set_remote(push_url, "origin_temp")
+            git_mgr.set_remote(push_url, "origin")
             
-            success, msg = git_mgr.push("origin_temp", branch)
+            # 推送分支并设置上游跟踪
+            success, msg = git_mgr.push("origin", branch, set_upstream=True)
             if not success:
                 print_warning(f"推送分支失败: {msg}")
             
-            success, msg = git_mgr.push_tag(tag, "origin_temp")
+            # 推送标签
+            success, msg = git_mgr.push_tag(tag, "origin")
             if not success:
                 print_error(f"推送标签失败: {msg}")
+                # 恢复原始 URL 后返回
+                if original_url:
+                    git_mgr.set_remote(original_url, "origin")
                 return
             
-            # 恢复原始远程 URL
-            git_mgr.set_remote(clone_url)
+            # 恢复原始 remote URL
+            if original_url:
+                git_mgr.set_remote(original_url, "origin")
             
             print_success("代码已推送")
         else:

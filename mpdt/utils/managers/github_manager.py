@@ -52,162 +52,155 @@ class GitHubManager:
     ) -> dict[str, Any]:
         """统一权限检查
         
-        在开始 GitHub 操作前检查所有需要的权限：
-        - 仓库访问权限
-        - Push 权限（如果需要）
-        - Release 管理权限（如果需要）
-        - 创建仓库的权限（如果仓库不存在）
+        在开始 GitHub 操作前检查所有需要的权限。
+        不抛出异常，只返回权限状态，由调用方自行处理。
         
         Args:
             owner: 仓库所有者
             repo: 仓库名称
-            need_push: 是否需要 push 权限
-            need_release: 是否需要 release 权限
+            need_push: 是否检查 push 权限
+            need_release: 是否检查 release 权限
             
         Returns:
             权限检查结果字典，包含：
             - repo_exists: 仓库是否存在
-            - repo_info: 仓库信息（如果存在）
             - is_user_repo: 是否是用户仓库（而非组织仓库）
+            - repo_info: 仓库信息（如果存在，否则为 None）
+            - can_push: 是否有 push 权限
+            - can_create_release: 是否有创建 release 权限
+            - can_create_repo: 是否可以创建仓库
             
-        Raises:
-            GitHubError: 权限不足或权限检查失败
+            如果检查过程出现异常，返回空字典 {}
         """
-        user = await self.get_current_user()
-        username = user.get("login", "")
-        is_user_repo = owner.lower() == username.lower()
-        
-        # 1. 检查仓库是否存在
-        repo_info = await self.get_repo(owner, repo)
-        
-        if repo_info:
-            # 仓库存在 - 检查权限
-            permissions = repo_info.get("permissions")
+        try:
+            user = await self.get_current_user()
+            username = user.get("login", "")
+            is_user_repo = owner.lower() == username.lower()
             
-            # 检查 push 权限
-            if need_push:
-                has_push = (
-                    permissions is not None
-                    and (permissions.get("push") or permissions.get("admin"))
-                )
-                if not has_push:
-                    raise GitHubError(
-                        f"仓库 {owner}/{repo} 已存在但当前用户没有写入权限。"
-                        "请确保你有该仓库的 push 权限，或使用不同的仓库名称。"
-                    )
+            # 1. 检查仓库是否存在
+            repo_info = await self.get_repo(owner, repo)
             
-            # 检查 release 权限（通过尝试列出 releases 来验证）
-            if need_release:
-                try:
-                    await self._request(
-                        "GET",
-                        f"{self._base_url}/repos/{owner}/{repo}/releases",
-                        params={"per_page": "1"},
-                    )
-                except GitHubError as e:
-                    if "HTTP_403" in str(e):
-                        raise GitHubError(
-                            f"没有仓库 {owner}/{repo} 的 Release 管理权限。"
-                            "请检查 GitHub Token 是否有足够的权限。"
-                        )
-                    # 其他错误可以忽略（如 404 表示没有 releases，但这是正常的）
-            
-            return {
-                "repo_exists": True,
-                "repo_info": repo_info,
-                "is_user_repo": is_user_repo,
-            }
-        else:
-            # 仓库不存在 - 检查是否有创建权限
-            if not is_user_repo:
-                # 组织仓库 - 检查组织成员身份和权限
-                try:
-                    await self._request(
-                        "GET",
-                        f"{self._base_url}/orgs/{owner}/members/{username}"
-                    )
-                except GitHubError as e:
-                    if "HTTP_404" in str(e):
-                        raise GitHubError(
-                            f"组织 {owner} 不存在，或你不是该组织的成员。"
-                            "请检查组织名称是否正确。"
-                        )
-                    raise
+            if repo_info:
+                # 仓库存在 - 检查权限
+                permissions = repo_info.get("permissions")
                 
-                # 检查在组织中创建仓库的权限（通过检查用户在组织中的角色）
-                try:
-                    result = await self._request(
-                        "GET",
-                        f"{self._base_url}/orgs/{owner}/memberships/{username}",
-                        return_headers=True,
-                    )
-                    membership = cast(tuple[dict[str, Any], dict[str, str]], result)[0]
-                    role = membership.get("role")
-                    # admin 可以创建仓库，member 需要组织设置允许
-                    if role != "admin":
-                        # 获取组织设置
-                        result2 = await self._request(
+                # 检查 push 权限
+                can_push = False
+                if need_push and permissions is not None:
+                    can_push = bool(permissions.get("push") or permissions.get("admin"))
+                
+                # 检查 release 权限（通过尝试列出 releases 来验证）
+                can_create_release = False
+                if need_release:
+                    try:
+                        await self._request(
                             "GET",
-                            f"{self._base_url}/orgs/{owner}",
+                            f"{self._base_url}/repos/{owner}/{repo}/releases",
+                            params={"per_page": "1"},
+                        )
+                        can_create_release = True
+                    except GitHubError as e:
+                        if "HTTP_403" not in str(e):
+                            # 其他错误可以忽略（如 404 表示没有 releases，但这是正常的）
+                            can_create_release = True
+                
+                return {
+                    "repo_exists": True,
+                    "is_user_repo": is_user_repo,
+                    "repo_info": repo_info,
+                    "can_push": can_push,
+                    "can_create_release": can_create_release,
+                    "can_create_repo": False,
+                }
+            else:
+                # 仓库不存在 - 检查是否有创建权限
+                can_create_repo = True  # 默认可以创建
+                
+                if not is_user_repo:
+                    # 组织仓库 - 检查组织成员身份和权限
+                    try:
+                        await self._request(
+                            "GET",
+                            f"{self._base_url}/orgs/{owner}/members/{username}"
+                        )
+                    except GitHubError as e:
+                        if "HTTP_404" in str(e):
+                            # 不是组织成员，无法创建
+                            can_create_repo = False
+                            return {
+                                "repo_exists": False,
+                                "is_user_repo": is_user_repo,
+                                "repo_info": None,
+                                "can_push": False,
+                                "can_create_release": False,
+                                "can_create_repo": can_create_repo,
+                            }
+                        # 其他错误继续
+                    
+                    # 检查在组织中创建仓库的权限（通过检查用户在组织中的角色）
+                    try:
+                        result = await self._request(
+                            "GET",
+                            f"{self._base_url}/orgs/{owner}/memberships/{username}",
                             return_headers=True,
                         )
-                        org_info = cast(tuple[dict[str, Any], dict[str, str]], result2)[0]
-                        members_can_create = org_info.get("members_can_create_repositories", False)
-                        if not members_can_create:
-                            raise GitHubError(
-                                f"你没有在组织 {owner} 中创建仓库的权限。"
-                                "请联系组织管理员授予权限。"
+                        membership = cast(tuple[dict[str, Any], dict[str, str]], result)[0]
+                        role = membership.get("role")
+                        # admin 可以创建仓库，member 需要组织设置允许
+                        if role != "admin":
+                            # 获取组织设置
+                            result2 = await self._request(
+                                "GET",
+                                f"{self._base_url}/orgs/{owner}",
+                                return_headers=True,
                             )
-                except GitHubError as e:
-                    if "HTTP_403" in str(e) or "HTTP_404" in str(e):
-                        raise GitHubError(
-                            f"无法验证在组织 {owner} 中创建仓库的权限。"
-                            "请确保你有足够的权限。"
+                            org_info = cast(tuple[dict[str, Any], dict[str, str]], result2)[0]
+                            members_can_create = org_info.get("members_can_create_repositories", False)
+                            can_create_repo = members_can_create
+                    except GitHubError as e:
+                        if "HTTP_403" in str(e) or "HTTP_404" in str(e):
+                            # 无法验证权限，标记为不能创建
+                            can_create_repo = False
+                
+                # 用户仓库或已验证组织权限 - 检查 token 是否有创建仓库的权限
+                if can_create_repo:
+                    try:
+                        # 获取 token 的 scopes 信息
+                        result = await self._request(
+                            "GET",
+                            f"{self._base_url}/user",
+                            expect_json=True,
+                            return_headers=True,
                         )
-                    raise
-            
-            # 用户仓库或已验证组织权限 - 检查 token 是否有创建仓库的权限
-            # 通过解析 token 的 scopes（从响应头获取）
-            try:
-                # 获取 token 的 scopes 信息
-                result = await self._request(
-                    "GET",
-                    f"{self._base_url}/user",
-                    expect_json=True,
-                    return_headers=True,
-                )
-                response_headers = cast(tuple[dict[str, Any], dict[str, str]], result)[1]
+                        response_headers = cast(tuple[dict[str, Any], dict[str, str]], result)[1]
+                        
+                        # 解析 X-OAuth-Scopes 头
+                        scopes_header = response_headers.get("X-OAuth-Scopes", "")
+                        scopes = [s.strip() for s in scopes_header.split(",") if s.strip()]
+                        
+                        # 检查是否有仓库相关权限
+                        has_repo_permission = any(
+                            scope in scopes
+                            for scope in ["repo", "public_repo"]
+                        )
+                        
+                        if not has_repo_permission:
+                            can_create_repo = False
+                    except Exception:
+                        # 无法验证 token 权限，标记为不能创建
+                        can_create_repo = False
                 
-                # 解析 X-OAuth-Scopes 头
-                scopes_header = response_headers.get("X-OAuth-Scopes", "")
-                scopes = [s.strip() for s in scopes_header.split(",") if s.strip()]
-                
-                # 检查是否有仓库相关权限
-                has_repo_permission = any(
-                    scope in scopes
-                    for scope in ["repo", "public_repo"]
-                )
-                
-                if not has_repo_permission:
-                    raise GitHubError(
-                        f"GitHub Token 没有创建仓库的权限。"
-                        f"当前 scopes: {', '.join(scopes) or '(无)'}"
-                        f"请确保 Token 有 'repo' 或 'public_repo' 权限。"
-                    )
-            except GitHubError:
-                # 如果是我们自己抛出的权限错误，直接传递
-                raise
-            except Exception as e:
-                # 其他异常（如网络错误），提供友好提示
-                raise GitHubError(
-                    f"无法验证 GitHub Token 权限: {e}"
-                )
-            
-            return {
-                "repo_exists": False,
-                "repo_info": None,
-                "is_user_repo": is_user_repo,
-            }
+                return {
+                    "repo_exists": False,
+                    "is_user_repo": is_user_repo,
+                    "repo_info": None,
+                    "can_push": False,
+                    "can_create_release": False,
+                    "can_create_repo": can_create_repo,
+                }
+        except Exception:
+            # 顶层异常处理：任何未捕获的异常都返回空字典
+            return {}
 
     async def get_repo(self, owner: str, repo: str) -> dict[str, Any] | None:
         """获取仓库信息

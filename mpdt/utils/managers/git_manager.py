@@ -498,6 +498,7 @@ config/local_*.toml
         branch: str | None = None,
         tags: bool = False,
         force: bool = False,
+        set_upstream: bool = False,
     ) -> tuple[bool, str]:
         """推送到远程仓库
         
@@ -506,15 +507,21 @@ config/local_*.toml
             branch: 分支名称，None 表示当前分支
             tags: 是否推送标签
             force: 是否强制推送
+            set_upstream: 是否设置上游分支（-u）
             
         Returns:
             (是否成功, 消息)
         """
         try:
-            cmd = ["git", "push", remote]
+            cmd = ["git", "push"]
+            
+            if set_upstream:
+                cmd.append("-u")
             
             if force:
                 cmd.append("--force")
+            
+            cmd.append(remote)
             
             if tags:
                 cmd.append("--tags")
