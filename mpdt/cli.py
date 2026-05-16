@@ -190,6 +190,98 @@ def plugin_dev(ctx: click.Context, neo_mofox_path: str | None, plugin_path: str 
 
 
 @cli.group()
+def market() -> None:
+    """插件市场管理"""
+    pass
+
+
+@market.command("publish")
+@click.argument("plugin_path", type=click.Path(), required=False, default=".")
+@click.option("--token", help="市场访问令牌")
+@click.option("--github-token", help="GitHub Personal Access Token")
+@click.option("--owner", help="GitHub 用户或组织名")
+@click.option("--repo", help="GitHub 仓库名（默认使用插件 ID）")
+@click.option("--private", is_flag=True, help="创建私有仓库")
+@click.option("--output", "output_dir", type=click.Path(), default="dist", help="输出目录")
+@click.option("--with-docs", is_flag=True, help="包含文档")
+@click.option("--release-notes", help="Release 说明")
+@click.option("--skip-push", is_flag=True, help="跳过 Git 推送")
+@click.option("--save-github-token/--no-save-github-token", default=None, help="是否保存 GitHub Token")
+def market_publish_cmd(
+    plugin_path: str,
+    token: str | None,
+    github_token: str | None,
+    owner: str | None,
+    repo: str | None,
+    private: bool,
+    output_dir: str,
+    with_docs: bool,
+    release_notes: str | None,
+    skip_push: bool,
+    save_github_token: bool | None,
+) -> None:
+    """一键发布插件到市场
+    
+    完整流程：构建 -> GitHub 仓库 -> Release -> 市场注册
+    """
+    from mpdt.commands.market import market_publish
+
+    try:
+        market_publish(
+            plugin_path=plugin_path,
+            token=token,
+            github_token=github_token,
+            owner=owner,
+            repo=repo,
+            private=private,
+            output_dir=output_dir,
+            with_docs=with_docs,
+            release_notes=release_notes,
+            skip_push=skip_push,
+            save_token=save_github_token,
+        )
+    except Exception as e:
+        print_error(f"发布失败: {e}")
+        raise click.Abort()
+
+
+@market.command("search")
+@click.argument("query", required=False)
+@click.option("--category", help="分类过滤")
+@click.option("--tag", help="标签过滤")
+@click.option("--limit", type=int, default=20, help="返回数量")
+def market_search_cmd(
+    query: str | None, category: str | None, tag: str | None, limit: int
+) -> None:
+    """搜索公开插件"""
+    from mpdt.commands.market import market_search
+
+    try:
+        market_search(
+            query=query,
+            category=category,
+            tag=tag,
+            limit=limit,
+        )
+    except Exception as e:
+        print_error(f"搜索失败: {e}")
+        raise click.Abort()
+
+
+@market.command("info")
+@click.argument("plugin_id")
+def market_info_cmd(plugin_id: str) -> None:
+    """查看公开插件详情"""
+    from mpdt.commands.market import market_info
+
+    try:
+        market_info(plugin_id=plugin_id)
+    except Exception as e:
+        print_error(f"查询失败: {e}")
+        raise click.Abort()
+
+
+@cli.group()
 def config() -> None:
     """配置管理"""
     pass
@@ -228,6 +320,8 @@ def config_show() -> None:
 
         table.add_row("配置文件", str(config.config_path))
         table.add_row("Neo-MoFox 路径", str(config.mofox_path) if config.mofox_path else "[red]未配置[/red]")
+        table.add_row("市场地址", config.market_url)
+        table.add_row("GitHub Token", "已配置" if config.github_token else "[yellow]未配置[/yellow]")
         table.add_row("自动重载", "是" if config.auto_reload else "否")
         table.add_row("重载延迟", f"{config.reload_delay}秒")
 
@@ -293,6 +387,73 @@ def config_set_mofox(path: str) -> None:
         config.save()
 
         print_success(f"Neo-MoFox 路径已设置: {path}")
+
+    except Exception as e:
+        print_error(f"设置失败: {e}")
+        raise click.Abort()
+
+
+@config.command("set-github-token")
+@click.option("--token", prompt="GitHub Token", hide_input=True, help="GitHub Personal Access Token")
+def config_set_github_token(token: str) -> None:
+    """设置 GitHub Token（用于插件市场发布）"""
+    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
+
+    try:
+        if not token or not token.strip():
+            print_error("GitHub Token 不能为空")
+            raise click.Abort()
+
+        config = get_or_init_mpdt_config()
+        config.github_token = token.strip()
+        config.save()
+
+        print_success("GitHub Token 已保存")
+        print_info("提示：您现在可以使用 'mpdt market publish' 命令发布插件到市场")
+
+    except Exception as e:
+        print_error(f"设置失败: {e}")
+        raise click.Abort()
+
+
+@config.command("clear-github-token")
+def config_clear_github_token() -> None:
+    """清除已保存的 GitHub Token"""
+    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
+
+    try:
+        config = get_or_init_mpdt_config()
+        
+        if not config.github_token:
+            print_warning("未找到已保存的 GitHub Token")
+            return
+
+        config.clear_github_token()
+        config.save()
+
+        print_success("GitHub Token 已清除")
+
+    except Exception as e:
+        print_error(f"清除失败: {e}")
+        raise click.Abort()
+
+
+@config.command("set-market-url")
+@click.argument("url")
+def config_set_market_url(url: str) -> None:
+    """设置插件市场镜像源地址"""
+    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
+
+    try:
+        if not url or not url.strip():
+            print_error("市场地址不能为空")
+            raise click.Abort()
+
+        config = get_or_init_mpdt_config()
+        config.market_url = url.strip()
+        config.save()
+
+        print_success(f"市场地址已设置: {config.market_url}")
 
     except Exception as e:
         print_error(f"设置失败: {e}")

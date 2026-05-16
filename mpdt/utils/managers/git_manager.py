@@ -363,3 +363,210 @@ config/local_*.toml
             GitManager 实例
         """
         return cls(path)
+
+    # ========== 市场发布相关功能 ==========
+
+    def has_remote(self, name: str = "origin") -> bool:
+        """检查远程仓库是否存在
+        
+        Args:
+            name: 远程仓库名称
+            
+        Returns:
+            是否存在
+        """
+        return self.get_remote_url(name) is not None
+
+    def set_remote(self, url: str, name: str = "origin") -> tuple[bool, str]:
+        """设置或更新远程仓库 URL
+        
+        Args:
+            url: 远程仓库 URL
+            name: 远程仓库名称
+            
+        Returns:
+            (是否成功, 消息)
+        """
+        try:
+            if self.has_remote(name):
+                subprocess.run(
+                    ["git", "remote", "set-url", name, url],
+                    cwd=self.work_dir,
+                    check=True,
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="ignore",
+                )
+            else:
+                subprocess.run(
+                    ["git", "remote", "add", name, url],
+                    cwd=self.work_dir,
+                    check=True,
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="ignore",
+                )
+            return True, f"远程仓库 {name} 已设置"
+        except subprocess.CalledProcessError as e:
+            return False, f"设置远程仓库失败: {e}"
+
+    def has_commits(self) -> bool:
+        """检查仓库是否有提交记录
+        
+        Returns:
+            是否有提交
+        """
+        try:
+            subprocess.run(
+                ["git", "rev-parse", "--verify", "HEAD"],
+                cwd=self.work_dir,
+                check=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="ignore",
+            )
+            return True
+        except subprocess.CalledProcessError:
+            return False
+
+    def ensure_commit(self, message: str) -> tuple[bool, str]:
+        """确保有提交（如果有未提交的更改就提交）
+        
+        Args:
+            message: 提交消息
+            
+        Returns:
+            (是否成功, 消息)
+        """
+        # 添加所有文件
+        success, msg = self.add()
+        if not success:
+            return False, msg
+
+        # 检查是否有更改
+        success, status = self.get_status()
+        if not success:
+            return False, f"获取状态失败: {status}"
+
+        # 如果没有更改且已有提交，直接返回
+        if not status.strip() and self.has_commits():
+            return True, "无需提交"
+
+        # 提交更改
+        return self.commit(message)
+
+    def tag_exists(self, tag: str) -> bool:
+        """检查标签是否存在
+        
+        Args:
+            tag: 标签名称
+            
+        Returns:
+            是否存在
+        """
+        try:
+            result = subprocess.run(
+                ["git", "tag", "--list", tag],
+                cwd=self.work_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+                check=False,
+            )
+            return bool(result.stdout.strip())
+        except Exception:
+            return False
+
+    def ensure_tag(self, tag: str, message: str | None = None) -> tuple[bool, str]:
+        """确保标签存在（不存在则创建）
+        
+        Args:
+            tag: 标签名称
+            message: 标签消息
+            
+        Returns:
+            (是否成功, 消息)
+        """
+        if self.tag_exists(tag):
+            return True, f"标签 {tag} 已存在"
+        return self.create_tag(tag, message)
+
+    def push(
+        self,
+        remote: str = "origin",
+        branch: str | None = None,
+        tags: bool = False,
+        force: bool = False,
+    ) -> tuple[bool, str]:
+        """推送到远程仓库
+        
+        Args:
+            remote: 远程仓库名称
+            branch: 分支名称，None 表示当前分支
+            tags: 是否推送标签
+            force: 是否强制推送
+            
+        Returns:
+            (是否成功, 消息)
+        """
+        try:
+            cmd = ["git", "push", remote]
+            
+            if force:
+                cmd.append("--force")
+            
+            if tags:
+                cmd.append("--tags")
+            elif branch:
+                cmd.extend([f"HEAD:{branch}"])
+            
+            subprocess.run(
+                cmd,
+                cwd=self.work_dir,
+                check=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="ignore",
+            )
+            return True, "推送成功"
+        except subprocess.CalledProcessError as e:
+            return False, f"推送失败: {e.stderr if hasattr(e, 'stderr') else str(e)}"
+
+    def push_tag(self, tag: str, remote: str = "origin") -> tuple[bool, str]:
+        """推送指定标签到远程仓库
+        
+        Args:
+            tag: 标签名称
+            remote: 远程仓库名称
+            
+        Returns:
+            (是否成功, 消息)
+        """
+        try:
+            subprocess.run(
+                ["git", "push", remote, tag],
+                cwd=self.work_dir,
+                check=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="ignore",
+            )
+            return True, f"标签 {tag} 推送成功"
+        except subprocess.CalledProcessError as e:
+            return False, f"推送标签失败: {e}"
+
+    @staticmethod
+    def build_github_push_url(owner: str, repo: str, token: str) -> str:
+        """构建带认证的 GitHub 推送 URL
+        
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            token: GitHub Token
+            
+        Returns:
+            GitHub 推送 URL
+        """
+        from urllib.parse import quote
+        return f"https://x-access-token:{quote(token, safe='')}@github.com/{owner}/{repo}.git"

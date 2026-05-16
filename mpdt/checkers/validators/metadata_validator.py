@@ -2,7 +2,7 @@
 插件元数据验证器
 """
 
-from mpdt.utils.managers.manifest_manager import ManifestManager
+from mpdt.utils.managers.manifest_manager import ALLOWED_CATEGORIES, ManifestManager
 from ..base import BaseValidator, ValidationResult
 
 
@@ -16,7 +16,7 @@ class MetadataValidator(BaseValidator):
     REQUIRED_FIELDS = ["name", "version", "description", "author", "dependencies", "entry_point"]
 
     # 推荐的元数据字段
-    RECOMMENDED_FIELDS = ["min_core_version", "include"]
+    RECOMMENDED_FIELDS = ["min_core_version", "include", "categories", "tags"]
 
     def validate(self) -> ValidationResult:
         """执行清单验证
@@ -170,5 +170,39 @@ class MetadataValidator(BaseValidator):
                     f"版本号格式建议使用语义化版本（如 1.0.0）: {version}",
                     file_path="manifest.json",
                 )
+
+        # 验证 categories（分类）
+        categories = manifest_manager.get_categories()
+        if not categories:
+            self.result.add_warning(
+                "manifest.json 缺少 categories 字段",
+                file_path="manifest.json",
+                suggestion=f"请添加 categories 字段，取值范围: {', '.join(ALLOWED_CATEGORIES)}",
+            )
+        elif len(categories) != 1:
+            self.result.add_warning(
+                f"categories 必须只包含一个值（当前: {len(categories)} 个）",
+                file_path="manifest.json",
+                suggestion=f"请选择一个分类: {', '.join(ALLOWED_CATEGORIES)}",
+            )
+        elif categories[0] not in ALLOWED_CATEGORIES:
+            self.result.add_warning(
+                f"categories 的值 '{categories[0]}' 不在允许的范围内",
+                file_path="manifest.json",
+                suggestion=f"允许的分类: {', '.join(ALLOWED_CATEGORIES)}",
+            )
+        else:
+            self.result.add_info(f"categories 验证通过: {categories[0]}")
+
+        # 验证 tags（标签）
+        tags = manifest_manager.get_tags()
+        if not tags:
+            self.result.add_warning(
+                "manifest.json 缺少 tags 字段或 tags 为空",
+                file_path="manifest.json",
+                suggestion="请添加至少一个标签（多个标签用数组表示）",
+            )
+        else:
+            self.result.add_info(f"tags 验证通过: {len(tags)} 个标签")
 
         return self.result

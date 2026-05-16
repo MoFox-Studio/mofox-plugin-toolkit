@@ -7,6 +7,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+# 允许的插件分类
+ALLOWED_CATEGORIES = ("tool", "chat", "fun", "information", "moderation")
+
 
 class ManifestManager:
     """Manifest.json 统一管理器
@@ -443,3 +446,283 @@ class ManifestManager:
             ManifestManager 实例
         """
         return cls(plugin_path)
+
+    # ========== 插件市场相关功能 ==========
+
+    def get_plugin_id(self) -> str:
+        """获取插件 ID（插件名称）
+        
+        Returns:
+            插件 ID
+            
+        Raises:
+            ValueError: 如果 manifest 不存在或缺少 name 字段
+        """
+        manifest = self.load()
+        if not manifest:
+            raise ValueError("无法加载 manifest.json")
+        
+        plugin_id = manifest.get("name", "").strip()
+        if not plugin_id:
+            raise ValueError("manifest.json 缺少 name 字段")
+        
+        return plugin_id
+
+    def get_version(self) -> str:
+        """获取插件版本号
+        
+        Returns:
+            版本号
+            
+        Raises:
+            ValueError: 如果 manifest 不存在或缺少 version 字段
+        """
+        manifest = self.load()
+        if not manifest:
+            raise ValueError("无法加载 manifest.json")
+        
+        version = manifest.get("version", "").strip()
+        if not version:
+            raise ValueError("manifest.json 缺少 version 字段")
+        
+        return version
+
+    def build_market_plugin_payload(
+        self, repository_url: str | None = None
+    ) -> dict[str, Any]:
+        """构建插件市场注册 payload
+        
+        Args:
+            repository_url: 仓库 URL，不提供则使用 manifest 中的或默认值
+            
+        Returns:
+            插件注册 payload
+            
+        Raises:
+            ValueError: 如果 manifest 数据不完整
+        """
+        manifest = self.load()
+        if not manifest:
+            raise ValueError("无法加载 manifest.json")
+
+        plugin_id = manifest.get("name", "").strip()
+        if not plugin_id:
+            raise ValueError("manifest.json 缺少 name 字段")
+
+        # 解析仓库 URL
+        repo = (
+            repository_url
+            or manifest.get("repository_url")
+            or f"https://github.com/MoFox-Studio/{plugin_id}"
+        )
+
+        # 提取维护者列表
+        maintainers = manifest.get("maintainers")
+        if isinstance(maintainers, list) and maintainers:
+            maintainer_list = [str(item) for item in maintainers]
+        else:
+            author = str(manifest.get("author", "mock-author")).strip()
+            maintainer_list = [author or "mock-author"]
+
+        return {
+            "plugin_id": plugin_id,
+            "display_name": str(manifest.get("display_name") or plugin_id),
+            "summary": str(
+                manifest.get("summary")
+                or manifest.get("description")
+                or f"{plugin_id} 插件"
+            ),
+            "description": str(manifest.get("description") or ""),
+            "homepage": manifest.get("homepage") or repo,
+            "repository_url": repo,
+            "license": str(manifest.get("license") or "UNKNOWN"),
+            "categories": list(manifest.get("categories") or []),
+            "tags": list(manifest.get("tags") or []),
+            "maintainers": maintainer_list,
+        }
+
+    def build_market_version_payload(
+        self,
+        asset_name: str,
+        asset_download_url: str,
+        release_url: str,
+        sha256: str,
+        file_size: int,
+    ) -> dict[str, Any]:
+        """构建插件市场版本提交 payload
+        
+        Args:
+            asset_name: 资产文件名
+            asset_download_url: 资产下载 URL
+            release_url: Release 页面 URL
+            sha256: 文件 SHA256 校验和
+            file_size: 文件大小（字节）
+            
+        Returns:
+            版本提交 payload
+            
+        Raises:
+            ValueError: 如果 manifest 数据不完整
+        """
+        manifest = self.load()
+        if not manifest:
+            raise ValueError("无法加载 manifest.json")
+
+        plugin_id = manifest.get("name", "").strip()
+        version = manifest.get("version", "").strip()
+        if not plugin_id or not version:
+            raise ValueError("manifest.json 必须包含 name 和 version 字段")
+
+        return {
+            "version": version,
+            "release_tag": self.build_release_tag(version),
+            "release_title": f"{plugin_id} {version}",
+            "release_url": release_url,
+            "asset_name": asset_name,
+            "asset_download_url": asset_download_url,
+            "checksum_sha256": sha256,
+            "file_size": file_size,
+            "is_prerelease": "-" in version,
+            "plugin_api_version": str(manifest.get("plugin_api_version") or "1.0"),
+            "min_host_version": str(
+                manifest.get("min_host_version")
+                or manifest.get("min_core_version")
+                or "1.0.0"
+            ),
+            "max_host_version": manifest.get("max_host_version"),
+            "supported_platforms": list(
+                manifest.get("supported_platforms") or ["all"]
+            ),
+        }
+
+    @staticmethod
+    def build_release_tag(version: str) -> str:
+        """构建 Release 标签名称
+        
+        Args:
+            version: 版本号
+            
+        Returns:
+            标签名称（格式：v{version}）
+        """
+        return version if version.startswith("v") else f"v{version}"
+
+    def build_default_release_url(self) -> str:
+        """构建默认的 Release URL
+        
+        Returns:
+            Release URL
+            
+        Raises:
+            ValueError: 如果 manifest 数据不完整
+        """
+        plugin_id = self.get_plugin_id()
+        version = self.get_version()
+        plugin_id = self.get_plugin_id()
+        tag = self.build_release_tag(version)
+        return f"https://github.com/MoFox-Studio/{plugin_id}/releases/tag/{tag}"
+
+    def build_default_asset_url(self, asset_name: str) -> str:
+        """构建默认的资产下载 URL
+        
+        Args:
+            asset_name: 资产文件名
+            
+        Returns:
+            资产下载 URL
+            
+        Raises:
+            ValueError: 如果 manifest 数据不完整
+        """
+        plugin_id = self.get_plugin_id()
+        version = self.get_version()
+        tag = self.build_release_tag(version)
+        return f"https://github.com/MoFox-Studio/{plugin_id}/releases/download/{tag}/{asset_name}"
+
+    # ========== 元数据验证相关功能 ==========
+
+    def get_categories(self) -> list[str]:
+        """获取标准化的分类列表
+        
+        Returns:
+            分类列表
+        """
+        manifest = self.load()
+        if not manifest:
+            return []
+        
+        value = manifest.get("categories")
+        if not isinstance(value, list):
+            return []
+        return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+    def get_tags(self) -> list[str]:
+        """获取标准化的标签列表
+        
+        Returns:
+            标签列表
+        """
+        manifest = self.load()
+        if not manifest:
+            return []
+        
+        value = manifest.get("tags")
+        if not isinstance(value, list):
+            return []
+        
+        normalized: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            tag = item.strip()
+            if tag and tag not in normalized:
+                normalized.append(tag)
+        return normalized
+
+    @staticmethod
+    def normalize_tags(raw_tags: str) -> list[str]:
+        """解析原始标签输入为去重的标签列表
+        
+        Args:
+            raw_tags: 原始标签字符串（逗号分隔）
+            
+        Returns:
+            标签列表
+        """
+        tags: list[str] = []
+        normalized_input = raw_tags.replace("，", ",").replace("\n", ",")
+        for part in normalized_input.split(","):
+            tag = part.strip()
+            if tag and tag not in tags:
+                tags.append(tag)
+        return tags
+
+    def set_categories(self, categories: list[str]) -> None:
+        """设置分类
+        
+        Args:
+            categories: 分类列表
+        """
+        manifest = self.load()
+        if manifest is None:
+            raise ValueError("无法加载 manifest.json")
+        
+        # 移除旧的单数形式字段
+        manifest.pop("category", None)
+        manifest["categories"] = categories
+        self.save(manifest)
+
+    def set_tags(self, tags: list[str]) -> None:
+        """设置标签
+        
+        Args:
+            tags: 标签列表
+        """
+        manifest = self.load()
+        if manifest is None:
+            raise ValueError("无法加载 manifest.json")
+        
+        # 移除旧的单数形式字段
+        manifest.pop("tag", None)
+        manifest["tags"] = tags
+        self.save(manifest)

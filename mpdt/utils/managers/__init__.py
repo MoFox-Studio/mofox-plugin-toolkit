@@ -7,6 +7,7 @@ MPDT 管理器模块
 from .config_manager import MPDTConfig, get_or_init_mpdt_config, interactive_config
 from .git_manager import GitManager
 from .manifest_manager import ManifestManager
+from .package_manager import PackageManager, PackageResult
 
 __all__ = [
     "MPDTConfig",
@@ -14,4 +15,6 @@ __all__ = [
     "interactive_config",
     "GitManager",
     "ManifestManager",
+    "PackageManager",
+    "PackageResult",
 ]

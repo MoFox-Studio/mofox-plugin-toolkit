@@ -5,7 +5,6 @@
 from .file_ops import *
 from .template_engine import *
 from .color_printer import *
-from .config_loader import *
 from .managers.config_manager import *
 from .plugin_parser import *
 from .license_generator import *
@@ -17,7 +16,6 @@ __all__ = [
     "file_ops",
     "template_engine",
     "color_printer",
-    "config_loader",
     "plugin_parser",
     "license_generator",
     "code_parser",

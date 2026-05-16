@@ -28,7 +28,7 @@ from mpdt.utils.color_printer import (
 )
 from mpdt.utils.file_ops import ensure_dir, safe_write_file, validate_plugin_name
 from mpdt.utils.license_generator import get_license_text
-from mpdt.utils.managers.manifest_manager import ManifestManager
+from mpdt.utils.managers.manifest_manager import ALLOWED_CATEGORIES, ManifestManager
 from mpdt.utils.managers.git_manager import GitManager
 
 # ============================================================================
@@ -45,6 +45,8 @@ def init_plugin(
     with_docs: bool = False,
     output_dir: str | None = None,
     init_git: bool | None = None,
+    categories: str | None = None,
+    tags: str | None = None,
 ) -> None:
     """
     初始化新插件
@@ -58,6 +60,8 @@ def init_plugin(
         with_docs: 是否创建文档
         output_dir: 输出目录
         init_git: 是否初始化 Git 仓库 (None 表示交互式询问)
+        categories: 插件分类（单个值，从允许的分类中选择）
+        tags: 插件标签（逗号分隔的字符串）
     """
     print_step("开始初始化插件...")
 
@@ -71,6 +75,8 @@ def init_plugin(
         license_type = plugin_info["license"]
         with_docs = plugin_info.get("with_docs", False)
         init_git = plugin_info.get("init_git", False)
+        categories = plugin_info.get("categories")
+        tags = plugin_info.get("tags")
 
     # 此时 plugin_name 必定不为 None
     assert plugin_name is not None
@@ -102,6 +108,8 @@ def init_plugin(
         email=email,
         license_type=license_type,
         with_docs=with_docs,
+        categories=categories,
+        tags=tags,
     )
 
     # 初始化 Git 仓库
@@ -186,6 +194,14 @@ def _interactive_init() -> dict[str, Any]:
             "邮箱地址:",
             default=git_info.get("email", ""),
         ),
+        categories=questionary.select(
+            "选择插件分类 (categories):",
+            choices=[questionary.Choice(item, value=item) for item in ALLOWED_CATEGORIES],
+        ),
+        tags=questionary.text(
+            "填写插件标签 (tags，多个标签用逗号分隔):",
+            validate=lambda x: bool(x.strip()) or "至少填写一个标签",
+        ),
         license=questionary.select(
             "选择开源协议:",
             choices=["GPL-v3.0", "MIT", "Apache-2.0", "BSD-3-Clause"],
@@ -215,6 +231,8 @@ def _create_plugin_structure(
     email: str | None,
     license_type: str,
     with_docs: bool,
+    categories: str | None,
+    tags: str | None,
 ) -> None:
     """创建插件目录结构"""
 
@@ -229,6 +247,14 @@ def _create_plugin_structure(
         template=template,
         description="",
     )
+    
+    # 设置分类和标签
+    if categories:
+        manifest_manager.set_categories([categories])
+    if tags:
+        normalized_tags = ManifestManager.normalize_tags(tags)
+        manifest_manager.set_tags(normalized_tags)
+    
     manifest_manager.save()
 
     # 创建 plugin.py
