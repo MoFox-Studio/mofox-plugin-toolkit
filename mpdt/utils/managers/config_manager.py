@@ -4,6 +4,7 @@ MPDT 配置管理器
 """
 
 from pathlib import Path
+from typing import Any
 
 import tomli
 import tomli_w
@@ -156,6 +157,121 @@ class MPDTConfig:
         """检查是否已配置"""
         return self.mofox_path is not None
 
+    def get_config(self, key: str) -> str | None:
+        """获取配置值（支持点号分隔的键）
+        
+        Args:
+            key: 配置键，如 "mofox.path" 或 "github.token"
+            
+        Returns:
+            配置值，如果不存在返回 None
+        """
+        keys = key.split(".")
+        value = self._config
+        
+        for k in keys:
+            if isinstance(value, dict):
+                value = value.get(k)
+            else:
+                return None
+                
+        return str(value) if value is not None else None
+
+    def set_config(self, key: str, value: str) -> None:
+        """设置配置值（支持点号分隔的键）
+        
+        Args:
+            key: 配置键，如 "mofox.path" 或 "github.token"
+            value: 配置值
+        """
+        keys = key.split(".")
+        
+        # 特殊处理某些配置项
+        actual_value: Any = value
+        if key == "mofox.path":
+            # 展开路径并转换为绝对路径
+            actual_value = str(Path(value).expanduser().absolute())
+        elif key in ["market.url", "pypi.index_url"]:
+            # 移除尾部斜杠
+            actual_value = value.rstrip("/")
+        elif key == "dev.auto_reload":
+            # 转换布尔值
+            actual_value = value.lower() in ("true", "yes", "1", "on")
+        elif key == "dev.reload_delay":
+            # 转换为浮点数
+            try:
+                actual_value = float(value)
+            except ValueError:
+                raise ValueError(f"reload_delay 必须是数字，得到: {value}")
+        
+        # 逐层创建字典并设置值
+        current = self._config
+        for i, k in enumerate(keys[:-1]):
+            if k not in current:
+                current[k] = {}
+            elif not isinstance(current[k], dict):
+                raise ValueError(f"配置键 '{'.'.join(keys[:i+1])}' 已存在且不是字典")
+            current = current[k]
+        
+        current[keys[-1]] = actual_value
+
+    def unset_config(self, key: str) -> bool:
+        """删除配置值（支持点号分隔的键）
+        
+        Args:
+            key: 配置键，如 "github.token"
+            
+        Returns:
+            是否成功删除
+        """
+        keys = key.split(".")
+        current = self._config
+        
+        # 导航到父字典
+        for k in keys[:-1]:
+            if not isinstance(current, dict) or k not in current:
+                return False
+            current = current[k]
+        
+        # 删除最后一个键
+        if isinstance(current, dict) and keys[-1] in current:
+            del current[keys[-1]]
+            
+            # 清理空的父字典
+            self._cleanup_empty_dicts()
+            return True
+        
+        return False
+
+    def _cleanup_empty_dicts(self) -> None:
+        """清理配置中的空字典"""
+        def clean(d: dict) -> dict:
+            return {
+                k: clean(v) if isinstance(v, dict) else v
+                for k, v in d.items()
+                if not (isinstance(v, dict) and not v)
+            }
+        
+        self._config = clean(self._config)
+
+    def list_all_configs(self) -> dict[str, str]:
+        """列出所有配置项（扁平化）
+        
+        Returns:
+            配置键值对字典
+        """
+        def flatten(d: dict, prefix: str = "") -> dict[str, str]:
+            result = {}
+            for k, v in d.items():
+                key = f"{prefix}.{k}" if prefix else k
+                if isinstance(v, dict):
+                    result.update(flatten(v, key))
+                else:
+                    result[key] = str(v)
+            return result
+        
+        return flatten(self._config)
+
 
 def get_or_init_mpdt_config() -> MPDTConfig:
     """获取或初始化全局配置实例（单例模式）
@@ -209,7 +325,7 @@ def interactive_config() -> MPDTConfig:
             config.github_token = github_token.strip()
             print_success("GitHub Token 已保存")
         else:
-            console.print("[yellow]未设置 GitHub Token，稍后可使用 'mpdt config set-github-token' 命令设置[/yellow]")
+            console.print("[yellow]未设置 GitHub Token，稍后可使用 'mpdt config edit github.token <token>' 命令设置[/yellow]")
 
     # 保存配置
     config.save()

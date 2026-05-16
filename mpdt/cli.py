@@ -446,117 +446,106 @@ def config_open() -> None:
         raise click.Abort()
 
 
-@config.command("set-mofox")
-@click.argument("path", type=click.Path(exists=True))
-def config_set_mofox(path: str) -> None:
-    """设置 Neo-MoFox 主程序路径"""
-    from pathlib import Path
+@config.command("edit")
+@click.argument("key", required=False)
+@click.argument("value", required=False)
+@click.option("--unset", is_flag=True, help="删除配置项")
+@click.option("--list", "list_all", is_flag=True, help="列出所有配置")
+def config_edit(key: str | None, value: str | None, unset: bool, list_all: bool) -> None:
+    """编辑配置项（类似 git config）
+    
+    支持的配置键：
+      - mofox.path: Neo-MoFox 主程序路径
+      - github.token: GitHub Personal Access Token
+      - market.url: 插件市场地址
+      - pypi.index_url: PyPI 镜像源地址
+      - dev.auto_reload: 自动重载（true/false）
+      - dev.reload_delay: 重载延迟（秒）
+    
+    示例：
+      mpdt config edit mofox.path /path/to/mofox
+      mpdt config edit github.token ghp_xxxxx
+      mpdt config edit --unset github.token
+      mpdt config edit --list
+    """
+    from rich.table import Table
 
     from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
 
     try:
         config = get_or_init_mpdt_config()
-        config.mofox_path = Path(path)
-        config.save()
 
-        print_success(f"Neo-MoFox 路径已设置: {path}")
+        # 列出所有配置
+        if list_all:
+            all_configs = config.list_all_configs()
+            if not all_configs:
+                print_warning("没有配置项")
+                print_info("请运行 mpdt config init 或 mpdt config edit <key> <value> 进行配置")
+                return
 
-    except Exception as e:
-        print_error(f"设置失败: {e}")
-        raise click.Abort()
+            table = Table(title="MPDT 配置")
+            table.add_column("配置键", style="cyan")
+            table.add_column("配置值", style="green")
 
+            for k, v in sorted(all_configs.items()):
+                # 隐藏敏感信息
+                if "token" in k.lower() and v:
+                    v = "***" + v[-4:] if len(v) > 4 else "***"
+                table.add_row(k, v)
 
-@config.command("set-github-token")
-@click.option("--token", prompt="GitHub Token", hide_input=True, help="GitHub Personal Access Token")
-def config_set_github_token(token: str) -> None:
-    """设置 GitHub Token（用于插件市场发布）"""
-    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
-
-    try:
-        if not token or not token.strip():
-            print_error("GitHub Token 不能为空")
-            raise click.Abort()
-
-        config = get_or_init_mpdt_config()
-        config.github_token = token.strip()
-        config.save()
-
-        print_success("GitHub Token 已保存")
-        print_info("提示：您现在可以使用 'mpdt market publish' 命令发布插件到市场")
-
-    except Exception as e:
-        print_error(f"设置失败: {e}")
-        raise click.Abort()
-
-
-@config.command("clear-github-token")
-def config_clear_github_token() -> None:
-    """清除已保存的 GitHub Token"""
-    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
-
-    try:
-        config = get_or_init_mpdt_config()
-        
-        if not config.github_token:
-            print_warning("未找到已保存的 GitHub Token")
+            console.print(table)
             return
 
-        config.clear_github_token()
-        config.save()
-
-        print_success("GitHub Token 已清除")
-
-    except Exception as e:
-        print_error(f"清除失败: {e}")
-        raise click.Abort()
-
-
-@config.command("set-market-url")
-@click.argument("url")
-def config_set_market_url(url: str) -> None:
-    """设置插件市场镜像源地址"""
-    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
-
-    try:
-        if not url or not url.strip():
-            print_error("市场地址不能为空")
+        # 检查参数
+        if not key:
+            print_error("请提供配置键")
+            print_info("使用 mpdt config edit --list 查看所有配置")
+            print_info("使用 mpdt config edit <key> <value> 设置配置")
             raise click.Abort()
 
-        config = get_or_init_mpdt_config()
-        config.market_url = url.strip()
+        # 删除配置
+        if unset:
+            if config.unset_config(key):
+                config.save()
+                print_success(f"已删除配置: {key}")
+            else:
+                print_warning(f"配置项不存在: {key}")
+            return
+
+        # 设置配置
+        if value is None:
+            # 只提供了 key，显示当前值
+            current_value = config.get_config(key)
+            if current_value is None:
+                print_warning(f"配置项未设置: {key}")
+            else:
+                # 隐藏敏感信息
+                if "token" in key.lower():
+                    display_value = "***" + current_value[-4:] if len(current_value) > 4 else "***"
+                else:
+                    display_value = current_value
+                print_info(f"{key} = {display_value}")
+            return
+
+        # 设置配置值
+        config.set_config(key, value)
         config.save()
+        
+        # 显示成功消息
+        if "token" in key.lower():
+            print_success(f"已设置: {key} = ***")
+        else:
+            print_success(f"已设置: {key} = {value}")
 
-        print_success(f"市场地址已设置: {config.market_url}")
-
+    except ValueError as e:
+        print_error(f"配置错误: {e}")
+        raise click.Abort()
     except Exception as e:
-        print_error(f"设置失败: {e}")
+        print_error(f"编辑配置失败: {e}")
         raise click.Abort()
 
 
-@config.command("set-pypi-index")
-@click.argument("url")
-def config_set_pypi_index(url: str) -> None:
-    """设置 PyPI 镜像源地址"""
-    from mpdt.utils.managers.config_manager import get_or_init_mpdt_config
 
-    try:
-        if not url or not url.strip():
-            print_error("PyPI 镜像源地址不能为空")
-            raise click.Abort()
-
-        config = get_or_init_mpdt_config()
-        config.pypi_index_url = url.strip()
-        config.save()
-
-        print_success(f"PyPI 镜像源已设置: {config.pypi_index_url}")
-        print_info("常用镜像源：")
-        print_info("  - 清华：https://pypi.tuna.tsinghua.edu.cn")
-        print_info("  - 阿里云：https://mirrors.aliyun.com/pypi")
-        print_info("  - 腾讯云：https://mirrors.cloud.tencent.com/pypi")
-
-    except Exception as e:
-        print_error(f"设置失败: {e}")
-        raise click.Abort()
 
 
 @cli.group()
