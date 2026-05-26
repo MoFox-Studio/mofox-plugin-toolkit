@@ -588,6 +588,9 @@ class ManifestManager:
         version = manifest.get("version", "").strip()
         if not plugin_id or not version:
             raise ValueError("manifest.json 必须包含 name 和 version 字段")
+        readme_markdown = self.load_readme_markdown() or str(
+            manifest.get("readme_markdown") or ""
+        )
 
         return {
             "version": version,
@@ -609,6 +612,7 @@ class ManifestManager:
             "supported_platforms": list(
                 manifest.get("supported_platforms") or ["all"]
             ),
+            "readme_markdown": readme_markdown,
         }
 
     @staticmethod
