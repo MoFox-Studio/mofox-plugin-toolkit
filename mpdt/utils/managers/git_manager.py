@@ -430,30 +430,28 @@ config/local_*.toml
             return False
 
     def ensure_commit(self, message: str) -> tuple[bool, str]:
-        """确保有提交（如果有未提交的更改就提交）
+        """确保仓库至少存在一个提交。
+        
+        仅在仓库完全没有提交记录时创建提交；如果仓库已有提交，
+        不会因为工作区存在未提交更改而自动产生新的发布提交。
         
         Args:
-            message: 提交消息
+            message: 首次提交时使用的提交消息
             
         Returns:
             (是否成功, 消息)
         """
-        # 添加所有文件
-        success, msg = self.add()
-        if not success:
-            return False, msg
+        if self.has_commits():
+            return True, "已有提交，无需创建新提交"
 
-        # 检查是否有更改
         success, status = self.get_status()
         if not success:
             return False, f"获取状态失败: {status}"
 
-        # 如果没有更改且已有提交，直接返回
-        if not status.strip() and self.has_commits():
-            return True, "无需提交"
+        if not status.strip():
+            return False, "仓库没有提交记录，且没有可提交的文件"
 
-        # 提交更改
-        return self.commit(message)
+        return self.commit(message, add_all=True)
 
     def tag_exists(self, tag: str) -> bool:
         """检查标签是否存在
