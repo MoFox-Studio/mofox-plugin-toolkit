@@ -191,8 +191,9 @@ def market_publish(
         git_mgr.set_remote(clone_url)
         
         # 确保有提交
-        print_info("正在提交代码...")
-        git_mgr.ensure_commit(f"Release {version}")
+        if not git_mgr.has_commits():
+            print_info("正在提交代码...")
+            git_mgr.ensure_commit(f"Release {version}")
         
         # 创建 tag
         tag = manifest_mgr.build_release_tag(version)
@@ -550,8 +551,9 @@ def market_package_new_version(
         git_mgr.set_remote(clone_url)
         
         # 确保有提交
-        print_info("正在提交代码...")
-        git_mgr.ensure_commit(f"Release {version}")
+        if not git_mgr.has_commits():
+            print_info("正在提交代码...")
+            git_mgr.ensure_commit(f"Release {version}")
         
         # 创建 tag
         print_info(f"正在创建标签: {tag}")
