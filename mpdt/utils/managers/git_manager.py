@@ -79,10 +79,10 @@ class GitManager:
             return False
 
     def is_git_repo(self) -> bool:
-        """检查当前目录是否是 Git 仓库
+        """检查当前目录是否属于某个 Git 仓库（可能是嵌套在父级仓库中）
 
         Returns:
-            是否是 Git 仓库
+            是否在某个 Git 仓库中
         """
         try:
             result = subprocess.run(
@@ -94,6 +94,47 @@ class GitManager:
             return result.returncode == 0
         except Exception:
             return False
+
+    def get_repo_root(self) -> str | None:
+        """获取 Git 仓库根目录的绝对路径
+
+        使用 git rev-parse --show-toplevel 获取仓库根目录，
+        在子目录中运行时也能正确返回顶层目录。
+
+        Returns:
+            仓库根目录路径字符串，如果不在任何 Git 仓库中则返回 None
+        """
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=self.work_dir,
+                capture_output=True,
+                check=False,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return None
+        except Exception:
+            return None
+
+    def is_standalone_repo(self) -> bool:
+        """检查当前目录是否是独立的 Git 仓库根目录
+
+        在 monorepo 子目录场景中，is_git_repo() 会返回 True
+        （因为 git 递归向上查找 .git），但 work_dir 并非仓库根目录。
+        本方法通过比较 work_dir 与 git rev-parse --show-toplevel 的结果，
+        精确判定当前目录自身是否是 git 仓库的根。
+
+        Returns:
+            当前目录是否是其自身 Git 仓库的根目录
+        """
+        repo_root = self.get_repo_root()
+        if repo_root is None:
+            return False
+        return Path(repo_root).resolve() == self.work_dir.resolve()
 
     def init_repository(
         self, create_gitignore: bool = True, initial_commit: bool = True

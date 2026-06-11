@@ -179,8 +179,12 @@ def market_publish(
         
         # 7. Git 操作
         git_mgr = GitManager(plugin_dir)
-        if not git_mgr.is_git_repo():
-            print_info("正在初始化 Git 仓库...")
+        if not git_mgr.is_standalone_repo():
+            if git_mgr.is_git_repo():
+                repo_root = git_mgr.get_repo_root()
+                print_info(f"检测到插件位于父级 Git 仓库中 ({repo_root})，正在创建独立仓库...")
+            else:
+                print_info("正在初始化 Git 仓库...")
             git_mgr.init_repository(initial_commit=False)
         
         # 设置远程仓库
@@ -525,8 +529,12 @@ def market_package_new_version(
         
         # 5. Git 操作
         git_mgr = GitManager(plugin_dir)
-        if not git_mgr.is_git_repo():
-            print_info("正在初始化 Git 仓库...")
+        if not git_mgr.is_standalone_repo():
+            if git_mgr.is_git_repo():
+                repo_root = git_mgr.get_repo_root()
+                print_info(f"检测到插件位于父级 Git 仓库中 ({repo_root})，正在创建独立仓库...")
+            else:
+                print_info("正在初始化 Git 仓库...")
             git_mgr.init_repository(initial_commit=False)
         
         # 获取仓库信息
