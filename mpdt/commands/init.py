@@ -495,13 +495,13 @@ TODO: 添加使用说明
 
 ```bash
 # 生成组件
-mpdt generate action MyAction
+mpdt plugin generate action MyAction
 
 # 运行检查
-mpdt check
+mpdt plugin check
 
-# 运行测试
-mpdt test
+# 构建插件
+mpdt plugin build
 ```
 
 ## 许可证

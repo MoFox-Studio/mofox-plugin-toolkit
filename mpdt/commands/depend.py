@@ -91,7 +91,7 @@ def depend_add(
             config = get_or_init_mpdt_config()
             if not config.mofox_path or not config.mofox_path.exists():
                 print_warning("未配置 Neo-MoFox 路径，跳过插件下载")
-                print_info("使用 'mpdt config set-mofox <path>' 配置路径")
+                print_info("使用 'mpdt config edit mofox.path <path>' 配置路径")
                 return
             
             plugins_dir = config.mofox_path / "plugins"
@@ -211,7 +211,7 @@ def depend_add(
             config = get_or_init_mpdt_config()
             if not config.mofox_path or not config.mofox_path.exists():
                 print_warning("未配置 Neo-MoFox 路径，跳过包安装")
-                print_info("使用 'mpdt config set-mofox <path>' 配置路径")
+                print_info("使用 'mpdt config edit mofox.path <path>' 配置路径")
                 return
             
             # 检查是否存在 .venv

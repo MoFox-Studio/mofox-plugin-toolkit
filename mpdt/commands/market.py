@@ -271,7 +271,7 @@ def market_publish(
             await market.get_plugin_detail(plugin_id)
             plugin_exists = True
             print_error(f"插件 {plugin_id} 已在市场注册")
-            print_info("如果要发布新版本，请使用 'mpdt market package-new-version' 命令")
+            print_info("如果要发布新版本，请使用 'mpdt market package-update' 命令")
             return
         except MarketError as e:
             if "NOT_FOUND" not in str(e).upper():

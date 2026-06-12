@@ -155,7 +155,7 @@ def plugin_check(ctx: click.Context, path: str, level: str, fix: bool, report: s
 def plugin_bump(ctx: click.Context, path: str, bump_type: str) -> None:
     """提升插件版本号
 
-    PLUGIN_PATH 为插件根目录（含 manifest.json），默认为当前目录。
+    PATH 为插件根目录（含 manifest.json），默认为当前目录。
     
     版本升级类型：
     - major: 主版本号 (1.0.0 -> 2.0.0)
@@ -183,7 +183,7 @@ def plugin_bump(ctx: click.Context, path: str, bump_type: str) -> None:
 def plugin_build(ctx: click.Context, path: str, output: str, with_docs: bool, fmt: str) -> None:
     """构建并打包插件为 .mfp 文件
 
-    PLUGIN_PATH 为插件根目录（含 manifest.json），默认为当前目录。
+    PATH 为插件根目录（含 manifest.json），默认为当前目录。
     """
     from mpdt.commands.build import build_plugin
 
