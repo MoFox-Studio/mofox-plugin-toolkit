@@ -87,7 +87,6 @@ class PackageManager:
         "venv",
         ".env",
         "node_modules",
-        "dist",
         ".DS_Store",
         "Thumbs.db",
     }
@@ -149,11 +148,12 @@ class PackageManager:
         
         return False
     
-    def collect_files(self, with_docs: bool = False) -> list[Path]:
+    def collect_files(self, with_docs: bool = False, output_dir: str = "dist") -> list[Path]:
         """递归收集插件目录中需要打包的文件列表
         
         Args:
             with_docs: 是否包含文档文件
+            output_dir: 输出目录名称，根级别的该目录将被排除
             
         Returns:
             文件路径列表（绝对路径）
@@ -161,9 +161,17 @@ class PackageManager:
         files: list[Path] = []
         
         for item in sorted(self.plugin_path.rglob("*")):
-            # 检查路径上的每个部分是否被排除
             relative = item.relative_to(self.plugin_path)
             parts = relative.parts
+            
+            # 根级别的输出目录跳过
+            if len(parts) >= 1 and parts[0] == output_dir:
+                continue
+            
+            # 根级别的 README 始终包含，不受 with_docs 控制
+            if len(parts) == 1 and item.is_file() and item.name in ("README.md", "README.rst"):
+                files.append(item)
+                continue
             
             excluded = False
             for part in parts:
@@ -243,8 +251,9 @@ class PackageManager:
         if not entry_file.exists():
             print_warning(f"入口文件不存在: {entry_point}（仍将继续构建）")
         
-        # 收集文件
-        files = self.collect_files(with_docs)
+        # 收集文件（根级别 output_dir 会被排除，根级别 README 始终包含）
+        output_dir_name = Path(output_dir).name
+        files = self.collect_files(with_docs, output_dir=output_dir_name)
         if not files:
             raise ValueError("未找到任何需要打包的文件")
         
