@@ -162,6 +162,8 @@ mpdt plugin check [PATH] [选项]
 - `--no-metadata`：跳过元数据检查
 - `--no-component`：跳过组件检查
 - `--no-type`：跳过类型检查
+- `--no-import`：跳过导入检查
+- `--no-config`：跳过配置检查
 - `--no-style`：跳过代码风格检查
 
 **示例**：
@@ -302,8 +304,6 @@ mpdt market publish [PLUGIN_PATH] [选项]
 - `PLUGIN_PATH`（可选）：插件路径（默认：当前目录）
 
 **选项**：
-- `--token <TOKEN>`：市场访问令牌
-- `--github-token <TOKEN>`：GitHub Personal Access Token
 - `--owner <NAME>`：GitHub 用户或组织名
 - `--repo <NAME>`：GitHub 仓库名（默认使用插件 ID）
 - `--private`：创建私有仓库
@@ -311,21 +311,22 @@ mpdt market publish [PLUGIN_PATH] [选项]
 - `--with-docs`：包含文档
 - `--release-notes <TEXT>`：Release 说明
 - `--skip-push`：跳过 Git 推送
-- `--save-github-token/--no-save-github-token`：是否保存 GitHub Token
+
+::: tip GitHub Token 配置
+发布前请通过 `mpdt config edit github.token <TOKEN>` 配置 GitHub Personal Access Token。
+:::
 
 **示例**：
 ```bash
 # 基本发布（使用配置文件中的 token）
 mpdt market publish
 
-# 指定所有参数
+# 指定参数
 mpdt market publish \
-  --github-token ghp_xxx \
   --owner myusername \
   --repo my-plugin \
   --with-docs \
-  --release-notes "首次发布" \
-  --save-github-token
+  --release-notes "首次发布"
 
 # 发布到私有仓库
 mpdt market publish --private --owner myorg
@@ -399,14 +400,11 @@ mpdt market package-update [PLUGIN_PATH] [选项]
 - `PLUGIN_PATH`（可选）：插件路径（默认：当前目录）
 
 **选项**：
-- `--token <TOKEN>`：市场访问令牌
-- `--github-token <TOKEN>`：GitHub Personal Access Token
 - `--owner <NAME>`：GitHub 用户或组织名
 - `--repo <NAME>`：GitHub 仓库名（默认使用插件 ID）
 - `--with-docs`：包含文档
 - `--release-notes <TEXT>`：Release 说明
 - `--skip-push`：跳过 Git 推送
-- `--save-github-token/--no-save-github-token`：是否保存 GitHub Token
 
 **前置检查**：
 - 插件是否已在市场注册
@@ -420,7 +418,6 @@ mpdt market package-update
 
 # 指定参数
 mpdt market package-update \
-  --github-token ghp_xxx \
   --owner myusername \
   --with-docs \
   --release-notes "修复了若干 bug"
@@ -484,7 +481,7 @@ mpdt config open
 ```
 ---
 
-### 18. `mpdt config edit` - 编辑配置项
+### 14. `mpdt config edit` - 编辑配置项
 
 类似 git config 的方式编辑配置项。
 
@@ -527,20 +524,20 @@ mpdt config edit --unset github.token
 
 ## 四、Depend 依赖管理命令组
 
-### 19. `mpdt depend add` - 添加依赖
+### 15. `mpdt depend add` - 添加依赖
 
 添加插件或 Python 包依赖到插件。
 
 **命令格式**：
 ```bash
-mpdt depend add <DEPENDENCY> [选项]
+mpdt depend add <DEPENDENCY> [PATH] [选项]
 ```
 
 **位置参数**：
 - `DEPENDENCY`（必需）：依赖包名称和版本约束
+- `PATH`（可选）：插件根目录（默认：当前目录）
 
 **选项**：
-- `--path <PATH>`：插件根目录（默认：当前目录）
 - `--type <TYPE>`：依赖类型（默认：auto）
   - `auto` - 自动判断
   - `plugin` - Neo-MoFox 插件
@@ -556,12 +553,12 @@ mpdt depend add 'aiohttp~=3.8'
 mpdt depend add 'some-plugin>=1.0.0' --type plugin
 
 # 指定插件路径
-mpdt depend add 'httpx>=0.24.0' --path ./my_plugin
+mpdt depend add 'httpx>=0.24.0' ./my_plugin
 ```
 
 ---
 
-### 20. `mpdt depend search` - 搜索依赖
+### 16. `mpdt depend search` - 搜索依赖
 
 在插件市场或 PyPI 中搜索可用的依赖包。
 
@@ -594,7 +591,7 @@ mpdt depend search http --limit 10
 
 ---
 
-### 21. `mpdt depend info` - 查看依赖信息
+### 17. `mpdt depend info` - 查看依赖信息
 
 查看依赖包的详细信息和可用版本。
 
@@ -623,7 +620,7 @@ mpdt depend info some-plugin --type plugin
 
 ---
 
-### 22. `mpdt depend remove` - 移除依赖
+### 18. `mpdt depend remove` - 移除依赖
 
 从插件中移除依赖。
 
@@ -656,7 +653,7 @@ mpdt depend remove httpx ./my_plugin
 
 ---
 
-### 23. `mpdt depend list` - 列出所有依赖
+### 19. `mpdt depend list` - 列出所有依赖
 
 列出插件的所有依赖。
 
@@ -684,6 +681,64 @@ mpdt depend list . --type python
 
 # 列出指定插件的依赖
 mpdt depend list ./my_plugin
+```
+
+---
+
+## 五、Market 市场管理命令组（补充）
+
+### 20. `mpdt market delete` - 删除插件
+
+从插件市场删除插件（不可逆操作）。
+
+**命令格式**：
+```bash
+mpdt market delete <PLUGIN_ID>
+```
+
+**位置参数**：
+- `PLUGIN_ID`（必需）：插件 ID
+
+::: danger 不可逆操作
+删除插件会从市场移除插件、删除所有版本信息、影响依赖此插件的用户。此操作不可逆，请谨慎使用。
+:::
+
+**示例**：
+```bash
+mpdt market delete my-plugin
+```
+
+---
+
+### 21. `mpdt market yank` - 废弃插件版本
+
+废弃指定版本的插件，标记为不推荐使用。
+
+**命令格式**：
+```bash
+mpdt market yank <PLUGIN_ID> <VERSION> [选项]
+```
+
+**位置参数**：
+- `PLUGIN_ID`（必需）：插件 ID
+- `VERSION`（必需）：要废弃的版本号
+
+**选项**：
+- `--reason, -r <TEXT>`：废弃原因（推荐提供）
+
+**废弃效果**：
+- 版本仍然存在，已安装的用户不受影响
+- 市场会显示废弃警告
+- 新用户无法安装此版本
+- 依赖解析会跳过此版本
+
+**示例**：
+```bash
+# 废弃有 bug 的版本
+mpdt market yank my-plugin 1.0.0 --reason "严重 bug，请升级到 1.0.1"
+
+# 废弃有安全问题的版本
+mpdt market yank my-plugin 2.1.0 --reason "安全漏洞 CVE-2024-XXXX"
 ```
 
 ---
@@ -744,16 +799,16 @@ mpdt plugin init  # 进入交互式向导
 
 ### 场景 1：检查失败
 
-如果 `mpdt check` 报错：
+如果 `mpdt plugin check` 报错：
 
 1. **查看错误详情**：
    ```bash
-   mpdt check --level info --report markdown --output check_report.md
+   mpdt plugin check --level info --report markdown --output check_report.md
    ```
 
 2. **尝试自动修复**：
    ```bash
-   mpdt check --fix
+   mpdt plugin check --fix
    ```
 
 3. **如果仍有错误**：
@@ -763,21 +818,20 @@ mpdt plugin init  # 进入交互式向导
 
 ### 场景 2：构建失败
 
-如果 `mpdt build` 失败：
+如果 `mpdt plugin build` 失败：
 
-1. 先运行检查：`mpdt check --fix`
+1. 先运行检查：`mpdt plugin check --fix`
 2. 确认 manifest.json 格式正确
 3. 确认所有必需文件都存在
 4. 查看构建日志确定具体错误
 
 ### 场景 3：开发模式启动失败
 
-如果 `mpdt dev` 失败：
+如果 `mpdt plugin dev` 失败：
 
 1. 检查配置：`mpdt config show`
-2. 测试配置：`mpdt config test`
-3. 确认 Neo-MoFox 路径正确
-4. 确认插件路径正确
+2. 确认 Neo-MoFox 路径正确
+3. 确认插件路径正确
 
 ## 最佳实践
 
@@ -814,7 +868,7 @@ def process_data(data: list[str]) -> str:
 养成习惯在构建前运行检查：
 
 ```bash
-mpdt check --fix && mpdt build
+mpdt plugin check --fix && mpdt plugin build
 ```
 
 ### 4. 利用开发模式
@@ -822,15 +876,15 @@ mpdt check --fix && mpdt build
 开发阶段使用 dev 模式提高效率：
 
 ```bash
-mpdt dev  # 自动热重载
+mpdt plugin dev  # 自动热重载
 ```
 
 ### 5. 版本管理
 
 使用语义化版本号：
-- 破坏性变更 → `--bump major`
-- 新功能 → `--bump minor`
-- Bug 修复 → `--bump patch`
+- 破坏性变更 → `--type major`
+- 新功能 → `--type minor`
+- Bug 修复 → `--type patch`
 
 ## 常见问题排查
 
@@ -855,16 +909,16 @@ pip install -e .  # 在 mofox-plugin-toolkit 目录下
 
 ### Q: 如何修改已生成的组件？
 
-直接编辑生成的 Python 文件，然后运行 `mpdt check` 验证。
+直接编辑生成的 Python 文件，然后运行 `mpdt plugin check` 验证。
 
 ### Q: 配置文件在哪？
 
 **位置**：
-- Linux/macOS: `~/.config/mpdt/config.json`
-- Windows: `%APPDATA%\mpdt\config.json`
+- Linux/macOS: `~/.mpdt/config.toml`
+- Windows: `%USERPROFILE%\.mpdt\config.toml`
 
 **查看配置**：`mpdt config show`
 
 ---
 
-**记住**：始终先运行 `mpdt check` 再构建或提交代码。
+**记住**：始终先运行 `mpdt plugin check` 再构建或提交代码。
