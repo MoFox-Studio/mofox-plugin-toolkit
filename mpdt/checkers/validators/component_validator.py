@@ -66,6 +66,7 @@ class ComponentValidator(BaseValidator):
         "Service": ["name", "description"],
         "BaseService": ["name", "description"],
         "Router": ["name", "description"],
+        "BaseRouter": ["name", "description"],
         "BaseRouterComponent": ["name", "description"],
     }
 
@@ -112,6 +113,7 @@ class ComponentValidator(BaseValidator):
         "BaseAdapter": ["from_platform_message", "get_bot_info"],
         "BaseChatter": ["execute"],
         "BaseCollection": ["get_contents"],
+        "BaseRouter": ["register_endpoints"],
         "BaseRouterComponent": ["register_endpoints"],
     }
 
@@ -171,6 +173,13 @@ class ComponentValidator(BaseValidator):
                 "params": [],  # async def get_contents(self)
                 "return_type": "list[str]",
                 "is_async": True,
+            },
+        },
+        "BaseRouter": {
+            "register_endpoints": {
+                "params": [],  # def register_endpoints(self)
+                "return_type": "None",
+                "is_async": False,
             },
         },
         "BaseRouterComponent": {
@@ -398,7 +407,7 @@ class ComponentValidator(BaseValidator):
         local_appends = {}  # 存储 append 调用: {变量名: [追加的元素]}
 
         for stmt in func_node.body.body:
-            # 收集赋值语句: components = [...]
+            # 收集赋值语句: components = [...] 或 components: list[type] = [...]
             if isinstance(stmt, cst.SimpleStatementLine):
                 for simple_stmt in stmt.body:
                     if isinstance(simple_stmt, cst.Assign):
@@ -408,6 +417,14 @@ class ComponentValidator(BaseValidator):
                                 local_vars[var_name] = simple_stmt.value
                                 if var_name not in local_appends:
                                     local_appends[var_name] = []
+
+                    # 带类型注解的赋值: components: list[type] = [...]
+                    elif isinstance(simple_stmt, cst.AnnAssign) and isinstance(simple_stmt.target, cst.Name):
+                        if simple_stmt.value is not None and isinstance(simple_stmt.value, cst.List):
+                            var_name = simple_stmt.target.value
+                            local_vars[var_name] = simple_stmt.value
+                            if var_name not in local_appends:
+                                local_appends[var_name] = []
 
                     # 收集 append 调用: components.append(MyAction)
                     elif isinstance(simple_stmt, cst.Expr) and isinstance(simple_stmt.value, cst.Call):
@@ -647,11 +664,15 @@ class ComponentValidator(BaseValidator):
         1. 无导入路径：组件在 plugin.py 中定义
         2. 相对导入：根据路径转换为文件路径
         3. 包导入：查找 __init__.py 文件
+           - 若类直接定义在该 __init__.py 中，返回该文件
+           - 若类通过 __init__.py 重新导出，则跟随导入语句定位真实源文件
         4. 搜索备选：遍历插件目录找到类定义
 
         例如：
         - ".actions.my_action" -> "plugin_dir/actions/my_action.py"
         - ".adapter" -> "plugin_dir/adapter.py"
+        - ".components.router.config" (类由 __init__.py 重新导出)
+          -> "plugin_dir/components/router/config/main_config_router.py"
 
         Args:
             import_from: 导入路径字符串（如 ".actions.my_action"）
@@ -680,7 +701,19 @@ class ComponentValidator(BaseValidator):
         # 尝试查找 __init__.py 中的定义
         init_file = plugin_dir / module_path / "__init__.py"
         if init_file.exists():
-            return init_file
+            # 情况 A: 类直接定义在该 __init__.py 中
+            try:
+                init_content = init_file.read_text(encoding="utf-8")
+                if re.search(rf"class\s+{re.escape(class_name)}\s*\(", init_content):
+                    return init_file
+            except Exception:
+                pass
+
+            # 情况 B: 类由 __init__.py 重新导出，跟随导入定位真实源文件
+            real_file = self._resolve_reexported_class(init_file, class_name)
+            if real_file is not None:
+                return real_file
+            # 找不到时继续向下进入全目录搜索兜底
 
         # 搜索整个插件目录
         for py_file in plugin_dir.rglob("*.py"):
@@ -693,6 +726,65 @@ class ComponentValidator(BaseValidator):
                         return py_file
             except Exception:
                 continue
+
+        return None
+
+    def _resolve_reexported_class(self, init_file: Path, class_name: str) -> Path | None:
+        """根据 __init__.py 中的导入语句定位类的真实源文件
+
+        当 `_resolve_component_file` 命中一个 `__init__.py` 但目标类并非直接
+        定义于其中（而是通过 `from .sub_module import ClassName` 重新导出）时，
+        使用本方法解析相对导入，定位真实源文件路径。
+
+        解析步骤：
+        1. 使用 CodeParser 收集 `__init__.py` 中的所有导入
+        2. 查找目标类名对应的相对导入路径（如 `.main_config_router`）
+        3. 按前导点数计算相对层级（1 个点=同目录，2 个点=父目录，...）
+        4. 将相对模块路径转换为文件路径，返回真实源文件
+
+        Args:
+            init_file: __init__.py 文件路径
+            class_name: 待定位的组件类名
+
+        Returns:
+            真实源文件路径；找不到时返回 None
+        """
+        try:
+            parser = CodeParser.from_file(init_file)
+        except Exception:
+            return None
+
+        # plugin_name 传空串：相对导入全部收集，绝对导入也全部收集
+        imports = self._collect_imports_from_parser(parser, "")
+        if class_name not in imports:
+            return None
+
+        relative_module = imports[class_name]  # 如 ".main_config_router" 或 "..sub.file"
+
+        # 前导点数表示相对层级：1 个点=同目录，2 个点=上一级，依此类推
+        dot_count = len(relative_module) - len(relative_module.lstrip("."))
+        module_remainder = relative_module.lstrip(".")
+
+        # 基准目录：从 __init__.py 所在目录开始按需向上回溯
+        base_dir = init_file.parent
+        for _ in range(max(dot_count - 1, 0)):
+            base_dir = base_dir.parent
+
+        if not module_remainder:
+            # from . import ClassName 形式——无法仅凭类名定位文件，
+            # 交给调用方的全目录搜索兜底
+            return None
+
+        # ".main_config_router" -> "main_config_router.py"
+        module_path = module_remainder.replace(".", "/")
+        candidate = base_dir / f"{module_path}.py"
+        if candidate.exists():
+            return candidate
+
+        # 模块本身是子包：递归到子包的 __init__.py
+        candidate_init = base_dir / module_path / "__init__.py"
+        if candidate_init.exists():
+            return candidate_init
 
         return None
 
