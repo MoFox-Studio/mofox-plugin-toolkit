@@ -29,8 +29,8 @@ class {class_name}(BaseRouter):
     - 与外部系统集成
     """
 
-    router_name = "{component_name}"
-    router_description = "{description}"
+    name = "{component_name}"
+    description = "{description}"
     custom_route_path = "/api/{component_name}"  # 自定义路由路径
     cors_origins = ["*"]  # CORS 配置，None 表示禁用 CORS
 
@@ -50,7 +50,7 @@ class {class_name}(BaseRouter):
             """
             示例 GET 端点
             """
-            return {{"message": f"Hello from {{self.router_name}}"}}
+            return {{"message": f"Hello from {{self.name}}"}}
 
         @self.app.get("/status")
         async def get_status():
@@ -61,7 +61,7 @@ class {class_name}(BaseRouter):
                 # TODO: 实现状态检查逻辑
                 return {{
                     "status": "ok",
-                    "router": self.router_name,
+                    "router": self.name,
                 }}
             except Exception as e:
                 logger.error(f"获取状态失败: {{e}}")

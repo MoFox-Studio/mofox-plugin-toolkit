@@ -27,8 +27,8 @@ class {class_name}(BaseCommand):
     - 类型提示参数解析
     """
 
-    command_name = "{component_name}"
-    command_description = "{description}"
+    name = "{component_name}"
+    description = "{description}"
     command_prefix = "/"  # 命令前缀
 
     # 示例：处理 "/{component_name} set <value>" 命令

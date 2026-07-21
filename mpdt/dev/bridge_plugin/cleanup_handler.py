@@ -23,8 +23,8 @@ logger = get_logger("dev_bridge_cleanup")
 class CleanupHandler(BaseEventHandler):
     """清理事件处理器 - 在程序停止时清理插件文件"""
 
-    handler_name = "dev_bridge_cleanup"
-    handler_description = "DevBridge 清理处理器，在系统停止时移除临时插件文件"
+    name = "dev_bridge_cleanup"
+    description = "DevBridge 清理处理器，在系统停止时移除临时插件文件"
     weight = -100  # 负权重，确保最后执行
     intercept_message = False
     init_subscribe: list[EventType | str] = [EventType.ON_STOP]

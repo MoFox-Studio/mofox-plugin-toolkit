@@ -32,8 +32,8 @@ class {class_name}(BaseCollection):
     - 嵌套的功能集合
     """
 
-    collection_name = "{component_name}"
-    collection_description = "{description}"
+    name = "{component_name}"
+    description = "{description}"
 
     # 关联平台（可选，默认支持所有平台）
     associated_platforms: list[str] = []

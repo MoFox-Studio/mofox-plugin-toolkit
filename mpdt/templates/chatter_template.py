@@ -32,8 +32,8 @@ class {class_name}(BaseChatter):
     - 多轮对话控制
     """
 
-    chatter_name = "{component_name}"
-    chatter_description = "{description}"
+    name = "{component_name}"
+    description = "{description}"
     
     # 关联平台（可选，默认支持所有平台）
     associated_platforms: list[str] = []
@@ -55,7 +55,7 @@ class {class_name}(BaseChatter):
             ChatterResult: Wait/Success/Failure/Stop 结果
         """
         try:
-            logger.info(f"[{{self.chatter_name}}] 开始执行")
+            logger.info(f"[{{self.name}}] 开始执行")
 
             # 获取并刷新未读消息
             unreads_json, unread_messages = await self.fetch_and_flush_unreads(
@@ -64,11 +64,11 @@ class {class_name}(BaseChatter):
             )
 
             if not unread_messages:
-                logger.debug(f"[{{self.chatter_name}}] 无未读消息，等待新消息")
+                logger.debug(f"[{{self.name}}] 无未读消息，等待新消息")
                 yield Wait(time=None)  # 等待新消息
                 return
 
-            logger.info(f"[{{self.chatter_name}}] 处理 {{len(unread_messages)}} 条未读消息")
+            logger.info(f"[{{self.name}}] 处理 {{len(unread_messages)}} 条未读消息")
 
             # TODO: 实现聊天处理逻辑
             # 示例：简单响应
@@ -102,7 +102,7 @@ class {class_name}(BaseChatter):
             )
 
         except Exception as e:
-            logger.error(f"[{{self.chatter_name}}] 执行失败: {{e}}", exc_info=True)
+            logger.error(f"[{{self.name}}] 执行失败: {{e}}", exc_info=True)
             yield Failure(
                 error=f"处理失败: {{e}}",
                 exception=e

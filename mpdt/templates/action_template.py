@@ -22,8 +22,8 @@ class {class_name}(BaseAction):
     Action 组件用于执行聊天中的具体动作任务。
     """
 
-    action_name = "{component_name}"
-    action_description = "{description}"
+    name = "{component_name}"
+    description = "{description}"
 
     # 可选：指定允许使用此 Action 的 chatter
     # chatter_allow: list[str] = ["your_chatter_name"]
@@ -43,7 +43,7 @@ class {class_name}(BaseAction):
             (success: bool, message: str): 执行结果和消息
         """
         try:
-            logger.info(f"执行 Action: {{self.action_name}}")
+            logger.info(f"执行 Action: {{self.name}}")
 
             # TODO: 实现 Action 的核心逻辑
             result_message = "执行成功"

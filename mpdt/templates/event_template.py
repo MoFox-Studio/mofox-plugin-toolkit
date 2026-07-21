@@ -32,8 +32,8 @@ class {class_name}(BaseEventHandler):
     - 在特定事件发生时执行操作
     """
 
-    handler_name = "{component_name}"
-    handler_description = "{description}"
+    name = "{component_name}"
+    description = "{description}"
     weight = 10  # 权重：数值越大优先级越高
     intercept_message = False  # 是否拦截消息（拦截后消息不再传递给后续处理器）
     init_subscribe = [EventType.ON_MESSAGE_RECEIVED]  # 初始订阅的事件类型列表
@@ -108,7 +108,7 @@ class {class_name}(BaseEventHandler):
         # TODO: 实现处理逻辑
         # 示例：修改参数
         # params["processed"] = True
-        # params["handler_name"] = self.handler_name
+        # params["handler_name"] = self.name
 
         # 示例：根据事件类型执行不同逻辑
         # if event_name == EventType.ON_MESSAGE_RECEIVED:

@@ -25,10 +25,10 @@ class {class_name}(BaseAdapter):
     Adapter 组件用于连接外部平台（如QQ、微信等）与 MoFox-Bot 核心。
     """
 
-    adapter_name = "{component_name}"
+    name = "{component_name}"
     adapter_version = "1.0.0"
     adapter_author = "{author}"
-    adapter_description = "{description}"
+    description = "{description}"
     platform = "your_platform"  # 平台标识（如 qq, wechat 等）
 
     run_in_subprocess = False  # 是否在子进程中运行
@@ -55,15 +55,15 @@ class {class_name}(BaseAdapter):
 
     async def on_adapter_loaded(self) -> None:
         """适配器加载时的初始化"""
-        logger.info(f"{{self.adapter_name}} 适配器正在启动...")
+        logger.info(f"{{self.name}} 适配器正在启动...")
         # TODO: 实现加载逻辑
-        logger.info(f"{{self.adapter_name}} 适配器已加载")
+        logger.info(f"{{self.name}} 适配器已加载")
 
     async def on_adapter_unloaded(self) -> None:
         """适配器卸载时的清理"""
-        logger.info(f"{{self.adapter_name}} 适配器正在关闭...")
+        logger.info(f"{{self.name}} 适配器正在关闭...")
         # TODO: 实现清理逻辑
-        logger.info(f"{{self.adapter_name}} 适配器已关闭")
+        logger.info(f"{{self.name}} 适配器已关闭")
 
     async def from_platform_message(self, raw: dict[str, Any]) -> MessageEnvelope | None:
         """

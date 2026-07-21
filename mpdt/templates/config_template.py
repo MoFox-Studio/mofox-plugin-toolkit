@@ -21,8 +21,8 @@ class {class_name}(BaseConfig):
     扩展 ConfigBase，提供插件特定的配置管理。
     """
 
-    config_name = "{component_name}"
-    config_description = "{description}"
+    name = "{component_name}"
+    description = "{description}"
 
     @config_section("general")
     class GeneralSection(SectionBase):

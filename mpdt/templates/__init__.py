@@ -39,7 +39,7 @@ def get_component_template(component_type: str) -> str:
     根据组件类型获取对应的模板
 
     Args:
-        component_type: 组件类型 (action, tool, event, adapter, prompt, plus_command, chatter, router, config, service)
+        component_type: 组件类型 (action, tool, event, adapter, plus_command, chatter, router, config, service)
 
     Returns:
         模板字符串
@@ -123,8 +123,6 @@ def prepare_component_context(
         context["event_type"] = component_name.replace("_handler", "").replace("_event", "")
     elif component_type == "adapter":
         context["adapter_name"] = component_name
-    elif component_type == "prompt":
-        context["prompt_name"] = component_name
     elif component_type == "chatter":
         context["chatter_name"] = component_name
     elif component_type == "router":
@@ -154,7 +152,6 @@ def _get_method_name(component_type: str) -> str:
         "collection": "get_contents",
         "event": "handle",
         "adapter": "connect",
-        "prompt": "build",
         "chatter": "chat",
         "router": "route",
     }

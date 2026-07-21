@@ -25,8 +25,8 @@ class {class_name}(BaseTool):
     与 Action 不同，Tool 侧重于"查询"功能而非"响应"动作。
     """
 
-    tool_name = "{component_name}"
-    tool_description = "{description}"
+    name = "{component_name}"
+    description = "{description}"
 
     async def execute(
         self,
@@ -52,7 +52,7 @@ class {class_name}(BaseTool):
             ...     print(result)
         """
         try:
-            logger.info(f"执行 Tool: {{self.tool_name}}")
+            logger.info(f"执行 Tool: {{self.name}}")
             logger.debug(f"查询: {{query}}, 限制: {{limit}}")
 
             # TODO: 实现工具的核心逻辑

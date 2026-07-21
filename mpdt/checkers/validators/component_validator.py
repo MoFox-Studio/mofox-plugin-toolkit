@@ -29,7 +29,9 @@ class ComponentValidator(BaseValidator):
     验证内容包括：
     - 插件类的基本元数据（plugin_name 等）
     - 插件类的必需方法（get_components）
-    - 组件类的元数据字段（如 action_name, action_description 等）
+    - 组件类的统一元数据字段（name, description）
+      旧属性名（如 action_name, tool_description）通过 BaseComponent 桥接仍可使用，
+      但会触发弃用警告。
     - 组件类的必需方法（如 execute, register_endpoints 等）
     - 方法签名的正确性（参数、返回类型、是否异步）
     - 方法实现的完整性（是否为空实现）
@@ -40,35 +42,64 @@ class ComponentValidator(BaseValidator):
     # ========================================
 
     # 不同组件类型的必需元数据字段映射表
-    # 注意：根据 Neo-MoFox 基类定义，各组件使用不同的属性名：
-    # - BaseTool: tool_name, tool_description
-    # - BaseCommand: command_name, command_description
-    # - BaseAction: action_name, action_description
-    # - BaseEventHandler: handler_name, handler_description
-    # - BaseAdapter: adapter_name, adapter_description
-    # - BaseChatter: chatter_name, chatter_description
-    # - BaseCollection: collection_name, collection_description
-    # - BaseService: service_name, service_description
-    # - BaseRouterComponent: router_name, router_description
+    # 注意：根据 Neo-MoFox BaseComponent 统一约定，所有组件使用统一的属性名：
+    # - name: 组件名称（统一属性，替代旧的 tool_name/action_name/...）
+    # - description: 组件描述（统一属性，替代旧的 tool_description/action_description/...）
+    # 旧属性名仍可通过 BaseComponent 的 _legacy_name_attr / _legacy_desc_attr 桥接，
+    # 但会发出 DeprecationWarning，因此这里把统一属性作为必需字段，
+    # 并通过 LEGACY_FIELD_ALIASES 在缺失时回退检查旧属性名并发出弃用警告。
     COMPONENT_REQUIRED_FIELDS = {
-        "Action": ["action_name", "action_description"],
-        "BaseAction": ["action_name", "action_description"],
-        "Command": ["command_name", "command_description"],
-        "BaseCommand": ["command_name", "command_description"],
-        "Tool": ["tool_name", "tool_description"],
-        "BaseTool": ["tool_name", "tool_description"],
-        "EventHandler": ["handler_name", "handler_description"],
-        "BaseEventHandler": ["handler_name", "handler_description"],
-        "Adapter": ["adapter_name", "adapter_description"],
-        "BaseAdapter": ["adapter_name", "adapter_description"],
-        "Chatter": ["chatter_name", "chatter_description"],
-        "BaseChatter": ["chatter_name", "chatter_description"],
-        "Collection": ["collection_name", "collection_description"],
-        "BaseCollection": ["collection_name", "collection_description"],
-        "Service": ["service_name", "service_description"],
-        "BaseService": ["service_name", "service_description"],
-        "Router": ["router_name", "router_description"],
-        "BaseRouterComponent": ["router_name", "router_description"],
+        "Action": ["name", "description"],
+        "BaseAction": ["name", "description"],
+        "Command": ["name", "description"],
+        "BaseCommand": ["name", "description"],
+        "Tool": ["name", "description"],
+        "BaseTool": ["name", "description"],
+        "EventHandler": ["name", "description"],
+        "BaseEventHandler": ["name", "description"],
+        "Adapter": ["name", "description"],
+        "BaseAdapter": ["name", "description"],
+        "Chatter": ["name", "description"],
+        "BaseChatter": ["name", "description"],
+        "Collection": ["name", "description"],
+        "BaseCollection": ["name", "description"],
+        "Service": ["name", "description"],
+        "BaseService": ["name", "description"],
+        "Router": ["name", "description"],
+        "BaseRouterComponent": ["name", "description"],
+    }
+
+    # 旧属性名到统一属性名的映射（用于向后兼容检查）
+    # 当统一属性缺失、但旧属性存在时，发出弃用警告而非错误。
+    LEGACY_FIELD_ALIASES = {
+        "name": [
+            "tool_name",
+            "action_name",
+            "command_name",
+            "handler_name",
+            "adapter_name",
+            "chatter_name",
+            "collection_name",
+            "service_name",
+            "router_name",
+            "config_name",
+            "agent_name",
+            "prompt_name",
+        ],
+        "description": [
+            "tool_description",
+            "action_description",
+            "command_description",
+            "handler_description",
+            "adapter_description",
+            "chatter_description",
+            "collection_description",
+            "service_description",
+            "router_description",
+            "config_description",
+            "agent_description",
+            "prompt_description",
+        ],
     }
 
     # 不同组件类型的必需方法映射表
@@ -503,7 +534,7 @@ class ComponentValidator(BaseValidator):
         1. 定位组件源文件
         2. 解析组件类定义
         3. 确定组件的基类类型
-        4. 检查必需的元数据字段（如 action_name, action_description）
+        4. 检查必需的统一元数据字段（name, description）
         5. 检查必需的方法（如 execute）
         6. 验证方法签名的正确性
 
@@ -568,11 +599,32 @@ class ComponentValidator(BaseValidator):
 
         for field in required_fields:
             if field not in class_attributes:
-                self.result.add_error(
-                    f"组件 {class_name} 缺少必需的类属性: {field}",
-                    file_path=str(component_file.relative_to(self.plugin_path)),
-                    suggestion=f"在类中添加: {field} = '...' | 可运行 'mpdt check --fix' 自动修复",
+                # 检查是否使用了旧属性名（向后兼容）
+                legacy_aliases = self.LEGACY_FIELD_ALIASES.get(field, [])
+                legacy_hit = next(
+                    (alias for alias in legacy_aliases if alias in class_attributes),
+                    None,
                 )
+                if legacy_hit is not None:
+                    # 使用了旧属性名：发出弃用警告而非错误
+                    if not class_attributes[legacy_hit]:
+                        self.result.add_warning(
+                            f"组件 {class_name} 的旧属性 {legacy_hit} 为空（已弃用，请改用 {field}）",
+                            file_path=str(component_file.relative_to(self.plugin_path)),
+                            suggestion=f"将 {legacy_hit} 重命名为 {field}",
+                        )
+                    else:
+                        self.result.add_warning(
+                            f"组件 {class_name} 使用了已弃用的属性 {legacy_hit}，请改用 {field}",
+                            file_path=str(component_file.relative_to(self.plugin_path)),
+                            suggestion=f"将 {legacy_hit} = ... 重命名为 {field} = ... | 可运行 'mpdt check --fix' 自动修复",
+                        )
+                else:
+                    self.result.add_error(
+                        f"组件 {class_name} 缺少必需的类属性: {field}",
+                        file_path=str(component_file.relative_to(self.plugin_path)),
+                        suggestion=f"在类中添加: {field} = '...' | 可运行 'mpdt check --fix' 自动修复",
+                    )
             elif not class_attributes[field]:
                 self.result.add_warning(
                     f"组件 {class_name} 的类属性 {field} 为空",

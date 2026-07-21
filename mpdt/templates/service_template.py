@@ -30,8 +30,8 @@ class {class_name}(BaseService):
     - 实现标准协议接口
     """
 
-    service_name = "{component_name}"
-    service_description = "{description}"
+    name = "{component_name}"
+    description = "{description}"
     version = "1.0.0"
 
     async def initialize(self) -> bool:
@@ -42,7 +42,7 @@ class {class_name}(BaseService):
             bool: 是否初始化成功
         """
         try:
-            logger.info(f"初始化服务: {{self.service_name}}")
+            logger.info(f"初始化服务: {{self.name}}")
             # TODO: 实现初始化逻辑
             return True
         except Exception as e:
@@ -54,7 +54,7 @@ class {class_name}(BaseService):
         关闭服务，清理资源
         """
         try:
-            logger.info(f"关闭服务: {{self.service_name}}")
+            logger.info(f"关闭服务: {{self.name}}")
             # TODO: 实现清理逻辑
         except Exception as e:
             logger.error(f"服务关闭失败: {{e}}")

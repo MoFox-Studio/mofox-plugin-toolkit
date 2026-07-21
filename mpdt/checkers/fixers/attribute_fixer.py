@@ -182,21 +182,34 @@ class AttributeFixer(BaseFixer):
         # 根据字段名推断默认值
         name_fields = [
             "name",
+            "tool_name",
             "action_name",
             "command_name",
             "handler_name",
             "adapter_name",
+            "agent_name",
             "prompt_name",
             "chatter_name",
+            "collection_name",
+            "service_name",
+            "router_name",
+            "config_name",
             "component_name",
         ]
         desc_fields = [
             "description",
+            "tool_description",
             "action_description",
             "command_description",
             "handler_description",
             "adapter_description",
+            "agent_description",
+            "prompt_description",
             "chatter_description",
+            "collection_description",
+            "service_description",
+            "router_description",
+            "config_description",
             "component_description",
         ]
 

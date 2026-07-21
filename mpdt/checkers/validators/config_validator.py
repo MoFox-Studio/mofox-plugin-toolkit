@@ -159,17 +159,29 @@ class ConfigValidator(BaseValidator):
                 )
                 return
 
-            # 检查是否定义了 config_name
+            # 检查是否定义了统一属性 name（旧属性 config_name 仍可使用，但已弃用）
             config_name = parser.find_class_attribute(
                 class_name=config_class_name,
-                attribute_name="config_name",
+                attribute_name="name",
             )
             if not config_name:
-                self.result.add_warning(
-                    f"配置类 {config_class_name} 未定义 config_name",
-                    file_path=config_file.name,
-                    suggestion="建议添加 config_name: ClassVar[str] = 'config' 以指定配置文件名",
+                # 检查旧属性 config_name（向后兼容）
+                legacy_config_name = parser.find_class_attribute(
+                    class_name=config_class_name,
+                    attribute_name="config_name",
                 )
+                if legacy_config_name:
+                    self.result.add_warning(
+                        f"配置类 {config_class_name} 使用了已弃用的 config_name 属性，请改用 name",
+                        file_path=config_file.name,
+                        suggestion="建议改写为: name: ClassVar[str] = 'config'",
+                    )
+                else:
+                    self.result.add_warning(
+                        f"配置类 {config_class_name} 未定义 name",
+                        file_path=config_file.name,
+                        suggestion="建议添加 name: ClassVar[str] = 'config' 以指定配置文件名",
+                    )
 
             # 检查是否定义了配置节（嵌套类）
             config_sections = self._find_config_sections(parser, config_class_name)
