@@ -539,6 +539,11 @@ class ManifestManager:
             manifest.get("readme_markdown") or ""
         )
 
+        # 插件依赖（manifest.dependencies.plugins），对应市场 API 的
+        # PluginCreate.plugin_dependencies 字段。缺失时返回空列表，
+        # 与 OpenAPI schema 的默认值一致。
+        plugin_dependencies = list(self.get_plugin_dependencies())
+
         return {
             "plugin_id": plugin_id,
             "display_name": str(manifest.get("display_name") or plugin_id),
@@ -554,6 +559,7 @@ class ManifestManager:
             "categories": list(manifest.get("categories") or []),
             "tags": list(manifest.get("tags") or []),
             "maintainers": maintainer_list,
+            "plugin_dependencies": plugin_dependencies,
             "readme_markdown": readme_markdown,
         }
 
