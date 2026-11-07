@@ -488,15 +488,17 @@ class ManifestManager:
         return version
 
     def load_readme_markdown(self) -> str:
-        """读取插件根目录 README.md 内容。"""
+        """读取插件根目录 README.md 或 readme.md 内容。"""
         readme_file = self.plugin_path / "README.md"
+        if not readme_file.exists():
+            readme_file = self.plugin_path / "readme.md"
         if not readme_file.exists():
             return ""
 
         try:
             return readme_file.read_text(encoding="utf-8").strip()
         except OSError as e:
-            raise OSError(f"读取 README.md 失败: {e}") from e
+            raise OSError(f"读取 {readme_file.name} 失败: {e}") from e
 
     def build_market_plugin_payload(
         self, repository_url: str | None = None
